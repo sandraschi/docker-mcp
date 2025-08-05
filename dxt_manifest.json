@@ -1,0 +1,108 @@
+{
+  "name": "dockermcp",
+  "display_name": "Docker MCP",
+  "version": "0.1.0",
+  "description": "FastMCP 2.10 server for Docker operations with Austrian efficiency",
+  "author": "Sandra Schimanovich",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sandraschi/dockermcp"
+  },
+  "server": {
+    "command": ["python", "-m", "dockermcp"],
+    "timeout": 30,
+    "launch_delay": 2000,
+    "port": 8000,
+    "auto_start": true
+  },
+  "tools": [
+    {"name": "list_containers", "description": "List all Docker containers"},
+    {"name": "get_container_info", "description": "Get container details"},
+    {"name": "create_container", "description": "Create new container"},
+    {"name": "start_container", "description": "Start container"},
+    {"name": "stop_container", "description": "Stop container"},
+    {"name": "restart_container", "description": "Restart container"},
+    {"name": "remove_container", "description": "Remove container"},
+    {"name": "get_container_logs", "description": "View container logs"},
+    {"name": "list_images", "description": "List Docker images"},
+    {"name": "pull_image", "description": "Pull Docker image"},
+    {"name": "remove_image", "description": "Remove Docker image"},
+    {"name": "list_networks", "description": "List Docker networks"},
+    {"name": "list_volumes", "description": "List Docker volumes"},
+    {"name": "docker_system_info", "description": "Get Docker system info"},
+    {"name": "docker_disk_usage", "description": "View disk usage"},
+    {"name": "vienna_dev_status", "description": "Check dev environment"},
+    {"name": "check_veogen_stack", "description": "Check Veogen stack"},
+    {"name": "check_myai_health", "description": "Check MyAI health"},
+    {"name": "fix_restart_loops", "description": "Fix container restarts"},
+    {"name": "smart_stack_restart", "description": "Restart stack properly"}
+  ],
+  "prompts": [
+    {
+      "name": "list_containers_prompt",
+      "description": "List all Docker containers with optional filters",
+      "template": "Show me {all_statuses}containers {filters}."
+    },
+    {
+      "name": "container_management_prompt",
+      "description": "Manage container state (start/stop/restart)",
+      "template": "{action} the container named {container_name}{force}."
+    },
+    {
+      "name": "container_info_prompt",
+      "description": "Get detailed information about a container",
+      "template": "Show me detailed information about the container {container_name}."
+    },
+    {
+      "name": "create_container_prompt",
+      "description": "Create a new container with specified parameters",
+      "template": "Create a new container from {image_name} named {container_name} with {port_mappings} and environment {env_vars}."
+    },
+    {
+      "name": "container_logs_prompt",
+      "description": "View container logs",
+      "template": "Show me the {recent} logs for container {container_name}{follow_status}."
+    },
+    {
+      "name": "image_management_prompt",
+      "description": "Manage Docker images (list/pull/remove)",
+      "template": "{action} the Docker image {image_name}{force}."
+    },
+    {
+      "name": "list_resources_prompt",
+      "description": "List Docker resources (networks/volumes)",
+      "template": "List all Docker {resource_type} with their details."
+    },
+    {
+      "name": "system_info_prompt",
+      "description": "Get Docker system information",
+      "template": "Show me {detailed} Docker system information."
+    },
+    {
+      "name": "disk_usage_prompt",
+      "description": "View Docker disk usage",
+      "template": "Show me Docker disk usage {verbose_status}."
+    },
+    {
+      "name": "vienna_dev_status_prompt",
+      "description": "Check Vienna development environment status",
+      "template": "Check the status of the Vienna development environment."
+    },
+    {
+      "name": "stack_management_prompt",
+      "description": "Check or manage Docker stacks",
+      "template": "{action} the {stack_name} stack."
+    },
+    {
+      "name": "fix_restart_loops_prompt",
+      "description": "Fix containers stuck in restart loops",
+      "template": "Find and fix containers stuck in restart loops{force}."
+    },
+    {
+      "name": "smart_restart_prompt",
+      "description": "Safely restart Docker services with dependencies",
+      "template": "Perform a smart restart of {service_name}{force}."
+    }
+  ]
+}

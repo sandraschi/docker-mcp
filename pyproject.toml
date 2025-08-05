@@ -1,0 +1,82 @@
+[build-system]
+requires = ["setuptools>=42", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dockermcp"
+version = "0.1.0"
+description = "FastMCP 2.10 server for Docker operations with Austrian efficiency"
+authors = [
+    {name = "Sandra Schimanovich", email = "sandra@example.com"}
+]
+readme = "README.md"
+requires-python = ">=3.8"
+license = {text = "MIT"}
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: System :: Systems Administration",
+    "Operating System :: Microsoft :: Windows",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console"
+]
+dependencies = [
+    "fastmcp>=2.10.0",
+    "docker>=6.0.0",
+    "pydantic>=1.10.0",
+    "python-dotenv>=0.21.0",
+    "typing-extensions>=4.0.0; python_version<\"3.10\""
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "black>=23.0.0",
+    "isort>=5.0.0",
+    "mypy>=1.0.0",
+    "types-python-dotenv>=1.0.0"
+]
+
+[project.urls]
+Homepage = "https://github.com/sandraschi/dockermcp"
+Documentation = "https://github.com/sandraschi/dockermcp#readme"
+Repository = "https://github.com/sandraschi/dockermcp"
+Changelog = "https://github.com/sandraschi/dockermcp/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+packages = ["dockermcp"]
+package-dir = {"" = "src"}
+
+[tool.black]
+line-length = 100
+target-version = ['py38']
+include = '\.pyi?$'
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.mypy]
+python_version = "3.8"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+check_untyped_defs = true
+disallow_incomplete_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = ["fastmcp.*", "docker.*"]
+ignore_missing_imports = true
