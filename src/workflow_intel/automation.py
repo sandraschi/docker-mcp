@@ -1,0 +1,340 @@
+"""
+Automation functionality for Docker MCP.
+Provides tools to automate common Docker operations.
+"""
+import json
+import subprocess
+import time
+from typing import Dict, Any, List, Optional, Callable
+import logging
+
+logger = logging.getLogger(__name__)
+
+class AutomationManager:
+    """
+    Handles automation of common Docker operations.
+    """
+    
+    def restart_failed_containers(self, max_attempts: int = 3) -> Dict[str, Any]:
+        """
+        Automatically restart containers that have failed.
+        
+        Args:
+            max_attempts: Maximum number of restart attempts (default: 3)
+            
+        Returns:
+            Dict containing restart results
+        """
+        try:
+            # Get all containers
+            result = subprocess.run(
+                ['docker', 'ps', '-a', '--format', '{{json .}}'],
+                capture_output=True,
+                text=True
+            )
+            
+            if result.returncode != 0:
+                return {
+                    'success': False,
+                    'error': f"Failed to list containers: {result.stderr}"
+                }
+            
+            containers = []
+            for line in result.stdout.strip().split('\n'):
+                if line:
+                    try:
+                        containers.append(json.loads(line))
+                    except json.JSONDecodeError:
+                        continue
+            
+            # Find failed containers
+            failed_containers = []
+            for container in containers:
+                status = container.get('Status', '')
+                if 'Exited' in status and '(0)' not in status:
+                    failed_containers.append(container)
+            
+            if not failed_containers:
+                return {
+                    'success': True,
+                    'message': 'No failed containers found',
+                    'restarted': []
+                }
+            
+            # Restart failed containers
+            restart_results = []
+            for container in failed_containers:
+                container_id = container.get('ID', '')
+                container_name = container.get('Names', '')
+                
+                for attempt in range(1, max_attempts + 1):
+                    # Try to restart the container
+                    restart_result = subprocess.run(
+                        ['docker', 'restart', container_id],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if restart_result.returncode == 0:
+                        # Verify container is running
+                        time.sleep(2)  # Give it a moment to start
+                        
+                        check_result = subprocess.run(
+                            ['docker', 'inspect', '--format', '{{.State.Running}}', container_id],
+                            capture_output=True,
+                            text=True
+                        )
+                        
+                        is_running = check_result.stdout.strip() == 'true'
+                        
+                        restart_results.append({
+                            'container_id': container_id,
+                            'container_name': container_name,
+                            'status': 'restarted' if is_running else 'failed',
+                            'attempts': attempt,
+                            'message': restart_result.stderr or 'Successfully restarted' if is_running else 'Failed to start'
+                        })
+                        break
+                    
+                    if attempt < max_attempts:
+                        time.sleep(1)  # Wait before retry
+                else:
+                    # Max attempts reached
+                    restart_results.append({
+                        'container_id': container_id,
+                        'container_name': container_name,
+                        'status': 'failed',
+                        'attempts': max_attempts,
+                        'message': f'Failed to restart after {max_attempts} attempts: {restart_result.stderr}'
+                    })
+            
+            return {
+                'success': True,
+                'restarted': restart_results,
+                'total_failed': len(failed_containers),
+                'successfully_restarted': sum(1 for r in restart_results if r['status'] == 'restarted')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in restart_failed_containers: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Error restarting containers: {str(e)}"
+            }
+    
+    def cleanup_unused_resources(self, prune_volumes: bool = False) -> Dict[str, Any]:
+        """
+        Clean up unused Docker resources.
+        
+        Args:
+            prune_volumes: Whether to also prune volumes (default: False)
+            
+        Returns:
+            Dict containing cleanup results
+        """
+        try:
+            # Prune containers
+            container_result = subprocess.run(
+                ['docker', 'container', 'prune', '-f'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Prune networks
+            network_result = subprocess.run(
+                ['docker', 'network', 'prune', '-f'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Prune images
+            image_result = subprocess.run(
+                ['docker', 'image', 'prune', '-a', '-f'],
+                capture_output=True,
+                text=True
+            )
+            
+            # Prune volumes if requested
+            volume_result = None
+            if prune_volumes:
+                volume_result = subprocess.run(
+                    ['docker', 'volume', 'prune', '-f'],
+                    capture_output=True,
+                    text=True
+                )
+            
+            return {
+                'success': True,
+                'containers_pruned': container_result.stdout,
+                'networks_pruned': network_result.stdout,
+                'images_pruned': image_result.stdout,
+                'volumes_pruned': volume_result.stdout if volume_result else 'Volume pruning skipped',
+                'warnings': {
+                    'containers': container_result.stderr if container_result.stderr else None,
+                    'networks': network_result.stderr if network_result.stderr else None,
+                    'images': image_result.stderr if image_result.stderr else None,
+                    'volumes': volume_result.stderr if volume_result and volume_result.stderr else None
+                }
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in cleanup_unused_resources: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Error cleaning up resources: {str(e)}"
+            }
+    
+    def update_containers(self, container_names: List[str] = None) -> Dict[str, Any]:
+        """
+        Update containers by pulling the latest images and recreating them.
+        
+        Args:
+            container_names: List of container names to update (None for all)
+            
+        Returns:
+            Dict containing update results
+        """
+        try:
+            # Get all containers if none specified
+            if not container_names:
+                result = subprocess.run(
+                    ['docker', 'ps', '--format', '{{.Names}}'],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if result.returncode != 0:
+                    return {
+                        'success': False,
+                        'error': f"Failed to list containers: {result.stderr}"
+                    }
+                
+                container_names = [name for name in result.stdout.strip().split('\n') if name]
+            
+            update_results = []
+            
+            for container_name in container_names:
+                # Get container info
+                inspect_result = subprocess.run(
+                    ['docker', 'inspect', container_name],
+                    capture_output=True,
+                    text=True
+                )
+                
+                if inspect_result.returncode != 0:
+                    update_results.append({
+                        'container': container_name,
+                        'status': 'failed',
+                        'error': f"Failed to inspect container: {inspect_result.stderr}"
+                    })
+                    continue
+                
+                try:
+                    container_info = json.loads(inspect_result.stdout)[0]
+                    image_name = container_info['Config']['Image']
+                    
+                    # Pull the latest image
+                    pull_result = subprocess.run(
+                        ['docker', 'pull', image_name],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if pull_result.returncode != 0:
+                        update_results.append({
+                            'container': container_name,
+                            'status': 'failed',
+                            'error': f"Failed to pull image: {pull_result.stderr}"
+                        })
+                        continue
+                    
+                    # Stop and remove the old container
+                    stop_result = subprocess.run(
+                        ['docker', 'stop', container_name],
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if stop_result.returncode != 0:
+                        update_results.append({
+                            'container': container_name,
+                            'status': 'failed',
+                            'error': f"Failed to stop container: {stop_result.stderr}"
+                        })
+                        continue
+                    
+                    # Get the original container's configuration
+                    original_config = container_info['Config']
+                    original_host_config = container_info['HostConfig']
+                    
+                    # Start a new container with the same configuration
+                    create_cmd = [
+                        'docker', 'run', '-d',
+                        '--name', container_name,
+                        '--restart', original_host_config.get('RestartPolicy', {}).get('Name', 'no')
+                    ]
+                    
+                    # Add environment variables
+                    for env in original_config.get('Env', []):
+                        create_cmd.extend(['-e', env])
+                    
+                    # Add volumes
+                    for vol in original_host_config.get('Binds', []):
+                        create_cmd.extend(['-v', vol])
+                    
+                    # Add ports
+                    port_bindings = original_host_config.get('PortBindings', {})
+                    for container_port, host_ports in port_bindings.items():
+                        if host_ports:
+                            host_port = host_ports[0]['HostPort']
+                            create_cmd.extend(['-p', f"{host_port}:{container_port.split('/')[0]}"])
+                    
+                    # Add the image name
+                    create_cmd.append(image_name)
+                    
+                    # Add the original command if it exists
+                    if original_config.get('Cmd'):
+                        create_cmd.extend(original_config['Cmd'])
+                    
+                    # Create and start the new container
+                    create_result = subprocess.run(
+                        create_cmd,
+                        capture_output=True,
+                        text=True
+                    )
+                    
+                    if create_result.returncode == 0:
+                        update_results.append({
+                            'container': container_name,
+                            'status': 'updated',
+                            'new_container_id': create_result.stdout.strip(),
+                            'image': image_name
+                        })
+                    else:
+                        update_results.append({
+                            'container': container_name,
+                            'status': 'failed',
+                            'error': f"Failed to create new container: {create_result.stderr}"
+                        })
+                    
+                except (json.JSONDecodeError, KeyError, IndexError) as e:
+                    update_results.append({
+                        'container': container_name,
+                        'status': 'failed',
+                        'error': f"Error processing container: {str(e)}"
+                    })
+            
+            return {
+                'success': True,
+                'results': update_results,
+                'total_containers': len(container_names),
+                'successful_updates': sum(1 for r in update_results if r['status'] == 'updated'),
+                'failed_updates': sum(1 for r in update_results if r['status'] == 'failed')
+            }
+            
+        except Exception as e:
+            logger.error(f"Error in update_containers: {str(e)}")
+            return {
+                'success': False,
+                'error': f"Error updating containers: {str(e)}"
+            }
