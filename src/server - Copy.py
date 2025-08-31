@@ -21,9 +21,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Any, Union, Literal, TypedDict
 
-import json
 from fastmcp import FastMCP, Tool, ToolException, Param, Return
-from .json_encoder import dumps as custom_dumps, loads as custom_loads
 from pydantic import BaseModel, Field, field_validator, HttpUrl
 
 # Configure logging
@@ -41,38 +39,11 @@ from workflow_intel.problem_detection import ProblemDetector
 from workflow_intel.automation import AutomationManager
 from workflow_intel.vienna_specific import ViennaEnvironment
 
-# Import refactored tool modules
-from dockermcp.tools.containers import (
-    list_containers, get_container_info, create_container, 
-    start_container, stop_container, restart_container, 
-    remove_container, get_container_logs
-)
-from dockermcp.tools.containers.container_tools_registry import register_container_tools
-from dockermcp.tools.images import (
-    list_images, pull_image, tag_image
-)
-from dockermcp.tools.networks import (
-    list_networks, create_network, remove_network
-)
-from dockermcp.tools.volumes import (
-    list_volumes, create_volume, remove_volume
-)
-from dockermcp.tools.system import (
-    system_info, get_docker_version, system_df, ping, 
-    docker_auth, system_prune, system_events, system_data_usage
-)
-from dockermcp.tools.workflow import (
-    create_workflow, execute_workflow, get_workflow_status,
-    list_workflows, cancel_workflow
-)
-
-# Initialize FastMCP server with custom JSON encoder
+# Initialize FastMCP server
 mcp = FastMCP(
     name="Sandra's Docker MCP Server",
     version="2.10.1",
-    description="Comprehensive Docker operations with Austrian efficiency",
-    json_dumps=custom_dumps,
-    json_loads=custom_loads
+    description="Comprehensive Docker operations with Austrian efficiency"
 )
 
 # Pydantic models for request/response validation
@@ -147,49 +118,6 @@ stack_health = StackHealthChecker()
 problem_detector = ProblemDetector()
 automation_mgr = AutomationManager()
 vienna_env = ViennaEnvironment()
-
-# Register all tools with the MCP instance
-# Container tools
-mcp.tool(list_containers)
-mcp.tool(get_container_info)
-mcp.tool(create_container)
-mcp.tool(start_container)
-mcp.tool(stop_container)
-mcp.tool(restart_container)
-mcp.tool(remove_container)
-mcp.tool(get_container_logs)
-
-# Image tools
-mcp.tool(list_images)
-mcp.tool(pull_image)
-mcp.tool(tag_image)
-
-# Network tools
-mcp.tool(list_networks)
-mcp.tool(create_network)
-mcp.tool(remove_network)
-
-# Volume tools
-mcp.tool(list_volumes)
-mcp.tool(create_volume)
-mcp.tool(remove_volume)
-
-# System tools
-mcp.tool(system_info)
-mcp.tool(get_docker_version)
-mcp.tool(system_df)
-mcp.tool(ping)
-mcp.tool(docker_auth)
-mcp.tool(system_prune)
-mcp.tool(system_events)
-mcp.tool(system_data_usage)
-
-# Workflow tools
-mcp.tool(create_workflow)
-mcp.tool(execute_workflow)
-mcp.tool(get_workflow_status)
-mcp.tool(list_workflows)
-mcp.tool(cancel_workflow)
 
 # Error handling
 def handle_error(error: Exception, context: str = "") -> Dict[str, Any]:
@@ -1937,24 +1865,9 @@ def main():
         logger.error(f"❌ Docker verification failed: {e}")
         sys.exit(1)
     
-    # Register container tools with detailed logging
-    try:
-        logger.info("🔄 Registering container tools...")
-        register_container_tools(mcp)
-        logger.info("✅ Container tools registered successfully")
-    except Exception as e:
-        logger.error(f"❌ Failed to register container tools: {e}")
-        sys.exit(1)
-    
     # Start the FastMCP server
     logger.info("🎯 Austrian efficiency: All systems operational")
-    logger.info("🌐 Starting FastMCP server...")
-    mcp.run(
-        host="0.0.0.0",
-        port=8000,
-        log_level="info",
-        reload=True
-    )
+    mcp.run()
 
 if __name__ == "__main__":
     main()

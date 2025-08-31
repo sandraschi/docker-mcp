@@ -1,16 +1,23 @@
 # DockerMCP 🐳
 
-**FastMCP 2.10 server for comprehensive Docker operations with Austrian efficiency**
+## FastMCP 2.11.3 server for comprehensive Docker operations with Austrian efficiency
 
-[![FastMCP](https://img.shields.io/badge/FastMCP-2.10-blue)](https://github.com/jlowin/fastmcp)
+[![FastMCP](https://img.shields.io/badge/FastMCP-2.10.1-blue)](https://github.com/jlowin/fastmcp)
 [![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Austrian Efficiency](https://img.shields.io/badge/Austrian-Efficiency-red)](https://en.wikipedia.org/wiki/Austrian_school)
 
-*Vienna-style Docker management with FastMCP 2.10 - because your containers deserve Sachertorte-level precision.*
+*Vienna-style Docker management with FastMCP 2.10.1 - because your containers deserve Sachertorte-level precision.*
 
 ## 🚀 Features
+
+### Stateful Operations (New in 2.11.3)
+
+- **Session Management**: Maintain state across multiple requests
+- **Persistent Storage**: Store and retrieve configuration and state
+- **Background Tasks**: Long-running operations with progress tracking
+- **Event Sourcing**: Track changes to Docker resources over time
 
 ### Core Docker Operations
 
@@ -27,13 +34,33 @@
 - **Intelligent Recovery**: Automated fixes for common Docker issues
 - **Maintenance Recommendations**: Proactive suggestions for keeping your Docker environment clean
 
+## 🏗 Project Structure
+
+```text
+dockermcp/
+├── src/
+│   └── dockermcp/
+│       ├── tools/               # FastMCP 2.11.3 compatible tools
+│       │   ├── containers.py    # Container management tools
+│       │   ├── networks.py      # Network management tools
+│       │   ├── volumes.py       # Volume management tools
+│       │   ├── system.py        # System-level tools
+│       │   └── workflow.py      # Workflow automation tools
+│       ├── core/               # Core Docker operations
+│       ├── models/             # Pydantic models
+│       ├── state.py            # State management
+│       └── server.py           # Main entry point
+└── tests/                      # Test suite
+```
+
 ## 📦 Installation
 
 ### Prerequisites
 
 - Python 3.8+
 - Docker Engine 20.10.0+
-- FastMCP 2.10+
+- FastMCP 2.11.3+
+- Redis Server (for state management)
 
 ### From Source
 

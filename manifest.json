@@ -35,7 +35,7 @@
       "type": "string",
       "title": "Docker Socket Path",
       "description": "Path to the Docker socket (default: /var/run/docker.sock on Unix, //./pipe/docker_engine on Windows)",
-      "default": "/var/run/docker.sock"
+      "default": "//./pipe/docker_engine"
     },
     "default_workspace": {
       "type": "directory",

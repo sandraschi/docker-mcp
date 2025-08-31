@@ -3,7 +3,7 @@ Problem detection functionality for Docker MCP.
 Provides tools to detect and diagnose common Docker issues.
 """
 import json
-import subprocess
+from dockermcp.utils import run_docker_command
 import re
 from typing import Dict, Any, List, Optional, Tuple
 import logging
@@ -60,12 +60,8 @@ class ProblemDetector:
         issues = []
         
         try:
-            # Check if Docker is running
-            result = subprocess.run(
-                ['docker', 'info'],
-                capture_output=True,
-                text=True
-            )
+            # Check if Docker is running using the utility function
+            docker_info = run_docker_command('info', format_json=False)
             
             if result.returncode != 0:
                 issues.append({
@@ -76,12 +72,8 @@ class ProblemDetector:
                     'recommendation': 'Start the Docker service and try again.'
                 })
             
-            # Check for low disk space
-            df_result = subprocess.run(
-                ['docker', 'system', 'df', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Check for low disk space using the utility function
+            df_info = run_docker_command('system', ['df'], format_json=True)
             
             if df_result.returncode == 0:
                 try:
@@ -108,12 +100,8 @@ class ProblemDetector:
         issues = []
         
         try:
-            # Get all containers (including stopped ones)
-            result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Get all containers (including stopped ones) using the utility function
+            containers = run_docker_command('ps', ['-a'], format_json=True)
             
             if result.returncode != 0:
                 return issues
@@ -133,12 +121,8 @@ class ProblemDetector:
                     exit_code = re.search(r'\(([0-9]+)\)', status)
                     exit_code = exit_code.group(1) if exit_code else 'unknown'
                     
-                    # Get container logs for context
-                    log_result = subprocess.run(
-                        ['docker', 'logs', '--tail=20', container['ID']],
-                        capture_output=True,
-                        text=True
-                    )
+                    # Get container logs for context using the utility function
+                    log_result = run_docker_command('logs', ['--tail=20', container['ID']], format_json=False)
                     
                     logs = log_result.stderr or log_result.stdout or 'No logs available'
                     
@@ -177,12 +161,8 @@ class ProblemDetector:
         issues = []
         
         try:
-            # Check for dangling images
-            result = subprocess.run(
-                ['docker', 'images', '-f', 'dangling=true', '--format', '{{.ID}}'],
-                capture_output=True,
-                text=True
-            )
+            # Check for dangling images using the utility function
+            dangling_images = run_docker_command('images', ['-f', 'dangling=true', '--format', '{{.ID}}'], format_json=False)
             
             if result.returncode == 0 and result.stdout.strip():
                 dangling_count = len([i for i in result.stdout.split('\n') if i.strip()])
@@ -195,12 +175,8 @@ class ProblemDetector:
                         'recommendation': 'Run "docker image prune" to remove dangling images.'
                     })
             
-            # Check for large images
-            result = subprocess.run(
-                ['docker', 'images', '--format', '{{.Size}}\t{{.Repository}}:{{.Tag}}'],
-                capture_output=True,
-                text=True
-            )
+            # Check for large images using the utility function
+            images = run_docker_command('images', ['--format', '{{.Size}}	{{.Repository}}:{{.Tag}}'], format_json=False)
             
             if result.returncode == 0:
                 large_images = []
@@ -246,12 +222,8 @@ class ProblemDetector:
         issues = []
         
         try:
-            # Check for networks with no containers
-            result = subprocess.run(
-                ['docker', 'network', 'ls', '--format', '{{.Name}}'],
-                capture_output=True,
-                text=True
-            )
+            # Check for networks with no containers using the utility function
+            networks = run_docker_command('network', ['ls', '--format', '{{.Name}}'], format_json=False)
             
             if result.returncode != 0:
                 return issues
@@ -262,12 +234,8 @@ class ProblemDetector:
                 if network in ['host', 'none', 'bridge']:
                     continue
                 
-                # Check if network has any containers
-                containers_result = subprocess.run(
-                    ['docker', 'network', 'inspect', '--format', '{{.Containers}}', network],
-                    capture_output=True,
-                    text=True
-                )
+                # Check if network has any containers using the utility function
+                network_info = run_docker_command('network', ['inspect', '--format', '{{.Containers}}', network], format_json=False)
                 
                 if containers_result.returncode == 0 and not containers_result.stdout.strip():
                     issues.append({
@@ -288,12 +256,8 @@ class ProblemDetector:
         issues = []
         
         try:
-            # Check for volumes not used by any container
-            result = subprocess.run(
-                ['docker', 'volume', 'ls', '--format', '{{.Name}}'],
-                capture_output=True,
-                text=True
-            )
+            # Check for volumes not used by any container using the utility function
+            volumes = run_docker_command('volume', ['ls', '--format', '{{.Name}}'], format_json=False)
             
             if result.returncode != 0:
                 return issues
@@ -301,12 +265,8 @@ class ProblemDetector:
             volumes = [v for v in result.stdout.strip().split('\n') if v]
             
             for volume in volumes:
-                # Check if volume is in use
-                in_use_result = subprocess.run(
-                    ['docker', 'ps', '-a', '--filter', f'volume={volume}', '--format', '{{.ID}}'],
-                    capture_output=True,
-                    text=True
-                )
+                # Check if volume is in use using the utility function
+                in_use_containers = run_docker_command('ps', ['-a', '--filter', f'volume={volume}', '--format', '{{.ID}}'], format_json=False)
                 
                 if in_use_result.returncode == 0 and not in_use_result.stdout.strip():
                     issues.append({

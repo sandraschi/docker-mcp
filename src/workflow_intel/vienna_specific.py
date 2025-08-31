@@ -3,7 +3,7 @@ Vienna-specific functionality for Docker MCP.
 Provides tools specific to Sandra's Vienna environment.
 """
 import json
-import subprocess
+from dockermcp.utils import run_docker_command
 import socket
 from typing import Dict, Any, List, Optional
 import logging
@@ -27,12 +27,8 @@ class ViennaEnvironment:
             hostname = socket.gethostname()
             ip_address = socket.gethostbyname(hostname)
             
-            # Get Docker system info
-            docker_info = subprocess.run(
-                ['docker', 'system', 'info', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Get Docker system info using the utility function
+            docker_info = run_docker_command('system', ['info'])
             
             docker_data = {}
             if docker_info.returncode == 0:
@@ -41,12 +37,8 @@ class ViennaEnvironment:
                 except json.JSONDecodeError:
                     pass
             
-            # Get running containers
-            containers = subprocess.run(
-                ['docker', 'ps', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Get running containers using the utility function
+            containers = run_docker_command('ps')
             
             running_containers = []
             if containers.returncode == 0:
@@ -100,12 +92,8 @@ class ViennaEnvironment:
         }
         
         try:
-            # Get all containers
-            result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Get all containers using the utility function
+            containers = run_docker_command('ps', ['-a'])
             
             if result.returncode != 0:
                 return stacks

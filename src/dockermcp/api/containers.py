@@ -1,0 +1,69 @@
+"""
+Container management API endpoints.
+
+This module provides FastMCP tool endpoints for container operations.
+"""
+from typing import List, Optional
+from fastmcp import FastMCP
+from pydantic import BaseModel, Field
+from ...models import ContainerInfo, BaseResponse
+import logging
+
+logger = logging.getLogger(__name__)
+
+# Initialize FastMCP
+mcp = FastMCP()
+
+class ContainerListResponse(BaseResponse):
+    """Response model for listing containers."""
+    data: List[ContainerInfo] = []
+
+@mcp.tool(
+    name="list_containers",
+    description="List all Docker containers with detailed information"
+)
+async def list_containers(all: bool = True) -> ContainerListResponse:
+    """
+    List all Docker containers.
+    
+    Args:
+        all: If True, show all containers. If False, only show running containers.
+        
+    Returns:
+        ContainerListResponse: List of containers with their details.
+        
+    Example:
+        >>> list_containers(all=False)
+        {
+            "success": true,
+            "message": "Containers retrieved successfully",
+            "data": [
+                {
+                    "id": "a1b2c3d4e5f6",
+                    "name": "my-container",
+                    "status": "running",
+                    "image": "nginx:latest",
+                    "created": "2023-01-01T12:00:00Z"
+                }
+            ]
+        }
+    """
+    try:
+        # TODO: Replace with actual container listing logic
+        # from ..core.containers import ContainerManager
+        # manager = ContainerManager(docker_client)
+        # containers = await manager.list_containers(all=all)
+        return ContainerListResponse(
+            success=True,
+            message="Containers retrieved successfully",
+            data=[]  # Placeholder
+        )
+    except Exception as e:
+        logger.error(f"Error listing containers: {str(e)}")
+        return ContainerListResponse(
+            success=False,
+            message="Failed to list containers",
+            error=str(e)
+        )
+
+# Add more container-related endpoints here

@@ -3,7 +3,7 @@ Automation functionality for Docker MCP.
 Provides tools to automate common Docker operations.
 """
 import json
-import subprocess
+from dockermcp.utils import run_docker_command
 import time
 from typing import Dict, Any, List, Optional, Callable
 import logging
@@ -26,12 +26,8 @@ class AutomationManager:
             Dict containing restart results
         """
         try:
-            # Get all containers
-            result = subprocess.run(
-                ['docker', 'ps', '-a', '--format', '{{json .}}'],
-                capture_output=True,
-                text=True
-            )
+            # Get all containers using the utility function
+            containers = run_docker_command('ps', ['-a'], format_json=True)
             
             if result.returncode != 0:
                 return {
@@ -68,22 +64,15 @@ class AutomationManager:
                 container_name = container.get('Names', '')
                 
                 for attempt in range(1, max_attempts + 1):
-                    # Try to restart the container
-                    restart_result = subprocess.run(
-                        ['docker', 'restart', container_id],
-                        capture_output=True,
-                        text=True
-                    )
+                    # Try to restart the container using the utility function
+                    restart_result = run_docker_command('restart', [container_id], format_json=False)
                     
                     if restart_result.returncode == 0:
                         # Verify container is running
                         time.sleep(2)  # Give it a moment to start
                         
-                        check_result = subprocess.run(
-                            ['docker', 'inspect', '--format', '{{.State.Running}}', container_id],
-                            capture_output=True,
-                            text=True
-                        )
+                        # Check container status using the utility function
+                        check_result = run_docker_command('inspect', ['--format', '{{.State.Running}}', container_id], format_json=False)
                         
                         is_running = check_result.stdout.strip() == 'true'
                         
@@ -133,35 +122,19 @@ class AutomationManager:
             Dict containing cleanup results
         """
         try:
-            # Prune containers
-            container_result = subprocess.run(
-                ['docker', 'container', 'prune', '-f'],
-                capture_output=True,
-                text=True
-            )
+            # Prune containers using the utility function
+            container_result = run_docker_command('container', ['prune', '-f'], format_json=False)
             
-            # Prune networks
-            network_result = subprocess.run(
-                ['docker', 'network', 'prune', '-f'],
-                capture_output=True,
-                text=True
-            )
+            # Prune networks using the utility function
+            network_result = run_docker_command('network', ['prune', '-f'], format_json=False)
             
-            # Prune images
-            image_result = subprocess.run(
-                ['docker', 'image', 'prune', '-a', '-f'],
-                capture_output=True,
-                text=True
-            )
+            # Prune images using the utility function
+            image_result = run_docker_command('image', ['prune', '-a', '-f'], format_json=False)
             
-            # Prune volumes if requested
+            # Prune volumes if requested using the utility function
             volume_result = None
             if prune_volumes:
-                volume_result = subprocess.run(
-                    ['docker', 'volume', 'prune', '-f'],
-                    capture_output=True,
-                    text=True
-                )
+                volume_result = run_docker_command('volume', ['prune', '-f'], format_json=False)
             
             return {
                 'success': True,
@@ -195,13 +168,9 @@ class AutomationManager:
             Dict containing update results
         """
         try:
-            # Get all containers if none specified
+            # Get all containers if none specified using the utility function
             if not container_names:
-                result = subprocess.run(
-                    ['docker', 'ps', '--format', '{{.Names}}'],
-                    capture_output=True,
-                    text=True
-                )
+                result = run_docker_command('ps', ['--format', '{{.Names}}'], format_json=False)
                 
                 if result.returncode != 0:
                     return {
@@ -214,12 +183,8 @@ class AutomationManager:
             update_results = []
             
             for container_name in container_names:
-                # Get container info
-                inspect_result = subprocess.run(
-                    ['docker', 'inspect', container_name],
-                    capture_output=True,
-                    text=True
-                )
+                # Get container info using the utility function
+                container_info = run_docker_command('inspect', [container_name], format_json=True)
                 
                 if inspect_result.returncode != 0:
                     update_results.append({
@@ -233,12 +198,8 @@ class AutomationManager:
                     container_info = json.loads(inspect_result.stdout)[0]
                     image_name = container_info['Config']['Image']
                     
-                    # Pull the latest image
-                    pull_result = subprocess.run(
-                        ['docker', 'pull', image_name],
-                        capture_output=True,
-                        text=True
-                    )
+                    # Pull the latest image using the utility function
+                    pull_result = run_docker_command('pull', [image_name], format_json=False)
                     
                     if pull_result.returncode != 0:
                         update_results.append({
@@ -248,12 +209,8 @@ class AutomationManager:
                         })
                         continue
                     
-                    # Stop and remove the old container
-                    stop_result = subprocess.run(
-                        ['docker', 'stop', container_name],
-                        capture_output=True,
-                        text=True
-                    )
+                    # Stop and remove the old container using the utility function
+                    stop_result = run_docker_command('stop', [container_name], format_json=False)
                     
                     if stop_result.returncode != 0:
                         update_results.append({
@@ -296,12 +253,8 @@ class AutomationManager:
                     if original_config.get('Cmd'):
                         create_cmd.extend(original_config['Cmd'])
                     
-                    # Create and start the new container
-                    create_result = subprocess.run(
-                        create_cmd,
-                        capture_output=True,
-                        text=True
-                    )
+                    # Create and start the new container using the utility function
+                    create_result = run_docker_command(create_cmd[0], create_cmd[1:], format_json=False)
                     
                     if create_result.returncode == 0:
                         update_results.append({

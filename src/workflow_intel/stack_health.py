@@ -3,7 +3,7 @@ Stack health checking functionality for Docker MCP.
 Provides tools to monitor and report on the health of Docker stacks.
 """
 import json
-import subprocess
+from dockermcp.utils import run_docker_command
 from typing import Dict, Any, List, Optional
 import logging
 
@@ -25,12 +25,8 @@ class StackHealthChecker:
             Dict containing health status and details
         """
         try:
-            # Get stack services
-            result = subprocess.run(
-                ['docker', 'stack', 'ps', '--format', '{{json .}}', stack_name],
-                capture_output=True,
-                text=True
-            )
+            # Get stack services using the utility function
+            services = run_docker_command('stack', ['ps', stack_name], format_json=True)
             
             if result.returncode != 0:
                 return {
@@ -99,11 +95,8 @@ class StackHealthChecker:
             Dict containing failed container information
         """
         try:
-            result = subprocess.run(
-                ['docker', 'stack', 'ps', '--format', '{{json .}}', '--filter', 'desired-state=running', stack_name],
-                capture_output=True,
-                text=True
-            )
+            # Get running stack services using the utility function
+            services = run_docker_command('stack', ['ps', '--filter', 'desired-state=running', stack_name], format_json=True)
             
             if result.returncode != 0:
                 return {
