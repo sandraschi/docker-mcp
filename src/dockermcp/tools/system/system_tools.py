@@ -1,7 +1,7 @@
 """
 System management tools for Docker MCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker system.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker system.
 """
 import asyncio
 import logging

@@ -1,7 +1,7 @@
 """
 Docker Compose Tools for DockerMCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker Compose applications.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker Compose applications.
 """
 from .compose_models import *
 from .compose_tools import *

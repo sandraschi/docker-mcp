@@ -1,7 +1,7 @@
 """
 Network management tools for Docker MCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker networks.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker networks.
 """
 # Import models
 from .network_models import (

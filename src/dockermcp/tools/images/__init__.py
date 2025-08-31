@@ -1,7 +1,7 @@
 """
 Docker Image Management Tools for DockerMCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker images.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker images.
 It includes functionality for pulling, building, tagging, and managing Docker images.
 """
 

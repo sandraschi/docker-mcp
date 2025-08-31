@@ -1,7 +1,7 @@
 """
-Container tools implementation for Docker MCP.
+Container management tools for Docker MCP.
 
-This module provides the implementation of container-related tools.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker containers.
 """
 from typing import Dict, Any, Optional, List, Type, TypeVar, Generic, Union
 from datetime import datetime

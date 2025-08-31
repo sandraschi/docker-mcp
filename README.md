@@ -1,23 +1,33 @@
-# DockerMCP 🐳
+# DockerMCP 
 
 ## FastMCP 2.11.3 server for comprehensive Docker operations with Austrian efficiency
 
-[![FastMCP](https://img.shields.io/badge/FastMCP-2.10.1-blue)](https://github.com/jlowin/fastmcp)
+[![FastMCP](https://img.shields.io/badge/FastMCP-2.11.3-blue)](https://github.com/jlowin/fastmcp)
 [![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Austrian Efficiency](https://img.shields.io/badge/Austrian-Efficiency-red)](https://en.wikipedia.org/wiki/Austrian_school)
 
-*Vienna-style Docker management with FastMCP 2.10.1 - because your containers deserve Sachertorte-level precision.*
+*Vienna-style Docker management with FastMCP 2.11.3 - because your containers deserve Sachertorte-level precision.*
 
 ## 🚀 Features
 
-### Stateful Operations (New in 2.11.3)
+### State Management (Powered by FastMCP 2.11.3)
 
-- **Session Management**: Maintain state across multiple requests
-- **Persistent Storage**: Store and retrieve configuration and state
-- **Background Tasks**: Long-running operations with progress tracking
-- **Event Sourcing**: Track changes to Docker resources over time
+DockerMCP leverages FastMCP 2.11.3's built-in state management system for all its stateful operations. This provides several key benefits:
+
+- **No External Dependencies**: No Redis or other external services required
+- **Consistent State**: All state is managed within the FastMCP runtime
+- **TTL Support**: Automatic expiration of temporary state
+- **Request Isolation**: Clean separation between different client sessions
+- **Efficient Storage**: Optimized for minimal memory footprint
+
+#### Key State Management Features
+
+- Session persistence across requests
+- Automatic cleanup of stale data
+- Thread-safe operations
+- Built-in caching for improved performance
 
 ### Core Docker Operations
 
@@ -40,17 +50,31 @@
 dockermcp/
 ├── src/
 │   └── dockermcp/
+│       ├── api/                 # API endpoints and routes
+│       ├── core/                # Core Docker operations
+│       │   ├── containers.py    # Container management
+│       │   ├── images.py        # Image handling
+│       │   ├── networks.py      # Network management
+│       │   ├── system.py        # System operations
+│       │   └── volumes.py       # Volume management
+│       │
+│       ├── models/              # Data models and schemas
 │       ├── tools/               # FastMCP 2.11.3 compatible tools
-│       │   ├── containers.py    # Container management tools
-│       │   ├── networks.py      # Network management tools
-│       │   ├── volumes.py       # Volume management tools
-│       │   ├── system.py        # System-level tools
-│       │   └── workflow.py      # Workflow automation tools
-│       ├── core/               # Core Docker operations
-│       ├── models/             # Pydantic models
-│       ├── state.py            # State management
-│       └── server.py           # Main entry point
-└── tests/                      # Test suite
+│       │   ├── compose/         # Docker Compose tools
+│       │   ├── containers/      # Container management tools
+│       │   ├── images/          # Image management tools
+│       │   ├── networks/        # Network management tools
+│       │   ├── system/          # System management tools
+│       │   ├── volumes/         # Volume management tools
+│       │   └── workflow/        # Workflow automation tools
+│       │
+│       └── utils/               # Utility functions
+│           ├── json_utils.py    # JSON handling utilities
+│           └── process_utils.py # Process management utilities
+│
+├── tests/                      # Test suite
+├── docs/                       # Documentation
+└── examples/                   # Usage examples
 ```
 
 ## 📦 Installation
@@ -59,8 +83,7 @@ dockermcp/
 
 - Python 3.8+
 - Docker Engine 20.10.0+
-- FastMCP 2.11.3+
-- Redis Server (for state management)
+- FastMCP 2.11.3+ (handles all state management internally)
 
 ### From Source
 

@@ -1,7 +1,7 @@
 """
 Container management tools for Docker MCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker containers.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker containers.
 """
 # Import models
 from .container_models import (

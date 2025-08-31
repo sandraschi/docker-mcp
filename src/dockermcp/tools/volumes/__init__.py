@@ -1,7 +1,7 @@
 """
 Volume management tools for Docker MCP.
 
-This module provides FastMCP 2.10.1 compatible tools for managing Docker volumes.
+This module provides FastMCP 2.11.3 compatible tools for managing Docker volumes.
 """
 # Import models
 from .volume_models import (

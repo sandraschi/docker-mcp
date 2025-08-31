@@ -1,11 +1,11 @@
 """
-DockerMCP - FastMCP 2.10.1 Server for Docker Operations
+DockerMCP - FastMCP 2.11.3 Server for Docker Operations
 
-This package implements a FastMCP 2.10.1 compatible server with STDIO connection
+This package implements a FastMCP 2.11.3 compatible server with STDIO connection
 for managing Docker containers, images, networks, and volumes.
 
 Key Features:
-- FastMCP 2.10.1 protocol implementation
+- FastMCP 2.11.3 protocol implementation
 - STDIO-based client communication
 - Comprehensive Docker management
 - Asynchronous I/O operations

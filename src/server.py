@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Sandra's Docker MCP Server - Austrian Efficiency Edition
-Built with FastMCP 2.10.1 - Comprehensive Docker operations + Workflow intelligence
+Built with FastMCP 2.11.3 - Comprehensive Docker operations + Workflow intelligence
 
 Features:
 - 25 bread-and-butter Docker operations (complete CRUD)
@@ -69,7 +69,7 @@ from dockermcp.tools.workflow import (
 # Initialize FastMCP server with custom JSON encoder
 mcp = FastMCP(
     name="Sandra's Docker MCP Server",
-    version="2.10.1",
+    version="2.11.3",
     description="Comprehensive Docker operations with Austrian efficiency",
     json_dumps=custom_dumps,
     json_loads=custom_loads

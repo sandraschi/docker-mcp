@@ -1,5 +1,5 @@
 """
-Docker MCP Tools - FastMCP 2.10.1 compatible tools
+Docker MCP Tools - FastMCP 2.11.3 compatible tools
 
 Docker MCP Tools Package
 
@@ -25,7 +25,7 @@ except ImportError:
 # Initialize FastMCP instance
 mcp = FastMCP(
     name="Docker MCP Tools",
-    version="2.10.1"
+    version="2.11.3"
 )
 
 def discover_and_register_tools() -> None:

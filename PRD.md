@@ -2,11 +2,11 @@
 
 ## 1. Overview
 
-DockerMCP is a FastMCP 2.10.1 compliant server that provides a comprehensive interface for managing Docker containers, images, networks, and volumes. It's designed with Austrian efficiency principles to deliver precise and reliable container management.
+DockerMCP is a FastMCP 2.11.3 compliant server that provides a comprehensive interface for managing Docker containers, images, networks, and volumes. It's designed with Austrian efficiency principles to deliver precise and reliable container management.
 
 ## 2. Objectives
 
-- Provide a standardized interface for Docker operations via FastMCP 2.10.1
+- Provide a standardized interface for Docker operations via FastMCP 2.11.3
 - Ensure high reliability and performance for container management
 - Implement best practices for container orchestration
 - Offer workflow automation capabilities
@@ -14,7 +14,26 @@ DockerMCP is a FastMCP 2.10.1 compliant server that provides a comprehensive int
 
 ## 3. Features
 
-### 3.1 Core Features
+### 3.1 State Management
+
+DockerMCP utilizes FastMCP 2.11.3's built-in state management system, providing a robust and efficient solution without external dependencies.
+
+#### Key Aspects of State Management
+
+- **Architecture**: In-memory state management within the FastMCP runtime
+- **Persistence**: State is maintained across requests with configurable TTL
+- **Isolation**: Each client session maintains independent state
+- **Performance**: Optimized for high throughput and low latency
+- **Reliability**: Automatic cleanup of stale data and error recovery
+
+#### Benefits
+
+- No external dependencies (Redis, etc.)
+- Consistent behavior across all operations
+- Built-in support for concurrent access
+- Resource-efficient implementation
+
+### 3.2 Core Features
 
 - **Container Management**
   - Create, start, stop, restart, and remove containers
