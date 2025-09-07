@@ -1,39 +1,42 @@
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 #!/usr/bin/env python3
 """Check if all required modules can be imported."""
 import sys
 import os
 from pathlib import Path
-
-print("Python Path:")
+logger.info("Python Path:")
 for path in sys.path:
-    print(f"  - {path}")
-
-print("\nChecking imports...")
+logger.info(f"  - {path}")
+logger.info("\nChecking imports...")
 
 try:
     import docker
-    print("✅ docker")
+logger.info("✅ docker")
 except ImportError as e:
-    print(f"❌ docker: {e}")
+logger.info(f"❌ docker: {e}")
 
 try:
     import fastmcp
-    print(f"✅ fastmcp ({fastmcp.__version__ if hasattr(fastmcp, '__version__') else 'version unknown'})")
+logger.info(f"✅ fastmcp ({fastmcp.__version__ if hasattr(fastmcp, '__version__') else 'version unknown'})")
 except ImportError as e:
-    print(f"❌ fastmcp: {e}")
+logger.info(f"❌ fastmcp: {e}")
 
 try:
     from dockermcp import mcp
-    print("✅ dockermcp.mcp")
+logger.info("✅ dockermcp.mcp")
 except ImportError as e:
-    print(f"❌ dockermcp.mcp: {e}")
+logger.info(f"❌ dockermcp.mcp: {e}")
 
 try:
     from dockermcp.tools.images import image_tools
-    print("✅ dockermcp.tools.images.image_tools")
+logger.info("✅ dockermcp.tools.images.image_tools")
 except ImportError as e:
-    print(f"❌ dockermcp.tools.images.image_tools: {e}")
-    print("\nCurrent working directory:", os.getcwd())
-    print("Contents of dockermcp directory:")
+logger.info(f"❌ dockermcp.tools.images.image_tools: {e}")
+logger.info("\nCurrent working directory:", os.getcwd())
+logger.info("Contents of dockermcp directory:")
     for f in (Path(__file__).parent / "src" / "dockermcp").glob("**/*.py"):
-        print(f"  - {f.relative_to(Path(__file__).parent / 'src')}")
+logger.info(f"  - {f.relative_to(Path(__file__).parent / 'src')}")

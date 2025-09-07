@@ -22,13 +22,21 @@ __version__ = "2.11.3"
 
 import os
 import logging
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 from typing import Dict, Any, Optional
 
 # Configure package-level logging
-logging.basicConfig(
-    level=os.environ.get("LOG_LEVEL", "INFO"),
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+logger = logging.getLogger(__name__)
+logger.setLevel(logging.INFO)
+handler = logging.StreamHandler()
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 )
+logger.addHandler(handler)
 
 # Import core components after logging is configured
 import docker

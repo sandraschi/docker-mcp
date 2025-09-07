@@ -1,47 +1,45 @@
 import sys
 import os
-sys.path.insert(0, os.path.join(os.getcwd(), 'src'))
+from dockermcp.logging_config import logger, configure_logging
 
-print("Testing container models import...")
+# Configure logging
+configure_logging()
+
+sys.path.insert(0, os.path.join(os.getcwd(), 'src'))
+logger.info("Testing container models import...")
 try:
     from dockermcp.tools.containers.container_models import ContainerInfo
-    print("✅ Container models OK")
+logger.info("✅ Container models OK")
 except Exception as e:
-    print(f"❌ Container models error: {e}")
-
-print("Testing image models import...")
+logger.info(f"❌ Container models error: {e}")
+logger.info("Testing image models import...")
 try:
     from dockermcp.tools.images.image_models import ImageInfo  
-    print("✅ Image models OK")
+logger.info("✅ Image models OK")
 except Exception as e:
-    print(f"❌ Image models error: {e}")
-
-print("Testing network models import...")
+logger.info(f"❌ Image models error: {e}")
+logger.info("Testing network models import...")
 try:
     from dockermcp.tools.networks.network_models import NetworkInfo
-    print("✅ Network models OK") 
+logger.info("✅ Network models OK") 
 except Exception as e:
-    print(f"❌ Network models error: {e}")
-
-print("Testing volumes models import...")
+logger.info(f"❌ Network models error: {e}")
+logger.info("Testing volumes models import...")
 try:
     from dockermcp.tools.volumes.volume_models import VolumeInfo
-    print("✅ Volume models OK")
+logger.info("✅ Volume models OK")
 except Exception as e:
-    print(f"❌ Volume models error: {e}")
-
-print("Testing system models import...")
+logger.info(f"❌ Volume models error: {e}")
+logger.info("Testing system models import...")
 try:
     from dockermcp.tools.system.system_models import SystemInfo
-    print("✅ System models OK")
+logger.info("✅ System models OK")
 except Exception as e:
-    print(f"❌ System models error: {e}")
-    
-print("Testing compose models import...")
+logger.info(f"❌ System models error: {e}")
+logger.info("Testing compose models import...")
 try:
     from dockermcp.tools.compose.compose_models import ComposeProjectInfo
-    print("✅ Compose models OK")
+logger.info("✅ Compose models OK")
 except Exception as e:
-    print(f"❌ Compose models error: {e}")
-
-print("Done.")
+logger.info(f"❌ Compose models error: {e}")
+logger.info("Done.")

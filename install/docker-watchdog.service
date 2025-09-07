@@ -1,0 +1,13 @@
+[Unit]
+Description=Docker Watchdog Service
+After=network.target docker.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/usr/bin/python3 -m dockermcp.services.docker_watchdog
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -1,3 +1,8 @@
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 """
 Docker MCP Tools - FastMCP 2.11.3 compatible tools
 
@@ -51,7 +56,7 @@ def discover_and_register_tools() -> None:
                     mcp.tool(attr)
                     
         except ImportError as e:
-            print(f"Warning: Failed to import tools from {module_name}: {e}")
+            logger.info(f"Warning: Failed to import tools from {module_name}: {e}")
 
 # Import the mcp instance from the main package
 from dockermcp import mcp

@@ -57,6 +57,13 @@ DockerMCP utilizes FastMCP 2.11.3's built-in state management system, providing 
 
 ### 3.2 Advanced Features
 
+- **Docker Watchdog**
+  - Automatic monitoring of Docker daemon health
+  - Cross-platform support (Windows/Linux)
+  - Configurable check intervals and retry policies
+  - Automatic recovery of unresponsive Docker daemon
+  - Detailed logging and status reporting
+
 - **Stack Health Monitoring**
   - Real-time health checks for Docker stacks
   - Automated problem detection and reporting
@@ -87,13 +94,49 @@ DockerMCP utilizes FastMCP 2.11.3's built-in state management system, providing 
 - Sub-second response time for common operations
 - Efficient resource utilization
 
-## 5. Non-Functional Requirements
+## 5. Future Development Roadmap
 
-### 5.1 Reliability
+### 5.1 Short-term (Next Release)
+- **Enhanced Alerting System**
+  - Email notifications for critical events
+  - Webhook integration for monitoring systems
+  - Custom alert thresholds
+
+- **Extended Monitoring**
+  - Container resource usage analytics
+  - Historical performance data
+  - Custom dashboard creation
+
+### 5.2 Medium-term
+- **Cluster Support**
+  - Swarm mode integration
+  - Multi-host monitoring
+  - Load balancing and failover
+
+- **Security Enhancements**
+  - Automated security scanning
+  - Vulnerability detection
+  - Compliance reporting
+
+### 5.3 Long-term
+- **Kubernetes Integration**
+  - Pod monitoring
+  - Helm chart support
+  - Custom resource definitions
+
+- **Self-healing Infrastructure**
+  - Predictive failure analysis
+  - Automated remediation workflows
+  - Machine learning-based optimization
+
+## 6. Non-Functional Requirements
+
+### 6.1 Reliability
 
 - 99.9% uptime
 - Graceful error handling
 - Automatic recovery from failures
+- Watchdog service with configurable health checks
 
 ### 5.2 Security
 

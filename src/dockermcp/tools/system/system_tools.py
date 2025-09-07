@@ -3,12 +3,19 @@ System management tools for Docker MCP.
 
 This module provides FastMCP 2.11.3 compatible tools for managing Docker system.
 """
+from dockermcp.logging_config import logger, configure_logging
+configure_logging()
+
 import asyncio
 import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Union, AsyncGenerator
 
 from fastmcp.tools import Tool
+from typing import Optional, Dict, Any
+import logging
+import docker
+from datetime import datetime
 from pydantic import ValidationError
 
 from dockermcp.core.system import SystemManager
@@ -27,6 +34,383 @@ logger = logging.getLogger(__name__)
 # Initialize system manager
 import docker
 system_mgr = SystemManager(docker_client=docker.from_env())
+
+async def _check_daemon_health() -> Dict[str, Any]:
+    """Check Docker daemon health and accessibility."""
+    try:
+        client = docker.from_env()
+        # Test basic API connectivity
+        client.ping()
+        
+        # Test more intensive operation to verify full functionality
+        try:
+            client.containers.list(limit=1)
+            daemon_status = 'healthy'
+        except Exception as e:
+            daemon_status = 'degraded'
+            logger.warning(f"Docker daemon is accessible but may be degraded: {str(e)}")
+            
+        return {
+            'status': daemon_status,
+            'api_version': client.api.version()['ApiVersion'],
+            'docker_version': client.version()['Version']
+        }
+    except Exception as e:
+        logger.error(f"Docker daemon check failed: {str(e)}")
+        return {
+            'status': 'unavailable',
+            'error': str(e),
+            'recovery_steps': [
+                '1. Check if Docker service is running: `systemctl status docker`',
+                '2. Try restarting Docker: `sudo systemctl restart docker`',
+                '3. Check logs: `journalctl -u docker.service --no-pager -n 50`',
+                '4. If Docker is unresponsive, consider: `sudo systemctl stop docker` then `sudo systemctl start docker`'
+            ]
+        }
+
+@Tool(
+    name="help",
+    description="List all available commands and their descriptions",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'category': {
+                'type': 'string',
+                'description': 'Filter tools by category (containers, images, networks, volumes, system, monitoring)',
+                'enum': ['containers', 'images', 'networks', 'volumes', 'system', 'monitoring', None],
+                'default': None
+            }
+        }
+    }
+)
+@Tool(
+    name="status",
+    description="Get system status and resource usage information with Docker daemon health check",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'detailed': {
+                'type': 'boolean',
+                'description': 'Include detailed resource usage information',
+                'default': False
+            },
+            'include_containers': {
+                'type': 'boolean',
+                'description': 'Include container status in the response',
+                'default': True
+            },
+            'include_system': {
+                'type': 'boolean',
+                'description': 'Include system resource usage information',
+                'default': True
+            },
+            'check_grafana': {
+                'type': 'boolean',
+                'description': 'Check for running Grafana monitoring',
+                'default': True
+            },
+            'check_daemon': {
+                'type': 'boolean',
+                'description': 'Perform Docker daemon health check',
+                'default': True
+            }
+        }
+    }
+)
+async def status(
+    detailed: bool = False,
+    include_containers: bool = True,
+    include_system: bool = True,
+    check_grafana: bool = True,
+    check_daemon: bool = True
+) -> Dict[str, Any]:
+    """
+    Get current status of the Docker system including daemon health, resource usage, and monitoring.
+    
+    Args:
+        detailed: Include detailed resource usage information
+        include_containers: Include container status in the response
+        include_system: Include system resource usage information
+        check_grafana: Check Grafana monitoring status
+        check_daemon: Perform Docker daemon health check
+        
+    Returns:
+        Dictionary with system status information including Docker daemon health
+    """
+    try:
+        result = {
+            'success': True,
+            'message': 'System status retrieved successfully',
+            'timestamp': datetime.utcnow().isoformat() + 'Z',
+            'status': {}
+        }
+        
+        if include_system:
+            # Get system-wide information
+            sys_info = await system_info(detailed=detailed)
+            if sys_info.get('success'):
+                result['status']['system'] = sys_info
+            
+            # Get disk usage
+            disk_usage = await system_disk_usage(verbose=detailed)
+            if disk_usage.get('success'):
+                result['status']['disk_usage'] = disk_usage
+        
+        if include_containers:
+            # Get container status
+            try:
+                from dockermcp.tools.containers.container_tools import list_containers
+                containers = await list_containers(all=True, size=detailed)
+                if containers.get('success'):
+                    result['status']['containers'] = containers
+            except Exception as e:
+                logger.warning(f"Could not fetch container status: {str(e)}")
+        
+        # Add Docker daemon health status
+        if check_daemon:
+            result['status']['daemon'] = await _check_daemon_health()
+            
+            # If daemon is down, skip other checks that would fail
+            if result['status']['daemon'].get('status') != 'healthy':
+                result['message'] = 'Docker daemon is not healthy - some checks were skipped'
+                result['status']['health'] = 'degraded'
+                return result
+                
+        # Add system health status
+        result['status']['health'] = await _check_health()
+        
+        # Check Grafana status if requested
+        if check_grafana:
+            try:
+                from dockermcp.utils.grafana_utils import GrafanaManager
+                grafana_mgr = GrafanaManager(docker_client=docker.from_env())
+                grafana_status = await grafana_mgr.is_grafana_running()
+                result['status']['grafana'] = grafana_status
+                
+                if grafana_status.get('status') != 'running' and detailed:
+                    result['status']['grafana_setup_guide'] = {
+                        'message': 'Grafana is not running. To set up Grafana for Docker monitoring:',
+                        'steps': [
+                            '1. Run: await setup_grafana() to start a Grafana container',
+                            f'2. Access Grafana at http://localhost:13000',
+                            '3. Log in with admin/admin (change password on first login)',
+                            '4. Set up data sources:',
+                            '   - Prometheus: http://prometheus:9090 (if using Docker monitoring stack)',
+                            '   - Node Exporter: For host metrics',
+                            '   - cAdvisor: For container metrics',
+                            '5. Import recommended dashboards:',
+                            '   - Docker Host Metrics (ID: 10619)',
+                            '   - Docker Container & Host (ID: 10620)',
+                            '   - cAdvisor (ID: 193)'
+                        ],
+                        'note': 'For detailed monitoring setup, run: await help(category="monitoring")'
+                    }
+                    
+            except Exception as e:
+                logger.warning(f"Could not check Grafana status: {str(e)}")
+                result['status']['grafana'] = {
+                    'status': 'error',
+                    'error': str(e)
+                }
+        
+        return result
+        
+    except Exception as e:
+        return handle_error(e, "retrieving system status")
+
+
+async def _check_health() -> Dict[str, Any]:
+    """Check the health of the Docker system."""
+    try:
+        # Check if Docker daemon is responding
+        ping = await system_ping()
+        if not ping.get('success'):
+            return {
+                'status': 'unhealthy',
+                'message': 'Docker daemon not responding',
+                'details': ping
+            }
+        
+        # Check disk space
+        disk = await system_disk_usage()
+        if disk.get('success') and 'data' in disk:
+            total_space = disk['data'].get('total_space', 0)
+            used_space = disk['data'].get('used_space', 0)
+            if total_space > 0 and (used_space / total_space) > 0.9:  # 90% full
+                return {
+                    'status': 'degraded',
+                    'message': 'Disk space is critically low',
+                    'details': disk
+                }
+        
+        return {
+            'status': 'healthy',
+            'message': 'All systems operational',
+            'details': {
+                'docker_version': ping.get('data', {}).get('version'),
+                'api_version': ping.get('data', {}).get('api_version')
+            }
+        }
+        
+    except Exception as e:
+        return {
+            'status': 'unknown',
+            'message': f'Health check failed: {str(e)}',
+            'error': str(e)
+        }
+
+
+@Tool(
+    name="help",
+    description="List all available commands and their descriptions",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'category': {
+                'type': 'string',
+                'description': 'Filter tools by category (containers, images, networks, volumes, system)',
+                'enum': ['containers', 'images', 'networks', 'volumes', 'system', None],
+                'default': None
+            }
+        }
+    }
+)
+async def help(category: Optional[str] = None) -> Dict[str, Any]:
+    """
+    List all available Docker MCP commands with their descriptions.
+    
+    Args:
+        category: Optional category to filter commands (containers, images, networks, volumes, system)
+        
+    Returns:
+        Dictionary with available commands grouped by category
+    """
+    try:
+        # In FastMCP 2.12+, get_tools_metadata() doesn't exist
+        # Provide a manual catalog of available commands instead
+        commands = {
+            'containers': [
+                {'name': 'list_containers', 'description': 'List all containers on the Docker host'},
+                {'name': 'create_container', 'description': 'Create a new container'},
+                {'name': 'start_container', 'description': 'Start a container'},
+                {'name': 'stop_container', 'description': 'Stop a running container'},
+                {'name': 'restart_container', 'description': 'Restart a container'},
+                {'name': 'remove_container', 'description': 'Remove a container'},
+                {'name': 'inspect_container', 'description': 'Get detailed information about a container'},
+                {'name': 'container_logs', 'description': 'Get logs from a container'}
+            ],
+            'images': [
+                {'name': 'list_images', 'description': 'List all images on the Docker host'},
+                {'name': 'pull_image', 'description': 'Pull an image from a registry'},
+                {'name': 'build_image', 'description': 'Build an image from a Dockerfile'},
+                {'name': 'remove_image', 'description': 'Remove an image'},
+                {'name': 'tag_image', 'description': 'Add a tag to an image'},
+                {'name': 'inspect_image', 'description': 'Get detailed information about an image'}
+            ],
+            'networks': [
+                {'name': 'list_networks', 'description': 'List all networks'},
+                {'name': 'create_network', 'description': 'Create a new network'},
+                {'name': 'remove_network', 'description': 'Remove a network'},
+                {'name': 'inspect_network', 'description': 'Get detailed information about a network'}
+            ],
+            'volumes': [
+                {'name': 'list_volumes', 'description': 'List all volumes'},
+                {'name': 'create_volume', 'description': 'Create a new volume'},
+                {'name': 'remove_volume', 'description': 'Remove a volume'},
+                {'name': 'inspect_volume', 'description': 'Get detailed information about a volume'}
+            ],
+            'system': [
+                {'name': 'system_info', 'description': 'Get system-wide information'},
+                {'name': 'system_disk_usage', 'description': 'Get disk usage information'},
+                {'name': 'system_prune', 'description': 'Remove unused resources'},
+                {'name': 'system_ping', 'description': 'Test connectivity to Docker daemon'},
+                {'name': 'status', 'description': 'Get overall system status and health'}
+            ],
+            'compose': [
+                {'name': 'compose_up', 'description': 'Create and start containers from Compose file'},
+                {'name': 'compose_down', 'description': 'Stop and remove containers from Compose file'},
+                {'name': 'compose_build', 'description': 'Build services defined in Compose file'},
+                {'name': 'compose_logs', 'description': 'View logs from Compose services'},
+                {'name': 'compose_ps', 'description': 'List containers in Compose project'}
+            ]
+        }
+        
+        # Filter by category if requested
+        if category and category in commands:
+            commands = {category: commands[category]}
+        
+        return {
+            'success': True,
+            'message': 'Available commands retrieved successfully',
+            'commands': commands,
+            'categories': list(commands.keys())
+        }
+        
+    except Exception as e:
+        return handle_error(e, "retrieving help information")
+
+
+@Tool(
+    name="setup_grafana",
+    description="Set up Grafana for home automation monitoring on port 13000",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'port': {
+                'type': 'integer',
+                'description': 'Host port to bind Grafana to (default: 13000)',
+                'default': 13000
+            },
+            'volume': {
+                'type': 'string',
+                'description': 'Name of the volume for persistent storage',
+                'default': 'grafana-storage'
+            },
+            'network': {
+                'type': 'string',
+                'description': 'Docker network to connect Grafana to (e.g., host, bridge, or custom network)',
+                'default': 'host'
+            }
+        }
+    }
+)
+async def setup_grafana(port: int = 13000, volume: str = "grafana-storage", network: str = "host") -> Dict[str, Any]:
+    """
+    Set up Grafana for home automation and camera monitoring.
+    
+    This will start a Grafana container with persistent storage and default configuration
+    optimized for home automation use cases, including camera monitoring and sensor data.
+    
+    Default access: http://localhost:13000 (admin/admin)
+    """
+    try:
+        from dockermcp.utils.grafana_utils import GrafanaManager
+        grafana_mgr = GrafanaManager(docker_client=docker.from_env())
+        result = await grafana_mgr.setup_grafana(port=port, volume=volume)
+        
+        if result.get('success'):
+            result['next_steps'] = [
+                f"1. Open Grafana in your browser: http://localhost:{port}",
+                "2. Log in with admin/admin (change password when prompted)",
+                "3. Add your data sources:",
+                "   - InfluxDB/Telegraf for sensor data",
+                "   - MQTT for IoT device communication",
+                "   - Prometheus for metrics collection",
+                "4. Import home automation dashboards:",
+                "   - Home Automation Dashboard (ID: 13639)",
+                "   - Smart Home Dashboard (ID: 10820)",
+                "5. Set up alerts for motion detection or sensor thresholds"
+            ]
+            result['documentation'] = (
+                "For home automation setup, run: await help(category='grafana')\n"
+                "Recommended plugins: 'grafana-image-renderer' for camera snapshots"
+            )
+            
+        return result
+        
+    except Exception as e:
+        return handle_error(e, "setting up Grafana")
+
 
 def handle_error(
     error: Exception,
@@ -66,7 +450,14 @@ def handle_error(
 
 @Tool(
     name="system_info",
-    description="Get comprehensive system-wide information about the Docker host"
+    description="Get comprehensive system-wide information about the Docker host",
+    parameters={
+        "type": "object",
+        "properties": {
+            "detailed": {"type": "boolean", "description": "Whether to include detailed resource usage information", "default": True}
+        },
+        "required": []
+    }
 )
 async def system_info(detailed: bool = True) -> Dict[str, Any]:
     """Get detailed system-wide information about the Docker host.
@@ -211,7 +602,14 @@ async def system_info(detailed: bool = True) -> Dict[str, Any]:
 
 @Tool(
     name="system_disk_usage",
-    description="Get detailed disk usage information for Docker resources"
+    description="Get detailed disk usage information for Docker resources",
+    parameters={
+        "type": "object",
+        "properties": {
+            "verbose": {"type": "boolean", "description": "Whether to include detailed information about each resource", "default": False}
+        },
+        "required": []
+    }
 )
 async def system_disk_usage(verbose: bool = False) -> Dict[str, Any]:
     """Get detailed disk usage information for Docker resources.
@@ -310,7 +708,12 @@ async def system_disk_usage(verbose: bool = False) -> Dict[str, Any]:
 
 @Tool(
     name="system_ping",
-    description="Ping the Docker server to check connectivity and get version information"
+    description="Ping the Docker server to check connectivity and get version information",
+    parameters={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
 )
 async def system_ping() -> Dict[str, Any]:
     """Ping the Docker server to check connectivity and get version information.
@@ -392,7 +795,24 @@ async def system_ping() -> Dict[str, Any]:
 
 @Tool(
     name="system_auth",
-    description="Authenticate with a Docker registry"
+    description="Authenticate with a Docker registry",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "username": {"type": "string", "description": "Registry username"},
+                    "password": {"type": "string", "description": "Registry password or token"},
+                    "email": {"type": "string", "format": "email", "description": "Email address for the registry account"},
+                    "serveraddress": {"type": "string", "description": "Address of the registry server"},
+                    "reauth": {"type": "boolean", "description": "Whether to force re-authentication", "default": False}
+                },
+                "required": ["username", "password", "serveraddress"]
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def system_auth(
     request: SystemAuthRequest
@@ -474,7 +894,33 @@ async def system_auth(
 
 @Tool(
     name="system_prune",
-    description="Delete unused Docker resources to free up disk space"
+    description="Delete unused Docker resources to free up disk space",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "containers": {"type": "boolean", "description": "Remove all stopped containers", "default": True},
+                    "images": {"type": "boolean", "description": "Remove unused images", "default": True},
+                    "volumes": {"type": "boolean", "description": "Remove unused volumes", "default": False},
+                    "networks": {"type": "boolean", "description": "Remove unused networks", "default": True},
+                    "build_cache": {"type": "boolean", "description": "Remove build cache", "default": True},
+                    "all": {"type": "boolean", "description": "Remove all unused resources (overrides other options)", "default": False},
+                    "filters": {
+                        "type": "object",
+                        "description": "Filter what to prune",
+                        "properties": {
+                            "until": {"type": "string", "description": "Prune resources created before this timestamp"},
+                            "label": {"type": "array", "items": {"type": "string"}, "description": "Prune resources with matching labels"}
+                        }
+                    }
+                },
+                "required": []
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def system_prune(
     request: SystemPruneRequest
@@ -607,7 +1053,34 @@ async def system_prune(
 
 @Tool(
     name="system_events",
-    description="Monitor Docker events in real-time"
+    description="Monitor Docker events in real-time",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "since": {"type": "string", "format": "date-time", "description": "Show events created since this timestamp"},
+                    "until": {"type": "string", "format": "date-time", "description": "Show events created before this timestamp"},
+                    "filters": {
+                        "type": "object",
+                        "description": "Filter events by criteria",
+                        "properties": {
+                            "type": {"type": "array", "items": {"type": "string"}, "description": "Event types to include (e.g., 'container', 'image', 'network')"},
+                            "event": {"type": "array", "items": {"type": "string"}, "description": "Event actions to include (e.g., 'start', 'stop', 'die')"},
+                            "container": {"type": "array", "items": {"type": "string"}, "description": "Filter by container ID or name"},
+                            "image": {"type": "array", "items": {"type": "string"}, "description": "Filter by image ID or name"},
+                            "label": {"type": "array", "items": {"type": "string"}, "description": "Filter by labels"},
+                            "event_type": {"type": "array", "items": {"type": "string"}, "description": "Filter by event type (deprecated, use 'type' instead)"}
+                        }
+                    },
+                    "stream": {"type": "boolean", "description": "Stream events in real-time", "default": False}
+                },
+                "required": []
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def system_events(
     request: SystemEventsRequest
@@ -640,29 +1113,9 @@ async def system_events(
                 
                 async def callback(event):
                     """Callback for processing events."""
-                    try:
-                        await event_queue.put(event)
-                    except Exception as e:
-                        logger.error(f"Error processing event: {str(e)}")
-                
-                # Start event listener
-                listener = await system_mgr.events(
-                    since=request.since,
-                    until=request.until,
-                    filters=event_filters,
-                    decode=True,
-                    callback=callback
-                )
+                    await event_queue.put(event)
                 
                 try:
-                    # Initial response to start the stream
-                    yield {
-                        'success': True,
-                        'message': 'Event stream started',
-                        'timestamp': datetime.utcnow().isoformat(),
-                        'event': None
-                    }
-                    
                     # Stream events as they arrive
                     while True:
                         try:
@@ -687,6 +1140,7 @@ async def system_events(
                             }
                 except asyncio.CancelledError:
                     logger.info("Event stream cancelled by client")
+                    raise
                 except Exception as e:
                     logger.error(f"Error in event stream: {str(e)}")
                     yield {
@@ -736,7 +1190,12 @@ async def system_events(
 
 @Tool(
     name="system_data_usage",
-    description="Get detailed data usage information about the Docker installation"
+    description="Get detailed data usage information about the Docker installation",
+    parameters={
+        "type": "object",
+        "properties": {},
+        "required": []
+    }
 )
 async def system_data_usage() -> Dict[str, Any]:
     """Get comprehensive data usage information about the Docker installation.

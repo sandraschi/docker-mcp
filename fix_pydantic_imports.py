@@ -1,3 +1,8 @@
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 #!/usr/bin/env python3
 """
 Fix Pydantic 2.x import compatibility for docker-mcp.
@@ -31,7 +36,7 @@ def fix_imports_in_file(filepath: Path) -> bool:
             return True
         return False
     except Exception as e:
-        print(f"Error processing {filepath}: {e}")
+logger.info(f"Error processing {filepath}: {e}")
         return False
 
 def main():
@@ -52,17 +57,17 @@ def main():
         if full_path.exists():
             if fix_imports_in_file(full_path):
                 fixed_files.append(file_path)
-                print(f"✅ Fixed: {file_path}")
+logger.info(f"✅ Fixed: {file_path}")
             else:
-                print(f"ℹ️  No changes needed: {file_path}")
+logger.info(f"ℹ️  No changes needed: {file_path}")
         else:
-            print(f"❌ File not found: {file_path}")
+logger.info(f"❌ File not found: {file_path}")
     
     if fixed_files:
-        print(f"\n🎯 Successfully fixed {len(fixed_files)} files.")
-        print("✅ Pydantic 2.x compatibility restored!")
+logger.info(f"\n🎯 Successfully fixed {len(fixed_files)} files.")
+logger.info("✅ Pydantic 2.x compatibility restored!")
     else:
-        print("\n❌ No files were fixed. Check if imports already correct.")
+logger.info("\n❌ No files were fixed. Check if imports already correct.")
     
     return 0 if fixed_files else 1
 

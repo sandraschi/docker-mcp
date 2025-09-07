@@ -13,7 +13,11 @@ from __future__ import annotations
 
 import asyncio
 import json
-import logging
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 import subprocess
 import sys
 from datetime import datetime
@@ -27,7 +31,7 @@ from .json_encoder import dumps as custom_dumps, loads as custom_loads
 from pydantic import BaseModel, Field, field_validator, HttpUrl
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+
 logger = logging.getLogger(__name__)
 
 # Import our specialized modules

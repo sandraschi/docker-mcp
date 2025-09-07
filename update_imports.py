@@ -1,6 +1,11 @@
 import os
 import re
 from pathlib import Path
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 
 # Base directory of the project
 BASE_DIR = Path(__file__).parent / 'src' / 'dockermcp'
@@ -58,12 +63,12 @@ def update_file_imports(file_path, patterns):
         if modified:
             with open(file_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"Updated: {file_path}")
+logger.info(f"Updated: {file_path}")
         else:
-            print(f"No changes needed: {file_path}")
+logger.info(f"No changes needed: {file_path}")
             
     except Exception as e:
-        print(f"Error processing {file_path}: {str(e)}")
+logger.info(f"Error processing {file_path}: {str(e)}")
 
 def main():
     """Update imports in all specified files."""
@@ -72,7 +77,7 @@ def main():
         if file_path.exists():
             update_file_imports(file_path, patterns)
         else:
-            print(f"File not found: {file_path}")
+logger.info(f"File not found: {file_path}")
 
 if __name__ == "__main__":
     main()

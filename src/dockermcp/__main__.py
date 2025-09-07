@@ -12,7 +12,11 @@ src_dir = str(Path(__file__).parent.absolute())
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-import logging
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 from fastmcp import FastMCP
 from .json_encoder import dumps as custom_dumps, loads as custom_loads
 
@@ -24,9 +28,7 @@ except ImportError:
     from api import containers
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+s - %(name)s - %(levelname)s - %(message)s',
     stream=sys.stdout
 )
 logger = logging.getLogger(__name__)
@@ -34,11 +36,11 @@ logger = logging.getLogger(__name__)
 def main():
     """Initialize and run the Docker MCP server."""
     try:
-        print("=== Docker MCP Server Starting ===")
-        print(f"Python Path: {sys.path}")
+logger.info("=== Docker MCP Server Starting ===")
+logger.info(f"Python Path: {sys.path}")
         
         # Initialize FastMCP with custom JSON encoder
-        print("Initializing FastMCP...")
+logger.info("Initializing FastMCP...")
         mcp = FastMCP(
             name="docker-mcp",
             version="1.0.0",
@@ -48,13 +50,13 @@ def main():
         )
         
         logger.info("Starting Docker MCP server...")
-        print("MCP server initialized. Starting main loop...")
+logger.info("MCP server initialized. Starting main loop...")
         mcp.run()
         
     except Exception as e:
         import traceback
-        print(f"=== ERROR: {str(e)}")
-        print("Stack trace:")
+logger.info(f"=== ERROR: {str(e)}")
+logger.info("Stack trace:")
         traceback.print_exc()
         logger.error(f"Failed to start Docker MCP server: {str(e)}")
         sys.exit(1)

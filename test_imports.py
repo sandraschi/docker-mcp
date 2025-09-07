@@ -1,3 +1,8 @@
+from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
+configure_logging()
+
 #!/usr/bin/env python3
 """Test script to verify all dockermcp imports work after pydantic v2 fixes."""
 
@@ -8,14 +13,14 @@ sys.path.insert(0, os.path.join(os.getcwd(), 'src'))
 def test_import(module_name, description):
     try:
         __import__(module_name)
-        print(f"✅ {description}")
+logger.info(f"✅ {description}")
         return True
     except Exception as e:
-        print(f"❌ {description}: {str(e)}")
+logger.info(f"❌ {description}: {str(e)}")
         return False
 
 def main():
-    print("Testing dockermcp imports after pydantic v2 fixes...\n")
+logger.info("Testing dockermcp imports after pydantic v2 fixes...\n")
     
     tests = [
         ("dockermcp.tools.containers.container_models", "Container models"),
@@ -33,14 +38,13 @@ def main():
     for module, desc in tests:
         if test_import(module, desc):
             passed += 1
-    
-    print(f"\n📊 Results: {passed}/{total} imports successful")
+logger.info(f"\n📊 Results: {passed}/{total} imports successful")
     
     if passed == total:
-        print("🎉 All imports working! Pydantic v2 fix successful.")
+logger.info("🎉 All imports working! Pydantic v2 fix successful.")
         return 0
     else:
-        print(f"💥 {total - passed} imports still failing.")
+logger.info(f"💥 {total - passed} imports still failing.")
         return 1
 
 if __name__ == "__main__":

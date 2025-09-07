@@ -3,547 +3,705 @@ Image management tools for Docker MCP.
 
 This module provides FastMCP 2.11.3 compatible tools for managing Docker images.
 """
+from dockermcp.logging_config import logger, configure_logging
+configure_logging()
+
 import os
 import logging
 from typing import Dict, Any, List, Optional
+
 from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field
 
 # Configure logger
 logger = logging.getLogger(__name__)
-from dockermcp.core.images import ImageManager
+
+# Import models
 from dockermcp.tools.images.image_models import (
-    ImageInfo, ImageResponse, ImageListResponse,
-    PullImageRequest, BuildImageRequest, ImageOperationRequest,
-    RemoveImageRequest, TagImageRequest, SearchImageRequest,
-    PruneImagesRequest, PruneImagesResponse, ImageInspectRequest,
-    ImageSaveRequest, ImageLoadRequest, ImageHistoryRequest,
-    ImageExportRequest, ImageImportRequest
+    ImageInfo, ImageListResponse
 )
 
 # Initialize image manager
 import docker
+from dockermcp.core.images import ImageManager
+
 image_mgr = ImageManager(docker_client=docker.from_env())
 
-@Tool(
-    name="list_images",
-    description="List all Docker images on the host system",
-    parameters={
-        "type": "object",
-        "properties": {
-            "all": {
-                "type": "boolean",
-                "default": True,
-                "description": "Show all images (default: True)"
-            },
-            "filters": {
-                "type": "object",
-                "default": {},
-                "description": "Filter images by criteria"
-            }
-        }
-    },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "images": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "id": {"type": "string"},
-                        "tags": {"type": "array", "items": {"type": "string"}},
-                        "size": {"type": "integer"},
-                        "created": {"type": "string", "format": "date-time"},
-                        "virtual_size": {"type": "integer"},
-                        "used": {"type": "boolean"}
-                    }
-                }
-            },
-            "total_size": {"type": "integer"},
-            "total": {"type": "integer"}
-        },
-        "required": ["success", "message", "images", "total_size", "total"]
-    },
-    examples=[
-        {
-            "input": {"all": True, "filters": {}},
-            "output": {
-                "success": True,
-                "message": "Images listed successfully",
-                "images": [
-                    {
-                        "id": "sha256:abc123",
-                        "tags": ["nginx:latest"],
-                        "size": 1337000000,
-                        "created": "2023-01-01T00:00:00Z",
-                        "virtual_size": 1337000000,
-                        "used": True
-                    }
-                ],
-                "total_size": 1337000000,
-                "total": 1
-            }
-        }
-    ]
-)
-async def list_images(
-    all: bool = True,
-    filters: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """List all Docker images on the host system with detailed information.
+def process_image_data(img_data: Any) -> ImageInfo:
+    """
+    Process raw image data into an ImageInfo object.
     
     Args:
-        all: Show all images (default: True)
-        filters: Filter images by criteria (default: None)
+        img_data: Raw image data from Docker SDK
         
     Returns:
-        Dictionary containing the list of images and metadata
+        Processed ImageInfo object
     """
-    logger.info(f"Listing images with filters: {filters}")
     try:
-        filters = filters or {}
-        # Get raw images data
-        images_data = await image_mgr.list_images(all=all, filters=filters)
+        # Ensure required fields exist
+        if not isinstance(img_data, dict):
+            img_data = vars(img_data) if hasattr(img_data, '__dict__') else dict(img_data)
+        
+        # Handle potential datetime objects
+        if 'Created' in img_data and hasattr(img_data['Created'], 'isoformat'):
+            img_data['Created'] = img_data['Created'].isoformat()
+        
+        return ImageInfo(**img_data)
+        
+    except Exception as e:
+        logger.warning(f'Failed to process image data: {str(e)}', exc_info=True)
+        return ImageInfo(
+            Id='error',
+            RepoTags=[f'error:{str(e)[:50]}'],
+            error=f'Failed to process image: {str(e)}',
+            raw_data=str(img_data)[:500]  # Include first 500 chars of raw data
+        )
+
+
+@Tool(
+    name='list_images',
+    description='List all Docker images on the host system',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'all_images': {'type': 'boolean', 'default': True, 'description': 'Show all images'},
+            'filters': {'type': 'object', 'default': {}, 'description': 'Filter images by criteria'}
+        }
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'images': {
+                'type': 'array', 
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'Id': {'type': 'string'},
+                        'RepoTags': {'type': 'array', 'items': {'type': 'string'}},
+                        'Created': {'type': 'integer'},
+                        'Size': {'type': 'integer'},
+                        'Labels': {'type': 'object', 'additionalProperties': {'type': 'string'}},
+                        'VirtualSize': {'type': 'integer'}
+                    }
+                }
+            },
+            'total_size': {'type': 'integer'},
+            'total': {'type': 'integer'}
+        },
+        'required': ['success', 'message', 'images', 'total_size', 'total']
+    }
+)
+async def list_images(
+    all_images: bool = True,
+    filters: Optional[Dict[str, Any]] = None
+) -> ImageListResponse:
+    '''
+    List all Docker images on the host system.
+    
+    Args:
+        all_images: Show all images (default: True)
+        filters: Filter images by criteria
+        
+    Returns:
+        ImageListResponse containing list of images and metadata
+    '''
+    try:
+        if filters is None:
+            filters = {}
+            
+        images_data = await image_mgr.list_images(all=all_images, filters=filters)
         
         # Convert to ImageInfo objects
-        images = []
-        for img_data in images_data:
-            try:
-                # Ensure required fields exist
-                if not isinstance(img_data, dict):
-                    img_data = vars(img_data) if hasattr(img_data, '__dict__') else dict(img_data)
-                
-                # Handle potential datetime objects
-                if 'Created' in img_data and hasattr(img_data['Created'], 'isoformat'):
-                    img_data['Created'] = img_data['Created'].isoformat()
-                
-                # Convert to ImageInfo and back to dict to ensure proper serialization
-                image_info = ImageInfo(**img_data)
-                images.append(image_info.model_dump())
-                
-            except Exception as img_error:
-                logger.warning(f"Failed to process image data: {str(img_error)}", exc_info=True)
-                # Include problematic image data in the response with error information
-                images.append({
-                    "error": f"Failed to process image: {str(img_error)}",
-                    "raw_data": str(img_data)[:500]  # Include first 500 chars of raw data
-                })
+        images = [process_image_data(img_data) for img_data in images_data]
         
         # Calculate total size
-        total_size = sum(img.get('Size', 0) for img in images if isinstance(img, dict) and 'Size' in img)
+        total_size = sum(img.Size or 0 for img in images)
         
-        # Create response
-        response = {
-            "success": True,
-            "message": f"Successfully listed {len(images)} images",
-            "images": images,
-            "total_size": total_size
-        }
-        
-        logger.info(f"Successfully listed {len(images)} images")
-        return response
-        
-    except Exception as e:
-        error_msg = f"Failed to list images: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            "success": False,
-            "message": error_msg,
-            "images": [],
-            "total_size": 0,
-            "error": str(e)
-        }
-
-@Tool(
-    name="pull_image",
-    description="Pull a Docker image from a registry",
-    parameters={
-        "type": "object",
-        "properties": {
-            "repository": {"type": "string", "description": "Name of the image to pull"},
-            "tag": {"type": "string", "default": "latest", "description": "Tag of the image to pull"},
-            "auth_config": {"type": "object", "default": {}, "description": "Authentication credentials"},
-            "platform": {"type": "string", "default": None, "description": "Platform in the format 'os/arch'"}
-        },
-        "required": ["repository"]
-    },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "image": {"type": "object"}
-        },
-        "required": ["success", "message"]
-    },
-    examples=[
-        {
-            "input": {
-                "repository": "nginx",
-                "tag": "latest"
-            },
-            "output": {
-                "success": True,
-                "message": "Image 'nginx:latest' pulled successfully",
-                "image": {
-                    "Id": "sha256:...",
-                    "RepoTags": ["nginx:latest"],
-                    "Size": 1337
-                }
-            }
-        }
-    ]
-)
-async def pull_image(
-    request: PullImageRequest
-) -> Dict[str, Any]:
-    """Pull a Docker image from a registry."""
-    logger.info(f"Pulling image: {request.repository}:{request.tag}")
-    try:
-        logger.debug(f"Pull request details: {request.model_dump()}")
-        image = await image_mgr.pull_image(
-            repository=request.repository,
-            tag=request.tag,
-            auth_config=request.auth_config,
-            platform=request.platform
+        return ImageListResponse(
+            success=True,
+            message=f'Found {len(images)} images',
+            images=images,
+            total_size=total_size,
+            total=len(images)
         )
         
-        response = {
-            "success": True,
-            "message": f"Image '{request.repository}:{request.tag}' pulled successfully",
-            "image": image
+    except Exception as e:
+        error_msg = f'Failed to list images: {str(e)}'
+        logger.error(error_msg, exc_info=True)
+        return ImageListResponse(
+            success=False,
+            message=error_msg,
+            images=[],
+            total_size=0,
+            total=0,
+            error=str(e)
+        )
+
+@Tool(
+    name='pull_image',
+    description='Pull a Docker image from a registry',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'repository': {'type': 'string', 'description': 'Name of the image to pull'},
+            'tag': {'type': 'string', 'default': 'latest', 'description': 'Tag of the image to pull'},
+            'auth_config': {'type': 'object', 'default': {}, 'description': 'Authentication credentials'},
+            'platform': {'type': 'string', 'default': None, 'description': "Platform in the format 'os/arch'"}
+        },
+        'required': ['repository']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'}
+        },
+        'required': ['success', 'message']
+    }
+)
+async def pull_image(
+    repository: str,
+    tag: str = "latest",
+    auth_config: Optional[Dict[str, Any]] = None,
+    platform: Optional[str] = None
+) -> Dict[str, Any]:
+    '''
+    Pull a Docker image from a registry.
+    
+    Args:
+        repository: Name of the image to pull
+        tag: Tag of the image to pull (default: "latest")
+        auth_config: Authentication credentials (optional)
+        platform: Platform in the format 'os/arch' (optional)
+        
+    Returns:
+        Dictionary containing success status, message, and image info
+    '''
+    logger.info(f'Pulling image: {repository}:{tag}')
+    try:
+        auth_config = auth_config or {}
+        logger.debug(f'Pull request - repository: {repository}, tag: {tag}, platform: {platform}')
+        
+        # Pull the image
+        image_data = await image_mgr.pull_image(
+            repository=repository,
+            tag=tag,
+            auth_config=auth_config,
+            platform=platform
+        )
+        
+        # Process the image data
+        image_info = process_image_data(image_data)
+        
+        return {
+            'success': True,
+            'message': f'Successfully pulled image: {repository}:{tag}',
+            'image': image_info.model_dump()
         }
-        logger.info(f"Successfully pulled image: {request.repository}:{request.tag}")
-        return response
         
     except Exception as e:
-        error_msg = f"Failed to pull image {request.repository}:{request.tag}: {str(e)}"
+        error_msg = f'Failed to pull image {repository}:{tag}: {str(e)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e)
+            'success': False,
+            'message': error_msg,
+            'error': str(e)
         }
 
 @Tool(
-    name="build_image",
-    description="Build a Docker image from a Dockerfile",
+    name='build_image',
+    description='Build a Docker image from a Dockerfile',
     parameters={
-        "type": "object",
-        "properties": {
-            "path": {"type": "string", "description": "Path to the directory containing the build context"},
-            "tag": {"type": "string", "description": "Name and optionally a tag in 'name:tag' format"},
-            "dockerfile": {"type": "string", "default": None, "description": "Path to the Dockerfile within the build context"},
-            "buildargs": {"type": "object", "default": {}, "description": "Build-time variables"},
-            "labels": {"type": "object", "default": {}, "description": "Set metadata for the image"},
-            "nocache": {"type": "boolean", "default": False, "description": "Do not use cache when building the image"},
-            "rm": {"type": "boolean", "default": True, "description": "Remove intermediate containers after a successful build"},
-            "pull": {"type": "boolean", "default": False, "description": "Attempt to pull a newer version of the image"}
+        'type': 'object',
+        'properties': {
+            'path': {'type': 'string', 'description': 'Path to the directory containing the build context'},
+            'tag': {'type': 'string', 'description': 'Name and optionally a tag in "name:tag" format'},
+            'dockerfile': {'type': 'string', 'default': None, 'description': 'Path to the Dockerfile within the build context'},
+            'buildargs': {'type': 'object', 'default': {}, 'description': 'Build-time variables'},
+            'labels': {'type': 'object', 'default': {}, 'description': 'Set metadata for the image'},
+            'nocache': {'type': 'boolean', 'default': False, 'description': 'Do not use cache when building the image'},
+            'rm': {'type': 'boolean', 'default': True, 'description': 'Remove intermediate containers after a successful build'},
+            'pull': {'type': 'boolean', 'default': False, 'description': 'Attempt to pull a newer version of the image'}
         },
-        "required": ["path", "tag"]
+        'required': ['path', 'tag']
     },
     returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "image": {"type": "object"}
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'}
         },
-        "required": ["success", "message"]
-    },
-    examples=[
-        {
-            "input": {
-                "path": "/path/to/build/context",
-                "tag": "myapp:latest"
-            },
-            "output": {
-                "success": True,
-                "message": "Image 'myapp:latest' built successfully",
-                "image": {
-                    "Id": "sha256:...",
-                    "RepoTags": ["myapp:latest"],
-                    "Size": 123456789
-                }
-            }
-        }
-    ]
+        'required': ['success', 'message']
+    }
 )
 async def build_image(
-    request: BuildImageRequest
+    path: str,
+    tag: str,
+    dockerfile: Optional[str] = None,
+    buildargs: Optional[Dict[str, str]] = None,
+    labels: Optional[Dict[str, str]] = None,
+    nocache: bool = False,
+    rm: bool = True,
+    pull: bool = False
 ) -> Dict[str, Any]:
-    """Build a Docker image from a Dockerfile."""
-    logger.info(f"Building image with tag: {request.tag}")
-    logger.debug(f"Build request details: {request.model_dump()}")
+    '''
+    Build a Docker image from a Dockerfile.
+    
+    Args:
+        path: Path to the directory containing the build context
+        tag: Name and optionally a tag in 'name:tag' format
+        dockerfile: Path to the Dockerfile within the build context (optional)
+        buildargs: Build-time variables (optional)
+        labels: Metadata for the image (optional)
+        nocache: Do not use cache when building the image (default: False)
+        rm: Remove intermediate containers after a successful build (default: True)
+        pull: Attempt to pull a newer version of the base image (default: False)
+        
+    Returns:
+        Dictionary containing success status, message, and image info
+    '''
+    logger.info(f'Building image with tag: {tag}')
+    buildargs = buildargs or {}
+    labels = labels or {}
     
     try:
         # Validate build context path exists
-        if not os.path.exists(request.path):
-            error_msg = f"Build context path does not exist: {request.path}"
+        if not os.path.exists(path):
+            error_msg = f'Build context path does not exist: {path}'
             logger.error(error_msg)
             raise ValueError(error_msg)
         
-        logger.info(f"Starting build from path: {request.path}")
-        if request.dockerfile:
-            logger.debug(f"Using Dockerfile: {request.dockerfile}")
+        logger.info(f'Starting build from path: {path}')
+        if dockerfile:
+            logger.debug(f'Using Dockerfile: {dockerfile}')
         
         # Build the image
-        image = await image_mgr.build_image(
-            path=request.path,
-            tag=request.tag,
-            dockerfile=request.dockerfile,
-            buildargs=request.buildargs,
-            labels=request.labels,
-            nocache=request.nocache,
-            rm=request.rm,
-            pull=request.pull
+        image_data = await image_mgr.build_image(
+            path=path,
+            tag=tag,
+            dockerfile=dockerfile,
+            buildargs=buildargs,
+            labels=labels,
+            nocache=nocache,
+            rm=rm,
+            pull=pull
         )
         
-        # Ensure image data is serializable
-        if hasattr(image, 'model_dump'):
-            image_data = image.model_dump()
-        elif hasattr(image, 'attrs'):
-            image_data = dict(image.attrs)
-        else:
-            image_data = dict(image)
+        # Process the image data
+        image_info = process_image_data(image_data)
         
-        response = {
-            "success": True,
-            "message": f"Image '{request.tag}' built successfully",
-            "image": image_data
+        return {
+            'success': True,
+            'message': f'Successfully built image: {tag}',
+            'image': image_info.model_dump()
         }
         
-        logger.info(f"Successfully built image: {request.tag}")
-        return response
-        
     except Exception as e:
-        error_msg = f"Failed to build image '{request.tag}': {str(e)}"
+        error_msg = f'Failed to build image {tag}: {str(e)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e)
+            'success': False,
+            'message': error_msg,
+            'error': str(e)
         }
 
 @Tool(
-    name="remove_image",
-    description="Remove a Docker image from the host system",
+    name='remove_image',
+    description='Remove a Docker image from the host system',
     parameters={
-        "type": "object",
-        "properties": {
-            "image": {"type": "string", "description": "Image ID or name to remove"},
-            "force": {"type": "boolean", "default": False, "description": "Force removal of the image"},
-            "noprune": {"type": "boolean", "default": False, "description": "Do not delete untagged parents"}
+        'type': 'object',
+        'properties': {
+            'image': {'type': 'string', 'description': 'ID or name of the image to remove'},
+            'force': {'type': 'boolean', 'default': False, 'description': 'Force removal of the image'},
+            'noprune': {'type': 'boolean', 'default': False, 'description': 'Do not delete untagged parents'}
         },
-        "required": ["image"]
+        'required': ['image']
     },
     returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "deleted": {"type": "array", "items": {"type": "string"}},
-            "untagged": {"type": "array", "items": {"type": "string"}}
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image_id': {'type': 'string'},
+            'deleted': {'type': 'array', 'items': {'type': 'string'}},
+            'space_reclaimed': {'type': 'integer'},
+            'error': {'type': 'string'}
         },
-        "required": ["success", "message", "deleted", "untagged"]
-    },
-    examples=[
-        {
-            "input": {
-                "image": "nginx:latest",
-                "force": False
-            },
-            "output": {
-                "success": True,
-                "message": "Image 'nginx:latest' removed successfully",
-                "deleted": ["sha256:abc123..."],
-                "untagged": ["nginx:latest"]
-            }
-        }
-    ]
+        'required': ['success', 'message']
+    }
 )
 async def remove_image(
-    request: RemoveImageRequest
+    image: str,
+    force: bool = False,
+    noprune: bool = False
 ) -> Dict[str, Any]:
-    """Remove a Docker image from the host system."""
-    logger.info(f"Removing image: {request.image}")
-    logger.debug(f"Remove request details: force={request.force}, noprune={request.noprune}")
+    '''
+    Remove a Docker image from the host system.
+    
+    Args:
+        image: ID or name of the image to remove
+        force: Force removal of the image (default: False)
+        noprune: Do not delete untagged parents (default: False)
+        
+    Returns:
+        Dictionary containing success status, message, and removal details
+    '''
+    logger.info(f'Removing image: {image} (force={force}, noprune={noprune})')
     
     try:
-        logger.debug(f"Initiating removal of image: {request.image}")
+        # Check if image exists first
+        try:
+            await image_mgr.inspect_image(image)
+        except docker.errors.ImageNotFound:
+            error_msg = f'Image not found: {image}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': 'Image not found',
+                'image_id': image
+            }
+            
+        # Check if image is in use by any containers
+        if not force:
+            try:
+                containers = await image_mgr.list_containers(all=True, filters={'ancestor': image})
+                if containers:
+                    container_ids = [c.get('Id', '')[:12] for c in containers]
+                    error_msg = (
+                        f'Cannot remove image {image} as it is in use by {len(containers)} container(s): '
+                        f'{', '.join(container_ids)}. Use force=True to remove anyway.'
+                    )
+                    logger.warning(error_msg)
+                    return {
+                        'success': False,
+                        'message': error_msg,
+                        'error': 'Image in use',
+                        'image_id': image,
+                        'containers_using_image': container_ids
+                    }
+            except Exception as e:
+                logger.warning(f'Error checking containers using image {image}: {str(e)}')
+        
+        # Remove the image
         result = await image_mgr.remove_image(
-            image=request.image,
-            force=request.force,
-            noprune=request.noprune
+            image=image,
+            force=force,
+            noprune=noprune
         )
         
-        # Ensure we have lists for deleted and untagged
-        deleted = list(result.get('Deleted', []))
-        untagged = list(result.get('Untagged', []))
+        deleted = result.get('deleted', [])
+        space_reclaimed = result.get('space_reclaimed', 0)
         
-        # Log the operation details
-        logger.info(f"Successfully processed removal of image: {request.image}")
-        if deleted:
-            logger.debug(f"Deleted layers: {deleted}")
-        if untagged:
-            logger.debug(f"Untagged references: {untagged}")
+        logger.info(
+            f'Successfully removed image: {image}. '
+            f'Deleted {len(deleted)} layers, reclaimed {format_size(space_reclaimed)}.'
+        )
         
-        response = {
-            "success": True,
-            "message": f"Image '{request.image}' removed successfully",
-            "deleted": deleted,
-            "untagged": untagged
+        return {
+            'success': True,
+            'message': f'Successfully removed image: {image}',
+            'image_id': image,
+            'deleted': deleted,
+            'space_reclaimed': space_reclaimed
         }
         
-        return response
-        
-    except docker.errors.ImageNotFound as e:
-        error_msg = f"Image not found: {request.image}"
-        logger.error(error_msg)
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while removing image {image}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e),
-            "deleted": [],
-            "untagged": []
-        }
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error while removing image {request.image}"
-        logger.error(f"{error_msg}: {str(e)}", exc_info=True)
-        return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e),
-            "deleted": [],
-            "untagged": []
+            'success': False,
+            'message': error_msg,
+            'error': str(api_error),
+            'image_id': image
         }
     except Exception as e:
-        error_msg = f"Unexpected error removing image {request.image}"
-        logger.error(f"{error_msg}: {str(e)}", exc_info=True)
+        error_msg = f'Failed to remove image {image}: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e),
-            "deleted": [],
-            "untagged": []
+            'success': False,
+            'message': error_msg,
+            'error': str(e),
+            'image_id': image
         }
 
 @Tool(
-    name="tag_image",
-    description="Tag a Docker image with a new name and tag",
+    name='tag_image',
+    description='Tag a Docker image with a new name and tag',
     parameters={
-        "type": "object",
-        "properties": {
-            "image": {"type": "string", "description": "Source image name or ID"},
-            "repository": {"type": "string", "description": "Repository to tag the image with"},
-            "tag": {"type": "string", "default": "latest", "description": "Tag name"},
-            "force": {"type": "boolean", "default": False, "description": "Force tagging even if tag already exists"}
+        'type': 'object',
+        'properties': {
+            'image': {
+                'type': 'string', 
+                'description': 'Source image name or ID',
+                'examples': ['ubuntu:20.04', 'sha256:abc123']
+            },
+            'repository': {
+                'type': 'string', 
+                'description': 'Repository to tag the image with',
+                'examples': ['myregistry.example.com/myapp', 'myapp']
+            },
+            'tag': {
+                'type': 'string', 
+                'default': 'latest', 
+                'description': 'Tag name',
+                'examples': ['v1.0.0', 'staging', 'production']
+            },
+            'force': {
+                'type': 'boolean', 
+                'default': False, 
+                'description': 'Force tagging even if the tag already exists'
+            }
         },
-        "required": ["image", "repository"]
+        'required': ['image', 'repository'],
+        'additionalProperties': False
     },
     returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "source_image": {"type": "string"},
-            "new_tag": {"type": "string"}
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'source_image': {'type': 'string'},
+            'new_tag': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'},
+            'error': {'type': 'string'}
         },
-        "required": ["success", "message", "source_image", "new_tag"]
-    },
-    examples=[
-        {
-            "input": {
-                "image": "nginx:latest",
-                "repository": "myregistry/nginx",
-                "tag": "v1.0"
-            },
-            "output": {
-                "success": True,
-                "message": "Image 'nginx:latest' successfully tagged as 'myregistry/nginx:v1.0'",
-                "source_image": "nginx:latest",
-                "new_tag": "myregistry/nginx:v1.0"
-            }
-        }
-    ]
+        'required': ['success', 'message'],
+        'additionalProperties': False
+    }
 )
 async def tag_image(
-    request: TagImageRequest
+    image: str,
+    repository: str,
+    tag: str = 'latest',
+    force: bool = False
 ) -> Dict[str, Any]:
-    """Tag a Docker image with a new name and tag."""
-    new_tag = f"{request.repository}:{request.tag}"
-    logger.info(f"Tagging image: {request.image} as {new_tag}")
-    logger.debug(f"Tag request details: force={request.force}")
+    '''
+    Tag a Docker image with a new name and tag.
+    
+    This operation creates a new tag that points to the same image as the source.
+    The image can then be referred to by either the original name or the new name.
+    
+    Args:
+        image: Source image name or ID (e.g., 'ubuntu:20.04' or 'sha256:abc123')
+        repository: Repository to tag the image with (e.g., 'myapp' or 'myregistry.com/myapp')
+        tag: Tag name (default: 'latest')
+        force: If True, will override the tag if it already exists (default: False)
+        
+    Returns:
+        Dictionary containing:
+        - success: Boolean indicating if the operation was successful
+        - message: Human-readable result message
+        - source_image: Original image reference
+        - new_tag: New tag in 'repository:tag' format
+        - image: Image information if successful
+        - error: Error message if the operation failed
+        
+    Example:
+        >>> await tag_image('ubuntu:20.04', 'myapp', 'v1.0.0')
+        {
+            'success': True,
+            'message': 'Successfully tagged ubuntu:20.04 as myapp:v1.0.0',
+            'source_image': 'ubuntu:20.04',
+            'new_tag': 'myapp:v1.0.0',
+            'image': { ... }
+        }
+    '''
+    new_tag = f'{repository}:{tag}'
+    logger.info(f'Tagging image: {image} as {new_tag} (force={force})')
     
     try:
-        # Validate source image exists
-        try:
-            await image_mgr.inspect_image(request.image)
-        except docker.errors.ImageNotFound:
-            error_msg = f"Source image not found: {request.image}"
+        # Validate repository and tag format
+        if not repository or not repository.strip():
+            error_msg = 'Repository name cannot be empty'
             logger.error(error_msg)
             return {
-                "success": False,
-                "message": error_msg,
-                "source_image": request.image,
-                "new_tag": new_tag
+                'success': False,
+                'message': error_msg,
+                'source_image': image,
+                'new_tag': new_tag,
+                'error': 'Invalid repository name'
+            }
+            
+        if not tag or not tag.strip():
+            error_msg = 'Tag cannot be empty'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'source_image': image,
+                'new_tag': new_tag,
+                'error': 'Invalid tag'
             }
         
-        logger.debug(f"Initiating tag operation from {request.image} to {new_tag}")
+        # Validate source image exists
+        try:
+            source_info = await image_mgr.inspect_image(image)
+            logger.debug(f'Source image found: {source_info.get("Id", "")[:12]}')
+        except docker.errors.ImageNotFound:
+            error_msg = f'Source image not found: {image}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'source_image': image,
+                'new_tag': new_tag,
+                'error': 'Source image not found'
+            }
+        
+        # Check if target tag already exists
+        if not force:
+            try:
+                existing = await image_mgr.inspect_image(new_tag)
+                if existing and not force:
+                    error_msg = f'Tag {new_tag} already exists. Use force=True to override.'
+                    logger.warning(error_msg)
+                    return {
+                        'success': False,
+                        'message': error_msg,
+                        'source_image': image,
+                        'new_tag': new_tag,
+                        'error': 'Tag already exists'
+                    }
+            except docker.errors.ImageNotFound:
+                # This is expected - we want the tag to not exist
+                pass
+        
+        logger.debug(f'Initiating tag operation from {image} to {new_tag}')
         result = await image_mgr.tag_image(
-            image=request.image,
-            repository=request.repository,
-            tag=request.tag,
-            force=request.force
+            image=image,
+            repository=repository,
+            tag=tag,
+            force=force
         )
         
-        # Verify the tag was created
-        try:
-            # Get the image details to verify the new tag exists
-            image_info = await image_mgr.inspect_image(new_tag)
-            logger.debug(f"Successfully verified new tag: {new_tag}")
-        except Exception as verify_error:
-            error_msg = f"Failed to verify new tag {new_tag}: {str(verify_error)}"
-            logger.error(error_msg, exc_info=True)
+        if not result:
+            error_msg = f'Failed to tag image {image} as {new_tag}'
+            logger.error(error_msg)
             return {
-                "success": False,
-                "message": error_msg,
-                "error": str(verify_error),
-                "source_image": request.image,
-                "new_tag": new_tag
+                'success': False,
+                'message': error_msg,
+                'source_image': image,
+                'new_tag': new_tag,
+                'error': 'Tag operation failed'
             }
         
-        response = {
-            "success": True,
-            "message": f"Successfully tagged {request.image} as {new_tag}",
-            "source_image": request.image,
-            "new_tag": new_tag
-        }
+        # Verify the new tag was created
+        try:
+            image_info_data = await image_mgr.inspect_image(new_tag)
+            image_info = process_image_data(image_info_data)
+            logger.info(f'Successfully tagged {image} as {new_tag}')
+            
+            return {
+                'success': True,
+                'message': f'Successfully tagged {image} as {new_tag}',
+                'source_image': image,
+                'new_tag': new_tag,
+                'image': image_info.model_dump()
+            }
+            
+        except docker.errors.ImageNotFound:
+            error_msg = f'Failed to verify new tag {new_tag}: Tag not found after creation'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'source_image': image,
+                'new_tag': new_tag,
+                'error': 'Tag verification failed'
+            }
         
-        logger.info(f"Successfully tagged image as {new_tag}")
-        return response
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error while tagging image: {str(e)}"
+    except Exception as e:
+        error_msg = f'Failed to tag image {image} as {new_tag}: {str(e)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e),
-            "source_image": request.image,
-            "new_tag": new_tag
+            'success': False,
+            'message': error_msg,
+            'error': str(e),
+            'source_image': image,
+            'new_tag': new_tag
+        }
+
+@Tool(
+    name='inspect_image',
+    description='Return low-level information about an image',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'image': {
+                'type': 'string',
+                'description': 'Name or ID of the image to inspect'
+            }
+        },
+        'required': ['image']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
+    }
+)
+async def inspect_image(
+    image: str
+) -> Dict[str, Any]:
+    '''
+    Return low-level information about an image.
+    
+    Args:
+        image: Name or ID of the image to inspect
+        
+    Returns:
+        Dictionary containing success status, message, and image info
+    '''
+    logger.info(f'Inspecting image: {image}')
+    
+    try:
+        # Validate image exists
+        try:
+            image_info_data = await image_mgr.inspect_image(image)
+        except docker.errors.ImageNotFound:
+            error_msg = f'Image not found: {image}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': error_msg
+            }
+        
+        image_info = process_image_data(image_info_data)
+        logger.debug(f'Successfully inspected image: {image}')
+        
+        return {
+            'success': True,
+            'message': f'Successfully inspected image: {image}',
+            'image': image_info.model_dump()
+        }
+        
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while inspecting image {image}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'error': str(api_error)
         }
     except Exception as e:
-        error_msg = f"Failed to tag image {request.image}: {str(e)}"
+        error_msg = f'Unexpected error while inspecting image {image}: {str(e)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "error": str(e),
-            "source_image": request.image,
-            "new_tag": new_tag
+            'success': False,
+            'message': error_msg,
+            'error': str(e)
         }
 
 @Tool(
@@ -559,14 +717,15 @@ async def tag_image(
             "limit": {
                 "type": "integer",
                 "default": 25,
+                "description": "Maximum number of results to return",
                 "minimum": 1,
-                "maximum": 100,
-                "description": "Maximum number of results to return"
+                "maximum": 100
             },
             "filters": {
                 "type": "object",
                 "default": {},
-                "description": "Additional filters for the search"
+                "description": "Additional filters for the search",
+                "additionalProperties": True
             }
         },
         "required": ["term"]
@@ -586,90 +745,78 @@ async def tag_image(
                         "is_official": {"type": "boolean"},
                         "is_automated": {"type": "boolean"},
                         "star_count": {"type": "integer"}
-                    }
+                    },
+                    "required": ["name"]
                 }
             },
-            "count": {"type": "integer"},
-            "search_term": {"type": "string"}
+            "count": {"type": "integer"}
         },
-        "required": ["success", "results", "count", "search_term"]
-    },
-    examples=[
-        {
-            "input": {
-                "term": "nginx",
-                "limit": 5
-            },
-            "output": {
-                "success": true,
-                "message": "Found 5 results for 'nginx'",
-                "results": [
-                    {
-                        "name": "nginx",
-                        "description": "Official build of Nginx.",
-                        "is_official": true,
-                        "is_automated": false,
-                        "star_count": 17500
-                    }
-                ],
-                "count": 5,
-                "search_term": "nginx"
-            }
-        }
-    ]
+        "required": ["success", "message", "results"]
+    }
 )
 async def search_images(
-    request: SearchImageRequest
+    term: str,
+    limit: int = 25,
+    filters: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
-    """Search for Docker images in a registry."""
-    logger.info(f"Searching for images with term: '{request.term}'")
-    logger.debug(f"Search parameters: limit={request.limit}, filters={request.filters}")
+    '''
+    Search for Docker images in a registry.
+    
+    Args:
+        term: Search term to look for in image names
+        limit: Maximum number of results to return (1-100, default: 25)
+        filters: Additional filters for the search
+        
+    Returns:
+        Dictionary containing search results with count and list of matching images
+    '''
+    if filters is None:
+        filters = {}
+        
+    logger.info(f"Searching for images with term: '{term}'")
+    logger.debug(f"Search parameters: limit={limit}, filters={filters}")
     
     try:
         # Validate search term
-        if not request.term or not isinstance(request.term, str):
-            error_msg = "Search term must be a non-empty string"
+        if not term or not isinstance(term, str):
+            error_msg = 'Search term must be a non-empty string'
             logger.error(error_msg)
             return {
-                "success": False,
-                "message": error_msg,
-                "results": [],
-                "count": 0,
-                "search_term": request.term
+                'success': False,
+                'message': error_msg,
+                'results': [],
+                'count': 0
             }
-        
-        # Ensure limit is within bounds
-        limit = max(1, min(100, int(request.limit) if request.limit else 25))
-        
-        logger.debug(f"Initiating image search for: '{request.term}' with limit {limit}")
-        
-        try:
-            results = await image_mgr.search_images(
-                term=request.term,
-                limit=limit,
-                filters=request.filters or {}
-            )
-        except docker.errors.APIError as api_error:
-            error_msg = f"Docker API error while searching images: {str(api_error)}"
-            logger.error(error_msg, exc_info=True)
+            
+        # Validate limit
+        if not (1 <= limit <= 100):
+            error_msg = f'Limit must be between 1 and 100, got {limit}'
+            logger.error(error_msg)
             return {
-                "success": False,
-                "message": error_msg,
-                "results": [],
-                "count": 0,
-                "search_term": request.term,
-                "error": str(api_error)
+                'success': False,
+                'message': error_msg,
+                'results': [],
+                'count': 0
             }
+            
+        # Prepare search parameters
+        search_params = {'term': term, 'limit': limit}
+        if filters:
+            search_params.update(filters)
+            
+        logger.debug(f'Executing search with params: {search_params}')
         
-        # Process and validate results
-        valid_results = []
-        for result in results:
+        # Execute the search and process results
+        raw_results = await image_mgr.search_images(**search_params)
+        processed_results = []
+        
+        for result in raw_results:
             try:
-                # Ensure required fields exist
+                # Ensure we have a dictionary
                 if not isinstance(result, dict):
                     result = dict(result) if hasattr(result, '__dict__') else {}
                 
-                # Create a standardized result entry
+                # Create a standardized result entry with default values
                 valid_result = {
                     'name': str(result.get('name', '')),
                     'description': str(result.get('description', '')),
@@ -680,175 +827,148 @@ async def search_images(
                 
                 # Only include results with a name
                 if valid_result['name']:
-                    valid_results.append(valid_result)
+                    processed_results.append(valid_result)
                 
-            except Exception as result_error:
-                logger.warning(f"Error processing search result: {str(result_error)}")
+            except Exception as e:
+                logger.warning(f'Error processing search result: {str(e)}', exc_info=True)
                 continue
+                
+        # Return the processed results
+        result_count = len(processed_results)
+        message = f"Found {result_count} result{'' if result_count == 1 else 's'} for '{term}'"
         
-        result_count = len(valid_results)
-        message = f"Found {result_count} result{'' if result_count == 1 else 's'} for '{request.term}'"
-        
-        response = {
-            "success": True,
-            "message": message,
-            "results": valid_results[:limit],  # Ensure we don't exceed the limit
-            "count": min(result_count, limit),
-            "search_term": request.term
-        }
-        
-        logger.info(message)
+        logger.info(f'Successfully processed {result_count} search results')
         if result_count > 0:
-            logger.debug(f"First result: {valid_results[0]}")
+            logger.debug(f'First result: {processed_results[0]}')
         
-        return response
+        return {
+            'success': True,
+            'message': message,
+            'results': processed_results[:limit],
+            'count': min(result_count, limit),
+            'search_term': term
+        }
         
     except ValueError as ve:
-        error_msg = f"Invalid search parameter: {str(ve)}"
+        error_msg = f'Invalid search parameter: {str(ve)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "results": [],
-            "count": 0,
-            "search_term": request.term,
-            "error": str(ve)
+            'success': False,
+            'message': error_msg,
+            'results': [],
+            'count': 0,
+            'search_term': term,
+            'error': str(ve)
         }
     except Exception as e:
-        error_msg = f"Unexpected error searching for images: {str(e)}"
+        error_msg = f'Unexpected error searching for images: {str(e)}'
         logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "message": error_msg,
-            "results": [],
+            'success': False,
+            'message': error_msg,
+            'results': [],
             "count": 0,
             "search_term": request.term,
             "error": str(e)
         }
 
 @Tool(
-    name="prune_images",
-    description="Remove unused Docker images to free up disk space",
+    name='prune_images',
+    description='Remove unused Docker images to free up disk space',
     parameters={
-        "type": "object",
-        "properties": {
-            "filters": {
-                "type": "object",
-                "default": {},
-                "description": "Filters to process on the prune list"
+        'type': 'object',
+        'properties': {
+            'filters': {
+                'type': 'object',
+                'default': {},
+                'description': 'Filter images to prune (e.g., {"dangling": true})',
+                'additionalProperties': True
             },
-            "dangling": {
-                "type": "boolean",
-                "default": True,
-                "description": "When true, delete only unused and untagged images"
+            'noprune': {
+                'type': 'boolean',
+                'default': False,
+                'description': 'Do not delete untagged parents'
             }
-        }
+        },
+        'required': []
     },
     returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
-            "images_deleted": {"type": "array", "items": {"type": "string"}},
-            "space_reclaimed": {"type": "integer"},
-            "details": {"type": "object"}
-        },
-        "required": ["success", "message", "images_deleted", "space_reclaimed"]
-    },
-    examples=[
-        {
-            "input": {
-                "dangling": true
-            },
-            "output": {
-                "success": true,
-                "message": "Successfully pruned 3 unused images, reclaiming 1.2GB",
-                "images_deleted": ["sha256:abc123...", "sha256:def456..."],
-                "space_reclaimed": 1288490188,
-                "details": {
-                    "ImagesDeleted": [
-                        {"Untagged": "<image_id_1>"},
-                        {"Deleted": "<image_id_2>"}
-                    ],
-                    "SpaceReclaimed": 1288490188
-                }
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'space_reclaimed': {'type': 'integer'},
+            'images_deleted': {
+                'type': 'array',
+                'items': {'type': 'string'}
             }
         }
-    ]
+    }
 )
 async def prune_images(
-    request: PruneImagesRequest
+    filters: Optional[Dict[str, Any]] = None,
+    noprune: bool = False
 ) -> Dict[str, Any]:
-    """
+    '''
     Remove unused Docker images to free up disk space.
     
     Args:
-        request: PruneImagesRequest containing filters and options
+        filters: Filter images to prune (e.g., {"dangling": true})
+        noprune: Do not delete untagged parents (default: False)
         
     Returns:
-        Dictionary with operation results including deleted images and space reclaimed
-    """
-    logger.info("Initiating image pruning operation")
-    logger.debug(f"Prune parameters: dangling={request.dangling}, filters={request.filters}")
+        Dictionary containing prune results with space reclaimed and list of deleted images
+    '''
+    if filters is None:
+        filters = {}
+        
+    logger.info('Pruning unused Docker images')
+    logger.debug(f'Prune parameters: filters={filters}, noprune={noprune}')
     
     try:
         # Validate filters if provided
-        if request.filters and not isinstance(request.filters, dict):
-            error_msg = "Filters must be a dictionary"
+        if filters and not isinstance(filters, dict):
+            error_msg = 'Filters must be a dictionary'
             logger.error(error_msg)
             return {
-                "success": False,
-                "message": error_msg,
-                "images_deleted": [],
-                "space_reclaimed": 0,
-                "error": error_msg
+                'success': False,
+                'message': error_msg,
+                'images_deleted': [],
+                'space_reclaimed': 0,
+                'error': error_msg
             }
-        
+            
         # Execute the prune operation
-        logger.debug("Executing image prune operation")
-        result = await image_mgr.prune_images(
-            filters=request.filters or {},
-            dangling=request.dangling
-        )
+        logger.debug('Executing image prune operation')
+        result = await image_mgr.prune_images(filters=filters, noprune=noprune)
         
-        # Process the results
-        images_deleted = []
-        space_reclaimed = int(result.get("SpaceReclaimed", 0))
+        # Process the result
+        if not isinstance(result, dict):
+            result = {}
+            
+        space_reclaimed = result.get('SpaceReclaimed', 0)
+        images_deleted = result.get('ImagesDeleted', [])
         
-        # Extract deleted image IDs
-        for item in result.get("ImagesDeleted", []):
-            if isinstance(item, dict):
-                # Handle both "Deleted" and "Untagged" entries
-                for _, img_id in item.items():
-                    if img_id and img_id not in images_deleted:
-                        images_deleted.append(img_id)
-            elif item and item not in images_deleted:
-                images_deleted.append(item)
+        # Ensure images_deleted is a list of strings
+        if images_deleted and not isinstance(images_deleted, list):
+            images_deleted = [str(images_deleted)]
+        elif not images_deleted:
+            images_deleted = []
+            
+        message = f"Successfully pruned {len(images_deleted)} images, " \
+                 f"reclaimed {space_reclaimed} bytes"
         
-        # Format the response
-        deleted_count = len(images_deleted)
-        space_mb = space_reclaimed / (1024 * 1024)
-        
-        if deleted_count == 0:
-            message = "No unused images to remove"
-        else:
-            message = (
-                f"Successfully pruned {deleted_count} unused image{'s' if deleted_count != 1 else ''}, "
-                f"reclaiming {space_mb:.2f}MB"
-            )
-        
-        response = {
-            "success": True,
-            "message": message,
-            "images_deleted": images_deleted,
-            "space_reclaimed": space_reclaimed,
-            "details": result
+        logger.info(message)
+        if images_deleted:
+            logger.debug(f'Deleted images: {images_deleted[:5]}' + 
+                       ('...' if len(images_deleted) > 5 else ''))
+            
+        return {
+            'success': True,
+            'message': message,
+            'space_reclaimed': space_reclaimed,
+            'images_deleted': images_deleted
         }
-        
-        logger.info(f"Prune operation completed: {message}")
-        logger.debug(f"Prune details: {result}")
-        
-        return response
         
     except docker.errors.APIError as api_error:
         error_msg = f"Docker API error during image pruning: {str(api_error)}"
@@ -883,7 +1003,14 @@ async def prune_images(
 
 @Tool(
     name="inspect_image",
-    description="Return low-level information about an image"
+    description="Return low-level information about an image",
+    parameters={
+        "type": "object",
+        "properties": {
+            "image": {"type": "string", "description": "Name or ID of the image to inspect"}
+        },
+        "required": ["image"]
+    }
 )
 async def inspect_image(
     request: ImageInspectRequest
@@ -906,132 +1033,546 @@ async def inspect_image(
         }
 
 @Tool(
-    name="save_image",
-    description="Save an image to a tar archive"
+    name='save_image',
+    description='Save a Docker image to a tar archive',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'image': {
+                'type': 'string',
+                'description': 'Name or ID of the image to save'
+            },
+            'output_path': {
+                'type': 'string',
+                'description': 'Path where to save the tar archive'
+            },
+            'format': {
+                'type': 'string',
+                'enum': ['tar', 'tar.gz', 'tar.xz'],
+                'default': 'tar',
+                'description': 'Format of the output archive'
+            }
+        },
+        'required': ['image', 'output_path']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'output_path': {'type': 'string'},
+            'size': {'type': 'integer'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message', 'output_path']
+    }
 )
 async def save_image(
-    request: ImageSaveRequest
+    image: str,
+    output_path: str,
+    format: str = 'tar'
 ) -> Dict[str, Any]:
-    """Save an image to a tar archive."""
+    '''
+    Save a Docker image to a tar archive.
+    
+    Args:
+        image: Name or ID of the image to save
+        output_path: Path where to save the tar archive
+        format: Format of the output archive (tar, tar.gz, tar.xz)
+        
+    Returns:
+        Dictionary containing success status, message, and output details
+    '''
+    logger.info(f'Saving image {image} to {output_path}')
+    
     try:
+        # Validate output directory exists and is writable
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        if not os.access(output_dir, os.W_OK):
+            error_msg = f'No write permission to directory: {output_dir}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'output_path': output_path,
+                'error': 'Permission denied'
+            }
+            
+        # Save the image
         result = await image_mgr.save_image(
-            image=request.image,
-            output_path=request.output_path,
-            format=request.format
+            image=image,
+            output_path=output_path,
+            format=format
         )
+        
+        # Get file size
+        file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+        
+        logger.info(f'Successfully saved image {image} to {output_path} ({file_size} bytes)')
+        
         return {
-            "success": True,
-            "output_path": request.output_path,
-            "size": result.get("size", 0),
-            "message": f"Image saved to {request.output_path}"
+            'success': True,
+            'message': f'Successfully saved image to {output_path}',
+            'output_path': output_path,
+            'size': file_size
+        }
+        
+    except docker.errors.ImageNotFound:
+        error_msg = f'Image not found: {image}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': 'Image not found'
+        }
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while saving image {image}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': str(api_error)
         }
     except Exception as e:
+        error_msg = f'Failed to save image {image} to {output_path}: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "error": f"Failed to save image: {str(e)}",
-            "output_path": request.output_path
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': str(e)
         }
 
 @Tool(
-    name="load_image",
-    description="Load an image from a tar archive"
+    name='load_image',
+    description='Load a Docker image from a tar archive',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'input_path': {
+                'type': 'string',
+                'description': 'Path to the tar archive containing the image'
+            },
+            'quiet': {
+                'type': 'boolean',
+                'default': False,
+                'description': 'Suppress output during load'
+            }
+        },
+        'required': ['input_path']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image_id': {'type': 'string'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
+    }
 )
 async def load_image(
-    request: ImageLoadRequest
+    input_path: str,
+    quiet: bool = False
 ) -> Dict[str, Any]:
-    """Load an image from a tar archive."""
+    '''
+    Load a Docker image from a tar archive.
+    
+    Args:
+        input_path: Path to the tar archive containing the image
+        quiet: Suppress output during load
+        
+    Returns:
+        Dictionary containing success status, message, and loaded image ID
+    '''
+    logger.info(f'Loading image from {input_path}')
+    
     try:
+        # Validate input file exists and is readable
+        if not os.path.exists(input_path):
+            error_msg = f'Input file not found: {input_path}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': 'File not found'
+            }
+            
+        if not os.access(input_path, os.R_OK):
+            error_msg = f'No read permission for file: {input_path}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': 'Permission denied'
+            }
+            
+        # Load the image
         result = await image_mgr.load_image(
-            input_path=request.input_path,
-            quiet=request.quiet
+            input_path=input_path,
+            quiet=quiet
         )
+        
+        image_id = result.get('image_id', 'unknown')
+        logger.info(f'Successfully loaded image {image_id} from {input_path}')
+        
         return {
-            "success": True,
-            "image": result.get("image_id"),
-            "message": "Image loaded successfully"
+            'success': True,
+            'message': f'Successfully loaded image {image_id}',
+            'image_id': image_id
+        }
+        
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while loading image from {input_path}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'error': str(api_error)
+        }
+    except docker.errors.DockerException as de:
+        error_msg = f'Docker error while loading image from {input_path}: {str(de)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'error': str(de)
         }
     except Exception as e:
+        error_msg = f'Failed to load image from {input_path}: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "error": f"Failed to load image: {str(e)}",
-            "input_path": request.input_path
+            'success': False,
+            'message': error_msg,
+            'error': str(e)
         }
 
 @Tool(
-    name="image_history",
-    description="Get the history of an image"
+    name='image_history',
+    description='Get the history of a Docker image',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'image': {
+                'type': 'string',
+                'description': 'Name or ID of the image to get history for'
+            }
+        },
+        'required': ['image']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'history': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'id': {'type': 'string'},
+                        'created': {'type': 'string', 'format': 'date-time'},
+                        'created_by': {'type': 'string'},
+                        'size': {'type': 'integer'},
+                        'tags': {
+                            'type': 'array',
+                            'items': {'type': 'string'}
+                        },
+                        'comment': {'type': 'string'}
+                    }
+                }
+            },
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
+    }
 )
 async def image_history(
-    request: ImageHistoryRequest
+    image: str
 ) -> Dict[str, Any]:
-    """Get the history of an image."""
+    '''
+    Get the history of a Docker image.
+    
+    Args:
+        image: Name or ID of the image to get history for
+        
+    Returns:
+        Dictionary containing success status, message, and image history
+    '''
+    logger.info(f'Getting history for image: {image}')
+    
     try:
-        history = await image_mgr.history(
-            image=request.image,
-            all_layers=request.all
-        )
+        # Get the image history
+        history = await image_mgr.image_history(image=image)
+        
+        if not history:
+            logger.warning(f'No history found for image: {image}')
+            return {
+                'success': True,
+                'message': f'No history found for image: {image}',
+                'history': []
+            }
+            
+        # Process history entries
+        processed_history = []
+        for entry in history:
+            # Convert entry to dict if it's an object
+            if not isinstance(entry, dict):
+                entry = vars(entry) if hasattr(entry, '__dict__') else dict(entry)
+                
+            # Handle datetime objects
+            if 'Created' in entry and hasattr(entry['Created'], 'isoformat'):
+                entry['Created'] = entry['Created'].isoformat()
+                
+            processed_history.append(entry)
+        
+        logger.debug(f'Retrieved {len(processed_history)} history entries for image: {image}')
+        
         return {
-            "success": True,
-            "history": history,
-            "layer_count": len(history)
+            'success': True,
+            'message': f'Successfully retrieved history for image: {image}',
+            'history': processed_history
+        }
+        
+    except docker.errors.ImageNotFound:
+        error_msg = f'Image not found: {image}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'message': error_msg,
+            'history': [],
+            'error': 'Image not found'
+        }
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while getting history for image {image}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'history': [],
+            'error': str(api_error)
         }
     except Exception as e:
+        error_msg = f'Failed to get history for image {image}: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "error": f"Failed to get image history: {str(e)}"
+            'success': False,
+            'message': error_msg,
+            'history': [],
+            'error': str(e)
         }
-
-@Tool(
-    name="export_filesystem",
-    description="Export a container's filesystem as a tar archive"
-)
 async def export_filesystem(
-    request: ImageExportRequest
+    container: str,
+    output_path: str
 ) -> Dict[str, Any]:
-    """Export a container's filesystem as a tar archive."""
+    '''
+    Export a container's filesystem as a tar archive.
+    
+    Args:
+        container: ID or name of the container to export
+        output_path: Path where to save the exported filesystem archive
+        
+    Returns:
+        Dictionary containing success status, message, and export details
+    '''
+    logger.info(f'Exporting filesystem of container {container} to {output_path}')
+    
     try:
+        # Validate output directory exists and is writable
+        output_dir = os.path.dirname(os.path.abspath(output_path))
+        if not os.path.exists(output_dir):
+            os.makedirs(output_dir, exist_ok=True)
+            
+        if not os.access(output_dir, os.W_OK):
+            error_msg = f'No write permission to directory: {output_dir}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'output_path': output_path,
+                'error': 'Permission denied'
+            }
+            
+        # Export the filesystem
         result = await image_mgr.export_filesystem(
-            container=request.image,
-            output_path=request.output_path,
-            chunk_size=request.chunk_size
+            container=container,
+            output_path=output_path
         )
+        
+        # Get file size
+        file_size = os.path.getsize(output_path) if os.path.exists(output_path) else 0
+        
+        logger.info(f'Successfully exported container {container} filesystem to {output_path} ({file_size} bytes)')
+        
         return {
-            "success": True,
-            "output_path": request.output_path,
-            "size": result.get("size", 0),
-            "message": f"Filesystem exported to {request.output_path}"
+            'success': True,
+            'message': f'Successfully exported container filesystem to {output_path}',
+            'output_path': output_path,
+            'size': file_size
+        }
+        
+    except docker.errors.NotFound:
+        error_msg = f'Container not found: {container}'
+        logger.error(error_msg)
+        return {
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': 'Container not found'
+        }
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while exporting container {container}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': str(api_error)
         }
     except Exception as e:
+        error_msg = f'Failed to export container {container} filesystem: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "error": f"Failed to export filesystem: {str(e)}",
-            "output_path": request.output_path
+            'success': False,
+            'message': error_msg,
+            'output_path': output_path,
+            'error': str(e)
         }
 
 @Tool(
-    name="import_filesystem",
-    description="Import the contents from a tarball to create a filesystem image"
+    name='import_filesystem',
+    description='Import the contents from a tarball to create a filesystem image',
+    parameters={
+        'type': 'object',
+        'properties': {
+            'source': {
+                'type': 'string',
+                'description': 'Path to the tarball to import'
+            },
+            'repository': {
+                'type': 'string',
+                'description': 'Repository name for the imported image (optional)'
+            },
+            'tag': {
+                'type': 'string',
+                'description': 'Tag for the imported image (default: "latest")',
+                'default': 'latest'
+            },
+            'message': {
+                'type': 'string',
+                'description': 'Commit message (optional)'
+            },
+            'changes': {
+                'type': 'array',
+                'items': {'type': 'string'},
+                'description': 'Dockerfile instructions to apply to the image (optional)'
+            }
+        },
+        'required': ['source']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image_id': {'type': 'string'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
+    }
 )
 async def import_filesystem(
-    request: ImageImportRequest
+    source: str,
+    repository: Optional[str] = None,
+    tag: str = 'latest',
+    message: Optional[str] = None,
+    changes: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    """Import the contents from a tarball to create a filesystem image."""
+    '''
+    Import the contents from a tarball to create a filesystem image.
+    
+    Args:
+        source: Path to the tarball to import
+        repository: Repository name for the imported image (optional)
+        tag: Tag for the imported image (default: "latest")
+        message: Commit message (optional)
+        changes: Dockerfile instructions to apply to the image (optional)
+        
+    Returns:
+        Dictionary containing success status, message, and imported image details
+    '''
+    logger.info(f'Importing filesystem from {source} to {repository or "<new image>"}:{tag}')
+    
     try:
+        # Validate source file exists and is readable
+        if not os.path.exists(source):
+            error_msg = f'Source file not found: {source}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': 'File not found'
+            }
+            
+        if not os.access(source, os.R_OK):
+            error_msg = f'No read permission for file: {source}'
+            logger.error(error_msg)
+            return {
+                'success': False,
+                'message': error_msg,
+                'error': 'Permission denied'
+            }
+            
+        # Import the filesystem
         result = await image_mgr.import_filesystem(
-            source=request.source,
-            repository=request.repository,
-            tag=request.tag,
-            message=request.message,
-            changes=request.changes
+            source=source,
+            repository=repository,
+            tag=tag,
+            message=message,
+            changes=changes
         )
+        
+        image_id = result.get('image_id', 'unknown')
+        logger.info(f'Successfully imported filesystem as image {image_id}')
+        
+        response = {
+            'success': True,
+            'message': 'Filesystem imported successfully',
+            'image_id': image_id
+        }
+        
+        if repository and tag:
+            response['repository'] = f'{repository}:{tag}'
+            
+        return response
+        
+    except docker.errors.APIError as api_error:
+        error_msg = f'Docker API error while importing filesystem from {source}: {str(api_error)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": True,
-            "image_id": result.get("image_id"),
-            "message": "Filesystem imported successfully"
+            'success': False,
+            'message': error_msg,
+            'error': str(api_error)
+        }
+    except docker.errors.DockerException as de:
+        error_msg = f'Docker error while importing filesystem from {source}: {str(de)}'
+        logger.error(error_msg, exc_info=True)
+        return {
+            'success': False,
+            'message': error_msg,
+            'error': str(de)
         }
     except Exception as e:
+        error_msg = f'Failed to import filesystem from {source}: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
-            "success": False,
-            "error": f"Failed to import filesystem: {str(e)}",
-            "source": request.source
+            'success': False,
+            'message': error_msg,
+            'error': str(e)
         }

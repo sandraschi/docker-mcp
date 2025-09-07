@@ -1,188 +1,199 @@
 """
 Container tools registry for Docker MCP.
 
-This module registers container management tools with the FastMCP server.
+This module registers all container management tools with the FastMCP 2.12+ server.
+It provides a centralized way to register all container-related tools and their schemas.
 """
-from typing import Dict, Any, Optional, List
-from fastmcp import FastMCP
-from fastmcp.tools import Tool
+from __future__ import annotations
 
-from .container_models import (
-    ContainerLifecycleRequest,
-    ContainerLifecycleResponse,
-    ContainerLogsRequest,
-    ContainerLogsResponse,
-    ContainerExecRequest,
-    ContainerExecResponse
-)
-from .container_lifecycle import manage_container_lifecycle
-from .container_logs import stream_container_logs
-from .container_exec import execute_in_container
+import logging
+from typing import Dict, Any, List, Type, Callable, Union, TypeVar
+
+# FastMCP imports
+from fastmcp import FastMCP
+from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel
+
+# Configure logging
+from dockermcp.logging_config import logger, configure_logging
+configure_logging()
+
+# Type aliases
+T = TypeVar('T', bound=BaseModel)
+ToolRegistration = Union[Tool, Callable, Type[BaseModel]]
+
+def get_all_tools() -> List[ToolRegistration]:
+    """
+    Get all container tools and models that should be registered.
+    
+    This function imports all tool modules and collects their exported tools.
+    It ensures all container-related functionality is properly registered with FastMCP.
+    
+    Returns:
+        List of tools, functions, and models to register with FastMCP
+        
+    Example:
+        >>> tools = get_all_tools()
+        >>> assert any(t.name == 'list_containers' for t in tools if hasattr(t, 'name'))
+    """
+    tools: List[ToolRegistration] = []
+    
+    # Import all tool modules
+    from . import (
+        container_lifecycle,
+        container_logs,
+        container_exec,
+        container_inspect,
+        container_models,
+        container_operations,
+        container_utils,
+        container_tools
+    )
+    
+    # Core modules that contain tools to register
+    modules = [
+        container_lifecycle,  # Container lifecycle operations
+        container_logs,      # Log management
+        container_exec,      # Command execution
+        container_inspect,   # Inspection and monitoring
+        container_tools      # Main facade with all tools re-exported
+    ]
+    
+    # Get all models from container_models
+    if hasattr(container_models, 'get_tools'):
+        tools.extend(container_models.get_tools())
+    
+    # Get tools from each module
+    for module in modules:
+        try:
+            if hasattr(module, 'get_tools'):
+                module_tools = module.get_tools()
+                if not isinstance(module_tools, list):
+                    logger.warning(f"Expected {module.__name__}.get_tools() to return a list, got {type(module_tools)}")
+                    continue
+                tools.extend(module_tools)
+                logger.debug(f"Added {len(module_tools)} tools from {module.__name__}")
+        except Exception as e:
+            logger.error(f"Error getting tools from {module.__name__}: {str(e)}", exc_info=True)
+    
+    # Log the total number of tools found
+    logger.info(f"Registered {len(tools)} container tools with FastMCP")
+    
+    return tools
 
 def register_container_tools(mcp: FastMCP) -> None:
-    """Register container management tools with the MCP server.
+    """
+    Register all container tools with the FastMCP server.
+    
+    This function registers all container-related tools including:
+    - Container lifecycle management (create, start, stop, restart, remove, prune)
+    - Container inspection and monitoring
+    - Container logs streaming and retrieval
+    - Command execution in containers
+    - Container statistics and process information
+    - All container-related Pydantic models
     
     Args:
         mcp: FastMCP server instance to register tools with
+        
+    Raises:
+        ToolError: If there's an error registering any tool
+        
+    Example:
+        ```python
+        from fastmcp import FastMCP
+        from dockermcp.tools.containers import register_container_tools
+        
+        # Create FastMCP instance
+        mcp = FastMCP()
+        
+        # Register all container tools
+        register_container_tools(mcp)
+        
+        # Start the server
+        mcp.run()
+        ```
     """
-    # Register container lifecycle tool
-    mcp.register_tool(
-        Tool(
-            name="manage_container_lifecycle",
-            description="Manage container lifecycle (start, stop, restart, remove, pause, unpause)",
-            method=manage_container_lifecycle,
-            input_model=ContainerLifecycleRequest,
-            output_model=ContainerLifecycleResponse,
-            examples=[
-                {
-                    "name": "Stop a container",
-                    "input": {
-                        "container_id": "my-container",
-                        "action": "stop",
-                        "timeout": 10
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Successfully stopped container my-container",
-                        "container_id": "my-container",
-                        "action": "stop",
-                        "state": {
-                            "Status": "exited",
-                            "Running": False,
-                            "Paused": False,
-                            "Restarting": False,
-                            "OOMKilled": False,
-                            "Dead": False,
-                            "Pid": 0,
-                            "ExitCode": 0,
-                            "Error": "",
-                            "StartedAt": "2023-01-01T12:00:00Z",
-                            "FinishedAt": "2023-01-01T12:00:10Z"
-                        }
-                    }
-                },
-                {
-                    "name": "Force remove a running container",
-                    "input": {
-                        "container_id": "my-container",
-                        "action": "remove",
-                        "force": True,
-                        "remove_volumes": True
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Successfully removed container my-container",
-                        "container_id": "my-container",
-                        "action": "remove"
-                    }
-                }
-            ]
-        )
-    )
+    try:
+        # Get all tools and models
+        tools = get_all_tools()
+        registered_count = 0
+        
+        # Register each tool
+        for tool in tools:
+            try:
+                # Skip None values that might be returned by get_tools()
+                if tool is None:
+                    continue
+                    
+                # Log detailed information about the tool being registered
+                tool_name = (
+                    getattr(tool, 'name', None) or 
+                    getattr(tool, '__name__', str(tool))
+                )
+                logger.debug(f"Registering tool: {tool_name}")
+                
+                # Register the tool with FastMCP
+                mcp.register_tool(tool)
+                registered_count += 1
+                
+                # Log successful registration
+                logger.debug(f"Successfully registered tool: {tool_name}")
+                
+            except Exception as e:
+                error_msg = f"Failed to register tool {tool_name if 'tool_name' in locals() else 'unknown'}: {str(e)}"
+                logger.error(error_msg, exc_info=True)
+                raise ToolError(error_msg) from e
+        
+        # Log summary of registration
+        logger.info(f"Successfully registered {registered_count} container tools with FastMCP")
+        
+    except Exception as e:
+        logger.error(f"Failed to register container tools: {e}", exc_info=True)
+        raise ToolError(f"Failed to register container tools: {e}") from e
+
+def get_tools() -> List[Tool]:
+    """
+    Get all container tools as Tool instances for registration with FastMCP.
     
-    # Register container logs tool
-    mcp.register_tool(
-        Tool(
-            name="stream_container_logs",
-            description="Stream logs from a container with filtering options",
-            method=stream_container_logs,
-            input_model=ContainerLogsRequest,
-            output_model=ContainerLogsResponse,
-            examples=[
-                {
-                    "name": "Get last 100 logs",
-                    "input": {
-                        "container_id": "my-container",
-                        "tail": 100,
-                        "timestamps": True
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Logs retrieved successfully",
-                        "container_id": "my-container",
-                        "logs": [
-                            {
-                                "timestamp": "2023-01-01T12:00:00Z",
-                                "stream": "stdout",
-                                "line": "Server started on port 8080"
-                            },
-                            {
-                                "timestamp": "2023-01-01T12:00:01Z",
-                                "stream": "stderr",
-                                "line": "Warning: Configuration file not found"
-                            }
-                        ]
-                    }
-                },
-                {
-                    "name": "Follow logs in real-time",
-                    "input": {
-                        "container_id": "my-container",
-                        "follow": True,
-                        "stream_type": "stdout"
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Streaming logs from container my-container",
-                        "container_id": "my-container",
-                        "logs": []
-                    }
-                }
-            ]
-        )
-    )
+    This function collects all container-related tools from various modules and
+    returns them in a format suitable for registration with the FastMCP server.
     
-    # Register container exec tool
-    mcp.register_tool(
-        Tool(
-            name="execute_in_container",
-            description="Execute a command inside a running container",
-            method=execute_in_container,
-            input_model=ContainerExecRequest,
-            output_model=ContainerExecResponse,
-            examples=[
-                {
-                    "name": "Run a simple command",
-                    "input": {
-                        "container_id": "my-container",
-                        "command": "ls -la /app"
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Command executed in container my-container with exit code 0",
-                        "container_id": "my-container",
-                        "command": "ls -la /app",
-                        "result": {
-                            "exit_code": 0,
-                            "stdout": "total 16\ndrwxr-xr-x 1 root root 4096 Jan  1 12:00 .\ndrwxr-xr-x 1 root root 4096 Jan  1 12:00 ..\n-rw-r--r-- 1 root root  220 Jan  1 12:00 app.py\n",
-                            "stderr": "",
-                            "output": "total 16\ndrwxr-xr-x 1 root root 4096 Jan  1 12:00 .\ndrwxr-xr-x 1 root root 4096 Jan  1 12:00 ..\n-rw-r--r-- 1 root root  220 Jan  1 12:00 app.py\n",
-                            "success": True
-                        }
-                    }
-                },
-                {
-                    "name": "Run interactive shell",
-                    "input": {
-                        "container_id": "my-container",
-                        "command": "/bin/bash",
-                        "tty": True,
-                        "stream": True
-                    },
-                    "output": {
-                        "success": True,
-                        "message": "Interactive shell started in container my-container",
-                        "container_id": "my-container",
-                        "command": "/bin/bash",
-                        "result": {
-                            "exit_code": 0,
-                            "stdout": "",
-                            "stderr": "",
-                            "output": "",
-                            "success": True
-                        }
-                    }
-                }
+    Returns:
+        List of Tool instances to register with FastMCP
+        
+    Example:
+        >>> from fastmcp.tools import get_tools_metadata
+        >>> tools = get_tools()
+        >>> assert any(t.name == 'list_containers' for t in tools)
+    """
+    try:
+        from fastmcp.tools import get_tools_metadata, Tool
+        
+        # Get all tools and models
+        all_items = get_all_tools()
+        
+        # Filter to only include Tool instances
+        tool_instances = [
+            item for item in all_items 
+            if isinstance(item, Tool) or hasattr(item, '_is_tool')
+        ]
+        
+        # Log the number of tools found
+        logger.info(f"Found {len(tool_instances)} container tools for registration")
+        
+        # Log the names of the tools for debugging
+        if logger.isEnabledFor(logging.DEBUG):
+            tool_names = [
+                getattr(t, 'name', getattr(t, '__name__', str(t)))
+                for t in tool_instances
             ]
-        )
-    )
+            logger.debug(f"Container tools to register: {', '.join(tool_names)}")
+        
+        return tool_instances
+        
+    except Exception as e:
+        error_msg = f"Error getting container tools: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise ToolError(error_msg) from e

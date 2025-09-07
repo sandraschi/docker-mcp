@@ -6,7 +6,7 @@ This module provides FastMCP 2.11.3 compatible tools for workflow automation.
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
 from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolException
+from fastmcp.exceptions import ToolError
 from workflow_intel.stack_health import StackHealthChecker
 
 # Import models

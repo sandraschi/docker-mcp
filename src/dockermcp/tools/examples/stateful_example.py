@@ -1,12 +1,19 @@
 """
 Stateful example tools for DockerMCP.
 
-This module demonstrates the stateful capabilities of FastMCP 2.11.3
+This module demonstrates the stateful capabilities of FastMCP 2.12
 with Docker management use cases.
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
-from fastmcp import Tool
+
+# Import FastMCP components
+from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.exceptions import ToolError
+
+# Configure logging
+from dockermcp.logging_config import logger, configure_logging
+configure_logging()
 
 # Import the state manager
 from dockermcp.state import get_state_manager
@@ -29,7 +36,7 @@ class TrackedContainers(BaseModel):
     name: str
     stats_history: List[ContainerStats] = Field(default_factory=list)
 
-@Tool(
+@Tool.register(
     name="track_container",
     description="Start tracking a container's statistics over time"
 )
@@ -65,7 +72,7 @@ async def track_container(container_id: str, name: str) -> Dict[str, Any]:
             "error": str(e)
         }
 
-@Tool(
+@Tool.register(
     name="update_container_stats",
     description="Update container statistics in the tracking system"
 )
@@ -129,7 +136,7 @@ async def update_container_stats(
             "error": str(e)
         }
 
-@Tool(
+@Tool.register(
     name="get_container_history",
     description="Get historical statistics for a tracked container"
 )
@@ -165,8 +172,11 @@ async def get_container_history(container_id: str) -> Dict[str, Any]:
             "error": str(e)
         }
 
-# Register the tools with the MCP instance
-from ..tools import mcp
-mcp.tool(track_container)
-mcp.tool(update_container_stats)
-mcp.tool(get_container_history)
+# Export the tools for registration
+def get_tools():
+    """Return all tools in this module for registration."""
+    return [
+        track_container,
+        update_container_stats,
+        get_container_history
+    ]

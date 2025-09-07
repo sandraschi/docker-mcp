@@ -3,8 +3,12 @@ Volume management tools for Docker MCP.
 
 This module provides FastMCP 2.11.3 compatible tools for managing Docker volumes.
 """
+from dockermcp.logging_config import logger, configure_logging
+configure_logging()
+
 from typing import Dict, Any, List, Optional
 from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolError
 from dockermcp.core.volumes import VolumeManager
 from dockermcp.tools.volumes.volume_models import (
     VolumeInfo, VolumeResponse, VolumeListResponse, VolumeInspectResponse,
@@ -15,7 +19,7 @@ from dockermcp.tools.volumes.volume_models import (
 import docker
 volume_mgr = VolumeManager(docker_client=docker.from_env())
 
-@Tool(
+@Tool.register(
     name="list_volumes",
     description="List all Docker volumes with their configurations and usage information"
 )
@@ -39,7 +43,23 @@ async def list_volumes() -> Dict[str, Any]:
 
 @Tool(
     name="create_volume",
-    description="Create a new Docker volume with the specified configuration"
+    description="Create a new Docker volume with the specified configuration",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name of the volume to create"},
+                    "driver": {"type": "string", "description": "Volume driver to use", "default": "local"},
+                    "driver_opts": {"type": "object", "description": "Driver-specific options", "default": {}},
+                    "labels": {"type": "object", "description": "Labels to apply to the volume", "default": {}}
+                },
+                "required": ["name"]
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def create_volume(
     request: CreateVolumeRequest
@@ -66,7 +86,20 @@ async def create_volume(
 
 @Tool(
     name="inspect_volume",
-    description="Get detailed information about a specific volume"
+    description="Get detailed information about a specific volume",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name or ID of the volume to inspect"}
+                },
+                "required": ["name"]
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def inspect_volume(
     request: VolumeOperationRequest
@@ -90,7 +123,21 @@ async def inspect_volume(
 
 @Tool(
     name="remove_volume",
-    description="Remove a Docker volume, with an option to force removal"
+    description="Remove a Docker volume, with an option to force removal",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name or ID of the volume to remove"},
+                    "force": {"type": "boolean", "description": "Force the removal of the volume even if in use", "default": False}
+                },
+                "required": ["name"]
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def remove_volume(
     request: RemoveVolumeRequest
@@ -114,7 +161,28 @@ async def remove_volume(
 
 @Tool(
     name="prune_volumes",
-    description="Remove all unused volumes, with optional filters"
+    description="Remove all unused volumes, with optional filters",
+    parameters={
+        "type": "object",
+        "properties": {
+            "request": {
+                "type": "object",
+                "properties": {
+                    "filters": {
+                        "type": "object",
+                        "description": "Filters to apply when pruning volumes",
+                        "properties": {
+                            "label": {"type": "array", "items": {"type": "string"}, "description": "Only remove volumes with these labels"},
+                            "until": {"type": "string", "description": "Only remove volumes created before this timestamp"}
+                        },
+                        "default": {}
+                    }
+                },
+                "required": []
+            }
+        },
+        "required": ["request"]
+    }
 )
 async def prune_volumes(
     request: Optional[PruneVolumesRequest] = None

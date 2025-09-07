@@ -1,4 +1,4 @@
-# DockerMCP 
+# DockerMCP
 
 ## FastMCP 2.11.3 server for comprehensive Docker operations with Austrian efficiency
 
@@ -39,10 +39,45 @@ DockerMCP leverages FastMCP 2.11.3's built-in state management system for all it
 
 ### Austrian Efficiency Add-ons
 
+- **Docker Watchdog**: Automatic monitoring and recovery of Docker daemon
 - **Stack Health Checks**: One-command status of all your stacks
 - **Problem Detection**: Find and diagnose issues before they become problems
 - **Intelligent Recovery**: Automated fixes for common Docker issues
 - **Maintenance Recommendations**: Proactive suggestions for keeping your Docker environment clean
+- **Cross-Platform Support**: Works on both Windows and Linux systems
+
+## 🚨 Docker Watchdog
+
+### Features
+
+- **Automatic Recovery**: Automatically restarts Docker daemon if it becomes unresponsive
+- **Cross-Platform**: Works on both Windows and Linux systems
+- **Configurable**: Adjust check intervals and retry attempts
+- **Detailed Logging**: Comprehensive logs for troubleshooting
+- **Service Integration**: Runs as a system service (systemd on Linux, Windows Service on Windows)
+
+### Installation
+
+#### Windows
+
+```powershell
+# Run as Administrator
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\install\docker-watchdog.ps1
+```
+
+#### Linux
+
+```bash
+# Install as systemd service
+sudo cp install/docker-watchdog.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now docker-watchdog
+```
+
+### Logs
+- **Windows**: `docker_watchdog.log` in the installation directory
+- **Linux**: `journalctl -u docker-watchdog -f`
 
 ## 🏗 Project Structure
 

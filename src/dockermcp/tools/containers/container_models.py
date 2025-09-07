@@ -2,15 +2,46 @@
 Container models for Docker MCP.
 
 This module contains Pydantic models for container-related requests and responses.
+Compatible with FastMCP 2.12+.
 """
-from typing import Dict, List, Optional, Any, Union, TypedDict, ClassVar, Literal
-from pydantic import BaseModel, Field, field_validator, model_validator, HttpUrl, ConfigDict, ValidationInfo
+from __future__ import annotations
+
+import re
 from datetime import datetime
 from enum import Enum, auto
-from typing_extensions import Annotated
+from typing import (
+    Any, Dict, List, Optional, Union, TypedDict, ClassVar, Literal, 
+    TypeVar, Generic, Type, get_origin, get_args
+)
+
+# FastMCP imports
+from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.exceptions import ToolError
+
+# Pydantic models
+from pydantic import (
+    BaseModel, Field, field_validator, model_validator, 
+    ConfigDict, HttpUrl, field_serializer
+)
+from pydantic.functional_validators import AfterValidator
+from typing_extensions import Annotated, Self
+
+# Type variable for generic models
+T = TypeVar('T')
 
 class ContainerState(str, Enum):
-    """Container state enumeration."""
+    """
+    Container state enumeration.
+    
+    Attributes:
+        CREATED: Container has been created but not started
+        RUNNING: Container is currently running
+        PAUSED: Container is paused
+        RESTARTING: Container is in the process of restarting
+        REMOVING: Container is being removed
+        EXITED: Container has stopped
+        DEAD: Container is dead (failed to start or crashed)
+    """
     CREATED = "created"
     RUNNING = "running"
     PAUSED = "paused"
@@ -18,23 +49,66 @@ class ContainerState(str, Enum):
     REMOVING = "removing"
     EXITED = "exited"
     DEAD = "dead"
+    
+    @classmethod
+    def from_docker_state(cls, docker_state: str) -> 'ContainerState':
+        """Convert Docker state string to ContainerState enum."""
+        docker_state = docker_state.lower()
+        for state in cls:
+            if state.value == docker_state:
+                return state
+        return cls.EXITED  # Default to EXITED for unknown states
 
 class ContainerInfo(BaseModel):
-    """Basic container information."""
-    id: str = Field(..., description="Container ID")
-    name: str = Field(..., description="Container name")
-    image: str = Field(..., description="Image name and tag")
-    status: str = Field(..., description="Container status")
+    """
+    Basic container information model.
+    
+    This model represents the essential information about a Docker container.
+    """
+    model_config = ConfigDict(
+        frozen=True,
+        json_schema_extra={
+            "example": {
+                "id": "a1b2c3d4e5f6",
+                "name": "my-container",
+                "image": "nginx:latest",
+                "status": "Up 2 hours",
+                "state": "running",
+                "created": "2023-01-01T12:00:00Z",
+                "ports": {"80/tcp": "0.0.0.0:8080"},
+                "networks": ["bridge"]
+            }
+        }
+    )
+    
+    id: str = Field(..., description="Container ID (64-character hex string)", min_length=12, max_length=64)
+    name: str = Field(..., description="Container name (without leading /)", min_length=1)
+    image: str = Field(..., description="Image name and tag (e.g., 'nginx:latest')")
+    status: str = Field(..., description="Human-readable container status")
     state: ContainerState = Field(..., description="Container state")
-    created: datetime = Field(..., description="Creation timestamp")
+    created: datetime = Field(..., description="Creation timestamp in UTC")
     ports: Dict[str, str] = Field(
         default_factory=dict,
-        description="Port mappings"
+        description="Port mappings in format {'container_port/proto': 'host:port'}"
     )
     networks: List[str] = Field(
         default_factory=list,
-        description="Network names"
+        description="List of network names the container is connected to"
     )
+    
+    @field_validator('name')
+    def validate_name(cls, v: str) -> str:
+        """Ensure container name doesn't start with a slash."""
+        if v.startswith('/'):
+            return v[1:]
+        return v
+        
+    @field_validator('id')
+    def validate_id(cls, v: str) -> str:
+        """Validate container ID format."""
+        if not re.match(r'^[a-f0-9]+$', v.lower()):
+            raise ValueError("Container ID must be a hex string")
+        return v.lower()
 
 class ContainerResponse(BaseModel):
     """Standard container operation response."""
@@ -194,9 +268,58 @@ class ExecCommandResponse(BaseModel):
     output: str
     error: Optional[str] = None
 
-class InspectContainerRequest(BaseModel):
-    """Request model for inspecting a container."""
+class ContainerTopRequest(BaseModel):
+    """Request model for getting container top processes."""
     container_id: str = Field(..., description="Container ID or name")
+    ps_args: Optional[str] = Field(
+        default="-ef",
+        description="Arguments to pass to ps (e.g., 'aux' or 'ef')"
+    )
+    stream: bool = Field(
+        default=False,
+        description="Stream the output continuously"
+    )
+
+
+class ContainerTopResponse(BaseModel):
+    """Response model for container top processes."""
+    success: bool
+    message: str
+    container_id: str
+    processes: List[List[str]] = Field(
+        default_factory=list,
+        description="List of processes with their details"
+    )
+    titles: List[str] = Field(
+        default_factory=list,
+        description="Column titles for the process list"
+    )
+    error: Optional[str] = None
+
+
+class InspectContainerRequest(BaseModel):
+    """Request model for inspecting a container.
+    
+    This is an alias for ContainerInspectRequest for backward compatibility.
+    """
+    container_id: str = Field(..., description="Container ID or name")
+    size: bool = Field(
+        default=False,
+        description="Return the size of container as fields SizeRw and SizeRootFs"
+    )
+
+
+class ContainerInspectRequest(InspectContainerRequest):
+    """Request model for inspecting a container."""
+    pass
+
+class ContainerInspectResponse(BaseModel):
+    """Response model for container inspection."""
+    success: bool
+    message: str
+    container_id: str
+    details: Optional[Dict[str, Any]] = None
+    error: Optional[str] = None
 
 class ContainerDetails(BaseModel):
     """Detailed container information."""
@@ -247,9 +370,44 @@ class ContainerStatsResponse(BaseModel):
     pids: int
     timestamp: datetime
 
+def get_tools() -> List[Type[BaseModel]]:
+    """
+    Get all Pydantic models in this module that should be registered with FastMCP.
+    
+    Returns:
+        List of Pydantic model classes to register
+    """
+    return [
+        ContainerInfo,
+        ContainerResponse,
+        ContainerLifecycleRequest,
+        ContainerLifecycleResponse,
+        ContainerLogsRequest,
+        ContainerLogsResponse,
+        ContainerExecRequest,
+        ContainerExecResponse,
+        ContainerInspectRequest,
+        ContainerInspectResponse,
+        ContainerStatsRequest,
+        ContainerStatsResponse,
+        ListContainersRequest,
+        StartContainerRequest,
+        StopContainerRequest,
+        RestartContainerRequest,
+        RemoveContainerRequest,
+        GetContainerLogsRequest,
+        PruneContainersRequest,
+        PruneContainersResponse,
+        ExecCommandRequest,
+        ExecCommandResponse,
+        ContainerTopRequest,
+        ContainerTopResponse,
+        ContainerDetails
+    ]
+
 # ============================================================================
 # Container Lifecycle Models
-# ============================================================================
+# =============================================================================
 
 class ContainerAction(str, Enum):
     """Available container actions."""

@@ -5,31 +5,36 @@ Docker MCP Server - Main Entry Point
 This module initializes and runs the Docker MCP server with FastMCP 2.11.3 compatibility
 and stateful features.
 """
-import asyncio
+import json
 import logging
 import os
 import sys
+import traceback
 import warnings
-from contextlib import redirect_stderr, redirect_stdout
-from io import StringIO
 from pathlib import Path
-from dockermcp.utils.json_utils import safe_json_loads, safe_json_dumps
+from typing import Dict, Any, Optional, List, Union
 
 # Suppress Pydantic deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
-# Add the parent directory to the Python path
-src_dir = str(Path(__file__).parent.parent.absolute())
-if src_dir not in sys.path:
-    sys.path.insert(0, src_dir)
-
-# Configure logging to capture warnings
+# Configure logging to stderr only
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stderr  # Send logs to stderr to avoid mixing with JSON output
+    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
+    handlers=[logging.StreamHandler(sys.stderr)]  # CRITICAL: stderr not stdout
 )
+
+# Import FastMCP after initial logging setup
+from fastmcp import FastMCP
+from pydantic import BaseModel, Field
+
+# Import local modules
+from dockermcp.logging_config import configure_logging
+from dockermcp.utils.json_utils import safe_json_loads, safe_json_dumps
+
+# Configure logging with our centralized config
+configure_logging()
 logger = logging.getLogger(__name__)
 
 # Redirect warnings to the logger
@@ -38,10 +43,6 @@ def warn_with_log(message, category, filename, lineno, file=None, line=None):
 
 warnings.showwarning = warn_with_log
 
-# Import FastMCP after configuring logging
-from fastmcp import FastMCP
-import traceback
-
 class SafeFastMCP(FastMCP):
     """Extended FastMCP class with enhanced error handling."""
     
@@ -49,14 +50,17 @@ class SafeFastMCP(FastMCP):
         """Handle incoming JSON-RPC messages with proper error handling."""
         try:
             # Log the raw message for debugging
-            logger.debug(f"Received message: {message[:200]}..." if len(message) > 200 else f"Received message: {message}")
+            if message and len(message) > 200:
+                logger.debug(f"Received message (truncated): {message[:200]}...")
+            elif message:
+                logger.debug(f"Received message: {message}")
             
             # Check for common issues
-            if not message.strip():
+            if not message or not message.strip():
                 logger.warning("Received empty message")
                 return ''
                 
-            if message.startswith('Warning:') or message.startswith('Error:'):
+            if message.startswith(('Warning:', 'Error:')):
                 logger.warning(f"Received warning/error message: {message}")
                 return ''
                 
@@ -68,39 +72,74 @@ class SafeFastMCP(FastMCP):
                 logger.warning(f"Skipping message: {message[:200]}...")
                 return ''
                 
-            # Parse the message using our safe JSON loader
-            parsed = safe_json_loads(message, context="incoming message")
-            if parsed is None:
-                return {
-                    "jsonrpc": "2.0",
-                    "id": None,
-                    "error": {
-                        "code": -32700,
-                        "message": "Parse error: Invalid JSON"
-                    }
-                }
-            return parsed
-            
             # Process the message normally
             return await super()._handle_message(message)
             
+        except json.JSONDecodeError as e:
+            logger.error(f"Invalid JSON received: {e}", exc_info=True)
+            return safe_json_dumps({
+                "jsonrpc": "2.0",
+                "id": None,
+                "error": {
+                    "code": -32700,
+                    "message": "Parse error: Invalid JSON"
+                }
+            })
         except Exception as e:
-            error_msg = f"Error processing message: {str(e)}\n{traceback.format_exc()}"
-            logger.error(error_msg)
-            return {
+            error_msg = f"Error processing message: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            return safe_json_dumps({
                 "jsonrpc": "2.0",
                 "id": None,
                 "error": {
                     "code": -32603,
                     "message": f"Internal error: {str(e)}"
                 }
-            }
+            })
 
 # Initialize FastMCP with built-in state management and custom error handling
 mcp = SafeFastMCP(
     name="DockerMCP",
-    version="2.11.0"
+    version="2.11.3"
 )
+
+# Import and register tools
+from dockermcp.tools.containers import (
+    list_containers,
+    create_container,
+    start_container,
+    stop_container,
+    restart_container,
+    remove_container,
+    inspect_container,
+    container_logs,
+    execute_in_container
+)
+
+# Register container tools
+mcp.tool(list_containers)
+mcp.tool(create_container)
+mcp.tool(start_container)
+mcp.tool(stop_container)
+mcp.tool(restart_container)
+mcp.tool(remove_container)
+mcp.tool(inspect_container)
+mcp.tool(container_logs)
+mcp.tool(execute_in_container)
+
+def main():
+    """Initialize and run the Docker MCP server."""
+    try:
+        logger.info("Starting Docker MCP server...")
+        mcp.run()
+    except KeyboardInterrupt:
+        logger.info("Shutting down Docker MCP server...")
+    except Exception as e:
+        logger.critical(f"Fatal error: {e}", exc_info=True)
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
 
 # Custom JSON encoder that handles common types
 class SafeJSONEncoder(json.JSONEncoder):
