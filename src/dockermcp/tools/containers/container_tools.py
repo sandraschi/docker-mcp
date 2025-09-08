@@ -27,7 +27,8 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 # Import FastMCP components
-from fastmcp.tools import tool as Tool
+from fastmcp.tools import tool
+from fastmcp.tools import Tool
 from fastmcp.exceptions import ToolError
 
 # Import all container models and types for re-export
@@ -95,9 +96,11 @@ T = TypeVar('T', bound=BaseModel)
 # Container Lifecycle Tools
 # -----------------------------------------------------------------------------
 
-@Tool(
+@tool(
     name="list_containers",
-    description="List containers with optional filtering"
+    description="List containers with optional filtering",
+    args_schema=ListContainersRequest,
+    return_schema=List[ContainerInfo]
 )
 async def list_containers(request: ListContainersRequest) -> List[ContainerInfo]:
     """
@@ -158,9 +161,11 @@ async def list_containers(request: ListContainersRequest) -> List[ContainerInfo]
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
-@Tool(
+@tool(
     name="create_container",
-    description="Create a new container with the specified configuration"
+    description="Create a new container with the specified configuration",
+    args_schema=ContainerLifecycleRequest,
+    return_schema=ContainerResponse
 )
 async def create_container(request: ContainerLifecycleRequest) -> ContainerResponse:
     """
@@ -189,9 +194,11 @@ async def create_container(request: ContainerLifecycleRequest) -> ContainerRespo
         logger.error(f"Error creating container: {str(e)}")
         raise ToolError(f"Failed to create container: {str(e)}")
 
-@Tool(
+@tool(
     name="start_container",
-    description="Start a stopped container"
+    description="Start a stopped container with the specified configuration",
+    args_schema=StartContainerRequest,
+    return_schema=ContainerResponse
 )
 async def start_container(request: StartContainerRequest) -> ContainerResponse:
     """
@@ -215,9 +222,11 @@ async def start_container(request: StartContainerRequest) -> ContainerResponse:
         logger.error(f"Error starting container: {str(e)}")
         raise ToolError(f"Failed to start container: {str(e)}")
 
-@Tool(
+@tool(
     name="stop_container",
-    description="Stop a running container"
+    description="Stop a running container with the specified configuration",
+    args_schema=StopContainerRequest,
+    return_schema=ContainerResponse
 )
 async def stop_container(request: StopContainerRequest) -> ContainerResponse:
     """
@@ -241,9 +250,11 @@ async def stop_container(request: StopContainerRequest) -> ContainerResponse:
         logger.error(f"Error stopping container: {str(e)}")
         raise ToolError(f"Failed to stop container: {str(e)}")
 
-@Tool(
+@tool(
     name="restart_container",
-    description="Restart a container"
+    description="Restart a container with the specified configuration",
+    args_schema=ContainerLifecycleRequest,
+    return_schema=ContainerResponse
 )
 async def restart_container(request: ContainerLifecycleRequest) -> ContainerResponse:
     """
@@ -267,9 +278,11 @@ async def restart_container(request: ContainerLifecycleRequest) -> ContainerResp
         logger.error(f"Error restarting container: {str(e)}")
         raise ToolError(f"Failed to restart container: {str(e)}")
 
-@Tool(
+@tool(
     name="remove_container",
-    description="Remove a container"
+    description="Remove a container with the specified configuration",
+    args_schema=ContainerLifecycleRequest,
+    return_schema=ContainerResponse
 )
 async def remove_container(request: ContainerLifecycleRequest) -> ContainerResponse:
     """
@@ -294,9 +307,11 @@ async def remove_container(request: ContainerLifecycleRequest) -> ContainerRespo
         logger.error(f"Error removing container: {str(e)}")
         raise ToolError(f"Failed to remove container: {str(e)}")
 
-@Tool(
+@tool(
     name="prune_containers",
-    description="Remove all stopped containers"
+    description="Remove all stopped containers with the specified configuration",
+    args_schema=PruneContainersRequest,
+    return_schema=PruneContainersResponse
 )
 async def prune_containers(request: PruneContainersRequest) -> PruneContainersResponse:
     """
@@ -311,10 +326,14 @@ async def prune_containers(request: PruneContainersRequest) -> PruneContainersRe
     from .container_lifecycle import prune_containers as _prune_containers
     return await _prune_containers(request)
 
-# Register remaining tools
-@Tool(
+# Container Logs Tools
+# -----------------------------------------------------------------------------
+
+@tool(
     name="get_container_logs",
-    description="Get logs from a container"
+    description="Get logs from a container with the specified configuration",
+    args_schema=ContainerLogsRequest,
+    return_schema=ContainerLogsResponse
 )
 async def get_container_logs(request: ContainerLogsRequest) -> ContainerLogsResponse:
     """
@@ -329,9 +348,11 @@ async def get_container_logs(request: ContainerLogsRequest) -> ContainerLogsResp
     from .container_logs import get_container_logs as _get_container_logs
     return await _get_container_logs(request)
 
-@Tool(
+@tool(
     name="stream_container_logs",
-    description="Stream logs from a container in real-time"
+    description="Stream logs from a container in real-time with the specified configuration",
+    args_schema=ContainerLogsRequest,
+    return_schema=AsyncGenerator[LogEntry, None]
 )
 async def stream_container_logs(request: ContainerLogsRequest) -> AsyncGenerator[LogEntry, None]:
     """
@@ -347,10 +368,14 @@ async def stream_container_logs(request: ContainerLogsRequest) -> AsyncGenerator
     async for entry in _stream_container_logs(request):
         yield entry
 
-# Register execution tools
-@Tool(
+# Container Execution Tools
+# -----------------------------------------------------------------------------
+
+@tool(
     name="execute_in_container",
-    description="Execute a command in a running container"
+    description="Execute a command in a running container with the specified configuration",
+    args_schema=ContainerExecRequest,
+    return_schema=ContainerExecResponse
 )
 async def execute_in_container(request: ContainerExecRequest) -> ContainerExecResponse:
     """
@@ -365,9 +390,11 @@ async def execute_in_container(request: ContainerExecRequest) -> ContainerExecRe
     from .container_exec import execute_in_container as _execute_in_container
     return await _execute_in_container(request)
 
-@Tool(
+@tool(
     name="exec_command",
-    description="Execute a command in a running container (legacy)"
+    description="Execute a command in a running container (legacy interface) with the specified configuration",
+    args_schema=ExecCommandRequest,
+    return_schema=ExecCommandResponse
 )
 async def exec_command(request: ExecCommandRequest) -> ExecCommandResponse:
     """
@@ -382,10 +409,14 @@ async def exec_command(request: ExecCommandRequest) -> ExecCommandResponse:
     from .container_exec import exec_command as _exec_command
     return await _exec_command(request)
 
-# Register inspection tools
-@Tool(
+# Container Inspection Tools
+# -----------------------------------------------------------------------------
+
+@tool(
     name="inspect_container",
-    description="Inspect a container"
+    description="Inspect a container with the specified configuration",
+    args_schema=InspectContainerRequest,
+    return_schema=ContainerInspectResponse
 )
 async def inspect_container(request: InspectContainerRequest) -> ContainerInspectResponse:
     """
@@ -400,9 +431,11 @@ async def inspect_container(request: InspectContainerRequest) -> ContainerInspec
     from .container_inspect import inspect_container as _inspect_container
     return await _inspect_container(request)
 
-@Tool(
+@tool(
     name="container_stats",
-    description="Get container resource usage statistics"
+    description="Get container resource usage statistics with the specified configuration",
+    args_schema=ContainerStatsRequest,
+    return_schema=ContainerStatsResponse
 )
 async def container_stats(request: ContainerStatsRequest) -> ContainerStatsResponse:
     """
@@ -417,9 +450,11 @@ async def container_stats(request: ContainerStatsRequest) -> ContainerStatsRespo
     from .container_inspect import container_stats as _container_stats
     return await _container_stats(request)
 
-@Tool(
+@tool(
     name="container_top",
-    description="Display the running processes of a container"
+    description="Display the running processes of a container with the specified configuration",
+    args_schema=ContainerTopRequest,
+    return_schema=ContainerTopResponse
 )
 async def container_top(request: ContainerTopRequest) -> ContainerTopResponse:
     """
@@ -434,12 +469,57 @@ async def container_top(request: ContainerTopRequest) -> ContainerTopResponse:
     from .container_inspect import container_top as _container_top
     return await _container_top(request)
 
+def get_tools() -> list:
+    """
+    Get all tools defined in this module for registration with FastMCP 2.12+.
+    
+    This function returns a list of tool functions that should be registered
+    with the FastMCP tool registry. Each tool is decorated with @tool
+    to provide metadata and enable remote invocation.
+    
+    Returns:
+        List of tool functions to register with FastMCP
+        
+    Example:
+        >>> from fastmcp.tools import tool
+        >>> @tool()
+        ... def my_tool():
+        ...     pass
+        >>> get_tools()
+        [<function my_tool at 0x...>]
+    """
+    return [
+        # Container lifecycle tools
+        list_containers,
+        create_container,
+        start_container,
+        stop_container,
+        restart_container,
+        remove_container,
+        prune_containers,
+        
+        # Log tools
+        get_container_logs,
+        stream_container_logs,
+        
+        # Execution tools
+        execute_in_container,
+        exec_command,
+        
+        # Inspection tools
+        inspect_container,
+        container_stats,
+        container_top,
+    ]
+
 # Public API
 # -----------------------------------------------------------------------------
 # This section defines the public interface of the module. Only symbols listed
 # in __all__ will be available when importing from this module.
 
 __all__ = [
+    # Functions
+    'get_tools',
     # Container Lifecycle Management
     'list_containers',
     'create_container',

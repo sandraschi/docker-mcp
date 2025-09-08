@@ -3,24 +3,36 @@ Container command execution for Docker MCP.
 
 This module provides tools for executing commands in running Docker containers
 with full support for FastMCP 2.12+ standards. It includes features for both
-synchronous and streaming command execution with proper error handling and logging.
+synchronous and streaming command execution with comprehensive error handling,
+logging, and security best practices.
 """
 from __future__ import annotations
 
 import asyncio
 import logging
+import traceback
+import time
+from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, Any, Optional, List, Union, AsyncGenerator, cast, TypeVar, Type
+from functools import wraps
+from typing import (
+    Dict, Any, Optional, List, Union, AsyncGenerator, 
+    cast, TypeVar, Type, Callable, Awaitable, ParamSpec, Tuple
+)
+from contextlib import asynccontextmanager
 
 # Pydantic models
-from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator, ValidationError
 
 # Docker SDK
 import aiodocker
+import docker
+from aiodocker.exceptions import DockerError
 from aiodocker.execs import Exec
+from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import tool as Tool
+from fastmcp.tools import Tool, get_tools_metadata
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -29,8 +41,67 @@ from dockermcp.logging_config import logger, configure_logging
 # Configure logging
 configure_logging()
 
-# Type variables
+# Type variables for type hints
 T = TypeVar('T', bound=BaseModel)
+P = ParamSpec('P')
+R = TypeVar('R')
+
+def handle_exec_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """
+    Decorator to handle Docker exec errors and standardize error responses.
+    
+    Args:
+        func: The async function to wrap
+        
+    Returns:
+        Wrapped function with error handling
+    """
+    @wraps(func)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return await func(*args, **kwargs)
+        except ValidationError as ve:
+            error_msg = f"Command execution validation error: {str(ve)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ve
+        except NotFound as nf:
+            error_msg = f"Container not found: {str(nf)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from nf
+        except ContainerError as ce:
+            error_msg = f"Container error during command execution: {str(ce)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ce
+        except APIError as ae:
+            error_msg = f"Docker API error during command execution: {str(ae)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ae
+        except DockerError as de:
+            error_msg = f"Docker error during command execution: {str(de)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from de
+        except asyncio.CancelledError:
+            logger.info("Command execution was cancelled")
+            raise
+        except Exception as e:
+            error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
+            logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
+            raise ToolError(f"Internal server error: {str(e)}") from e
+    return wrapper
+
+@asynccontextmanager
+async def get_docker_client():
+    """Context manager for Docker client with proper cleanup."""
+    client = None
+    try:
+        client = docker.from_env()
+        yield client
+    except Exception as e:
+        logger.error(f"Failed to initialize Docker client: {str(e)}")
+        raise ToolError("Failed to connect to Docker daemon") from e
+    finally:
+        if client is not None:
+            client.close()
 
 class ExecStreamType(str, Enum):
     """
@@ -255,19 +326,54 @@ class ContainerExecResponse(BaseModel):
         description="Error message if the execution failed"
     )
 
-@Tool.register(
+@tool(
     name="execute_in_container",
-    description="Execute a command in a running container and return the results"
+    description=(
+        "Execute a command in a running container with comprehensive error handling. "
+        "Supports both synchronous and streaming execution modes, environment variables, "
+        "working directory configuration, and user impersonation."
+    ),
+    args_schema=ContainerExecRequest,
+    return_schema=ContainerExecResponse,
+    examples=[
+        {
+            "container_id": "my-container",
+            "command": ["ls", "-l", "/app"],
+            "user": "appuser",
+            "workdir": "/app",
+            "environment": {"DEBUG": "true"},
+            "privileged": False,
+            "stream": True
+        },
+        {
+            "container_id": "another-container",
+            "command": "whoami",
+            "stream": False
+        }
+    ]
 )
-@Tool.register(
-    name="execute_in_container",
-    description="Execute a command in a running container"
-)
+@handle_exec_errors
 async def execute_in_container(
     request: ContainerExecRequest
 ) -> Union[ContainerExecResponse, AsyncGenerator[Dict[str, Any], None]]:
     """
-    Execute a command in a running container.
+    Execute a command in a running container with comprehensive error handling.
+    
+    This function provides a robust interface for executing commands in containers
+    with support for:
+    - Both synchronous and streaming execution modes
+    - Environment variable configuration
+    - Working directory specification
+    - User impersonation
+    - Privileged execution (with proper security considerations)
+    - Real-time output streaming
+    - Comprehensive error handling and logging
+    
+    Security Notes:
+    - Avoid using privileged mode unless absolutely necessary
+    - Always validate and sanitize command inputs
+    - Use the principle of least privilege when specifying users
+    - Be cautious with environment variables that may contain sensitive data
     
     Args:
         request: ContainerExecRequest with the following parameters:
@@ -276,35 +382,64 @@ async def execute_in_container(
             - user: User to run the command as (default: container's default user)
             - workdir: Working directory inside the container
             - environment: Environment variables to set for the command
-            - privileged: Run the command with extended privileges
-            - tty: Allocate a pseudo-TTY
-            - stream: Whether to stream the command output
+            - privileged: Run the command with extended privileges (use with caution)
+            - tty: Allocate a pseudo-TTY (required for interactive commands)
+            - stream: Whether to stream the command output in real-time
             - stream_type: Which streams to capture (stdout, stderr, or both)
-            - detach: If true, detach the command after starting it
-            - stdin: Open stdin
-            - socket: Return connection to attach to the command's socket
-            - demux: Return stdout and stderr separately
+            - detach: If true, run the command in the background
+            - stdin: Open stdin (required for interactive input)
+            - socket: Return connection to attach to the command's socket (advanced)
+            - demux: Return stdout and stderr separately (when stream=False)
             
     Returns:
-        Dictionary with command execution results:
+        If stream=True, yields dictionaries with command output in real-time.
+        If stream=False, returns a ContainerExecResponse with the full command results.
+        
+        Example response when stream=False:
         {
-            'success': bool,  # Whether the command was executed successfully
-            'message': str,   # Status message
-            'container_id': str,  # ID of the container
-            'command': Union[str, List[str]],  # The command that was executed
-            'result': {  # Only present if stream=False
-                'exit_code': int,  # Command exit code
-                'stdout': str,     # Standard output
-                'stderr': str,     # Standard error
-                'output': str,     # Combined stdout and stderr
-                'success': bool    # Whether exit_code is 0
-            },
-            'error': Optional[str]  # Error message if execution failed
+            'success': True,
+            'message': 'Command executed successfully',
+            'container_id': 'a1b2c3d4e5f6',
+            'command': ['ls', '-l', '/app'],
+            'result': {
+                'exit_code': 0,
+                'stdout': 'total 4\ndrwxr-xr-x 2 root root 4096 Jan 1 00:00 app\n',
+                'stderr': '',
+                'output': 'total 4\ndrwxr-xr-x 2 root root 4096 Jan 1 00:00 app\n',
+                'success': True
+            }
+        }
+        
+        When stream=True, yields dictionaries with the format:
+        {
+            'type': 'stdout'|'stderr',
+            'data': 'output data',
+            'timestamp': 'ISO-8601 timestamp'
         }
         
     Raises:
-        ToolError: If there's an error executing the command
+        ToolError: If there's an error executing the command or the container is not found
+        
+    Example:
+        # Synchronous execution
+        response = await execute_in_container(ContainerExecRequest(
+            container_id='my-container',
+            command=['ls', '-l', '/app'],
+            stream=False
+        ))
+        
+        # Streaming execution
+        async for chunk in execute_in_container(ContainerExecRequest(
+            container_id='my-container',
+            command=['tail', '-f', '/var/log/app.log'],
+            stream=True
+        )):
+            print(f"{chunk['type']}: {chunk['data']}")
     """
+    logger.info(
+        f"Executing command in container {request.container_id}: {request.command}"
+        f" (user={request.user}, workdir={request.workdir}, privileged={request.privileged})"
+    )
     # Extract parameters from request
     container_id = request.container_id
     command = request.command

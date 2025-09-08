@@ -9,19 +9,28 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timezone
+import traceback
+import time
+from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Dict, Any, Optional, List, Union, AsyncGenerator, cast, TypeVar, Type
+from functools import wraps
+from typing import (
+    Dict, Any, Optional, List, Union, AsyncGenerator, 
+    cast, TypeVar, Type, Callable, Awaitable, ParamSpec, Tuple
+)
+from contextlib import asynccontextmanager
 
 # Pydantic models
-from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator
+from pydantic import BaseModel, Field, field_validator, ConfigDict, model_validator, ValidationError
 
 # Docker SDK
 import aiodocker
+import docker
 from aiodocker.exceptions import DockerError
+from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import tool as Tool
+from fastmcp.tools import Tool, get_tools_metadata
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -30,8 +39,67 @@ from dockermcp.logging_config import logger, configure_logging
 # Configure logging
 configure_logging()
 
-# Type variables
+# Type variables for type hints
 T = TypeVar('T', bound=BaseModel)
+P = ParamSpec('P')
+R = TypeVar('R')
+
+def handle_log_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """
+    Decorator to handle Docker log streaming errors and standardize error responses.
+    
+    Args:
+        func: The async function to wrap
+        
+    Returns:
+        Wrapped function with error handling
+    """
+    @wraps(func)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return await func(*args, **kwargs)
+        except ValidationError as ve:
+            error_msg = f"Log request validation error: {str(ve)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ve
+        except NotFound as nf:
+            error_msg = f"Container not found: {str(nf)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from nf
+        except ContainerError as ce:
+            error_msg = f"Container error while streaming logs: {str(ce)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ce
+        except APIError as ae:
+            error_msg = f"Docker API error during log streaming: {str(ae)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ae
+        except DockerError as de:
+            error_msg = f"Docker error during log streaming: {str(de)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from de
+        except asyncio.CancelledError:
+            logger.info("Log streaming was cancelled")
+            raise
+        except Exception as e:
+            error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
+            logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
+            raise ToolError(f"Internal server error: {str(e)}") from e
+    return wrapper
+
+@asynccontextmanager
+async def get_docker_client():
+    """Context manager for Docker client with proper cleanup."""
+    client = None
+    try:
+        client = docker.from_env()
+        yield client
+    except Exception as e:
+        logger.error(f"Failed to initialize Docker client: {str(e)}")
+        raise ToolError("Failed to connect to Docker daemon") from e
+    finally:
+        if client is not None:
+            client.close()
 
 class LogStreamType(str, Enum):
     """
@@ -254,15 +322,44 @@ class ContainerLogsResponse(BaseModel):
         description="Error message if the operation failed"
     )
 
-@Tool.register(
+@tool(
     name="stream_container_logs",
-    description="Stream logs from a Docker container in real-time with filtering options"
+    description=(
+        "Stream logs from a Docker container in real-time with filtering options. "
+        "Supports following logs (like tail -f), filtering by time range, and "
+        "separating stdout/stderr streams with comprehensive error handling."
+    ),
+    args_schema=ContainerLogsRequest,
+    return_schema=ContainerLogsResponse,
+    examples=[
+        {
+            "container_id": "my-container",
+            "follow": True,
+            "tail": 100,
+            "stream_type": "all",
+            "timeout": 60
+        },
+        {
+            "container_id": "another-container",
+            "follow": False,
+            "since": "5m",
+            "timestamps": True
+        }
+    ]
 )
+@handle_log_errors
 async def stream_container_logs(
     request: ContainerLogsRequest
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
-    Stream logs from a Docker container in real-time.
+    Stream logs from a Docker container in real-time with comprehensive error handling.
+    
+    This function provides a robust interface for streaming container logs with support for:
+    - Real-time log following (like tail -f)
+    - Time-based filtering (since/until)
+    - Stream filtering (stdout/stderr)
+    - Configurable output format
+    - Graceful error handling and recovery
     
     Args:
         request: ContainerLogsRequest with the following parameters:
@@ -289,6 +386,10 @@ async def stream_container_logs(
     Raises:
         ToolError: If there's an error accessing the container logs
     """
+    logger.info(
+        f"Starting log stream for container {request.container_id} "
+        f"(follow={request.follow}, tail={request.tail}, stream_type={request.stream_type})"
+    )
     container_id = request.container_id
     
     try:
@@ -324,21 +425,96 @@ async def stream_container_logs(
     except Exception as e:
         raise ToolError(f'Unexpected error: {str(e)}') from e
 
+async def _stream_logs_with_timeout(
+    container: docker.models.containers.Container,
+    request: ContainerLogsRequest,
+    timeout: Optional[float] = None
+) -> AsyncGenerator[Dict[str, Any], None]:
+    """
+    Stream logs from a container with a timeout.
+    
+    Args:
+        container: Docker container object
+        request: Log request parameters
+        timeout: Optional timeout in seconds
+        
+    Yields:
+        Parsed log entries
+        
+    Raises:
+        asyncio.TimeoutError: If the timeout is reached
+    """
+    start_time = time.monotonic()
+    
+    try:
+        log_stream = container.logs(
+            stdout=request.stream_type in [LogStreamType.STDOUT, LogStreamType.ALL],
+            stderr=request.stream_type in [LogStreamType.STDERR, LogStreamType.ALL],
+            follow=request.follow,
+            tail=request.tail,
+            since=request.since.isoformat() if isinstance(request.since, datetime) else request.since,
+            until=request.until.isoformat() if isinstance(request.until, datetime) else request.until,
+            timestamps=request.timestamps,
+            stream=True
+        )
+        
+        async for line in log_stream:
+            # Check for timeout
+            if timeout and (time.monotonic() - start_time) > timeout:
+                raise asyncio.TimeoutError(f"Log stream timed out after {timeout} seconds")
+                
+            # Parse the log line
+            try:
+                parsed = _parse_log_line(line, request.timestamps)
+                if parsed:
+                    if request.include_raw:
+                        parsed['raw'] = line
+                    yield parsed
+            except Exception as e:
+                logger.warning(f"Failed to parse log line: {e}")
+                continue
+                
+    except Exception as e:
+        logger.error(f"Error in log stream: {e}")
+        raise
+
 def get_tools() -> List[Tool]:
     """
-    Get all tools defined in this module for registration with FastMCP.
+    Get all tools defined in this module for registration with FastMCP 2.12+.
+    
+    This function returns a list of tool functions that should be registered
+    with the FastMCP tool registry. Each tool is decorated with @tool
+    to provide metadata and enable remote invocation.
     
     Returns:
-        List of Tool instances to register with FastMCP
+        List of tool functions to register with FastMCP
         
     Example:
         >>> from dockermcp.tools.containers import container_logs
         >>> tools = container_logs.get_tools()
         >>> assert len(tools) == 1
-        >>> assert tools[0].name == "stream_container_logs"
+        >>> assert tools[0].__name__ == "stream_container_logs"
     """
-    return [stream_container_logs]
-
+    return [
+        Tool(
+            name="stream_container_logs",
+            func=stream_container_logs,
+            description=(
+                "Stream logs from a container in real-time with filtering options. "
+                "Supports following logs, time-based filtering, and stream selection."
+            ),
+            args_schema=ContainerLogsRequest,
+            return_schema=ContainerLogsResponse,
+            examples=[
+                {
+                    "container_id": "my-container",
+                    "follow": True,
+                    "tail": 100,
+                    "stream_type": "all"
+                }
+            ]
+        )
+    ]
 
 def _parse_log_line(line: bytes, include_timestamps: bool = False) -> Optional[Dict[str, Any]]:
     """

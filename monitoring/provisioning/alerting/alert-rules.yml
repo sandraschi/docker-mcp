@@ -1,0 +1,61 @@
+apiVersion: 1
+
+groups:
+  - name: Docker MCP Alerts
+    interval: 1m
+    rules:
+      # High error rate alert
+      - alert: HighErrorRate
+        expr: sum(rate({app="dockermcp"} |~ "error|ERROR" [5m])) by (level) > 5
+        for: 5m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: High error rate detected
+          description: 'Error rate is {{ $value }} for level {{ $labels.level }}'
+          runbook_url: 'https://github.com/yourorg/dockermcp/runbooks/high-error-rate'
+
+      # Application down alert
+      - alert: ApplicationDown
+        expr: up{job="dockermcp"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          team: platform
+        annotations:
+          summary: Application is down
+          description: 'The application has been down for more than 2 minutes'
+
+      # High CPU usage
+      - alert: HighCPUUsage
+        expr: 100 * (1 - avg(rate(node_cpu_seconds_total{mode="idle"}[5m])) by (instance) > 80
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: High CPU usage on {{ $labels.instance }}
+          description: 'CPU usage is {{ $value }}%'
+
+      # High memory usage
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 10m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: High memory usage on {{ $labels.instance }}
+          description: 'Memory usage is {{ $value }}%'
+
+      # Disk space alert
+      - alert: LowDiskSpace
+        expr: 100 - (node_filesystem_avail_bytes{mountpoint="/"} * 100 / node_filesystem_size_bytes{mountpoint="/"}) > 80
+        for: 15m
+        labels:
+          severity: warning
+          team: platform
+        annotations:
+          summary: Low disk space on {{ $labels.instance }}
+          description: 'Disk space is {{ $value }}% used on {{ $labels.mountpoint }}'

@@ -1,0 +1,20 @@
+apiVersion: 1
+
+notifiers:
+  - name: email-notifier
+    type: email
+    settings:
+      addresses: ${ALERT_EMAIL_SANDRASCHIPAL}
+      singleEmail: true
+      message: |
+        {{ template "email.default.message" . }}
+      subject: {{ template "email.default.subject" . }}
+
+  - name: default-email-receiver
+    type: email
+    settings:
+      addresses: ${ALERT_EMAIL_SANDRASCHIPAL}
+      singleEmail: true
+      message: |
+        {{ template "email.default.message" . }}
+      subject: {{ template "email.default.subject" . }}

@@ -2,7 +2,7 @@
 """
 Docker MCP Server - Main Entry Point
 
-This module initializes and runs the Docker MCP server with FastMCP 2.11.3 compatibility
+This module initializes and runs the Docker MCP server with FastMCP 2.12.0 compatibility
 and stateful features.
 """
 import json
@@ -100,7 +100,7 @@ class SafeFastMCP(FastMCP):
 # Initialize FastMCP with built-in state management and custom error handling
 mcp = SafeFastMCP(
     name="DockerMCP",
-    version="2.11.3"
+    version="2.12.0"
 )
 
 # Import and register tools

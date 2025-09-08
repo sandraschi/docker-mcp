@@ -4,11 +4,11 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 """
-Docker MCP Tools - FastMCP 2.11.3 compatible tools
+Docker MCP Tools - FastMCP 2.12.0 compatible tools
 
 Docker MCP Tools Package
 
-This package contains all the FastMCP 2.11.3 compatible tools for Docker operations.
+This package contains all the FastMCP 2.12.0 compatible tools for Docker operations.
 """
 import importlib
 import pkgutil
@@ -28,7 +28,7 @@ except ImportError as e:
 # Initialize FastMCP instance
 mcp = FastMCP(
     name="Docker MCP Tools",
-    version="2.11.3"
+    version="2.12.0"
 )
 
 def discover_and_register_tools() -> None:

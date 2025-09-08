@@ -1,7 +1,7 @@
 """
-Workflow tools for Docker MCP.
+Workflow management tools for Docker MCP.
 
-This module provides FastMCP 2.12+ compatible tools for workflow automation.
+This module provides FastMCP 2.12.0 compatible tools for workflow automation.
 """
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator

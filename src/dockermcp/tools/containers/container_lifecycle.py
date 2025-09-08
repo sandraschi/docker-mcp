@@ -9,18 +9,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Dict, Any, Optional, List, TypeVar, Type, cast
+import traceback
+from functools import wraps
+from typing import Dict, Any, Optional, List, TypeVar, Type, cast, Callable, Awaitable, TypeVar, ParamSpec
 from enum import Enum
+from contextlib import asynccontextmanager
 
 # Pydantic models
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, Field, ConfigDict, field_validator, ValidationError
 
 # Docker SDK
 import aiodocker
+import docker
 from aiodocker.exceptions import DockerError
+from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import tool as Tool
+from fastmcp.tools import Tool, get_tools_metadata
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -28,6 +33,69 @@ from dockermcp.logging_config import logger, configure_logging
 
 # Configure logging
 configure_logging()
+
+# Type variables for decorators
+T = TypeVar('T', bound=BaseModel)
+P = ParamSpec('P')
+R = TypeVar('R')
+
+def handle_docker_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[R]]:
+    """
+    Decorator to handle Docker API errors and standardize error responses.
+    
+    Args:
+        func: The async function to wrap
+        
+    Returns:
+        Wrapped function with error handling
+    """
+    @wraps(func)
+    async def wrapper(*args: P.args, **kwargs: P.kwargs) -> R:
+        try:
+            return await func(*args, **kwargs)
+        except ValidationError as ve:
+            error_msg = f"Validation error: {str(ve)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ve
+        except NotFound as nf:
+            error_msg = f"Container not found: {str(nf)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from nf
+        except ImageNotFound as inf:
+            error_msg = f"Docker image not found: {str(inf)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from inf
+        except ContainerError as ce:
+            error_msg = f"Container error: {str(ce)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ce
+        except APIError as ae:
+            error_msg = f"Docker API error: {str(ae)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from ae
+        except DockerError as de:
+            error_msg = f"Docker error: {str(de)}"
+            logger.error(f"{func.__name__} - {error_msg}")
+            raise ToolError(error_msg) from de
+        except Exception as e:
+            error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
+            logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
+            raise ToolError(f"Internal server error: {str(e)}") from e
+    return wrapper
+
+@asynccontextmanager
+async def get_docker_client():
+    """Context manager for Docker client with proper cleanup."""
+    client = None
+    try:
+        client = docker.from_env()
+        yield client
+    except Exception as e:
+        logger.error(f"Failed to initialize Docker client: {str(e)}")
+        raise ToolError("Failed to connect to Docker daemon") from e
+    finally:
+        if client is not None:
+            client.close()
 
 # Type variables
 T = TypeVar('T', bound=BaseModel)
@@ -162,13 +230,16 @@ class ContainerLifecycleResponse(BaseModel):
         description="Error message if the operation failed"
     )
 
-@Tool.register(
+@tool(
     name="manage_container_lifecycle",
-    description="Execute container lifecycle operations (start, stop, restart, pause, unpause, remove)"
+    description="Execute container lifecycle operations (start, stop, restart, remove, etc.)",
+    args_schema=ContainerLifecycleRequest,
+    return_schema=ContainerLifecycleResponse
 )
+@handle_docker_errors
 async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> ContainerLifecycleResponse:
     """
-    Execute container lifecycle operations.
+    Execute container lifecycle operations with comprehensive error handling and logging.
     
     This function provides a unified interface for common container operations
     including start, stop, restart, pause, unpause, and remove. It handles
@@ -194,6 +265,54 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
         response = await manage_container_lifecycle(request)
         ```
     """
+    logger.info(
+        f"Processing {request.action} operation for container {request.container_id}"
+        f" (force={request.force}, timeout={request.timeout}s)"
+    )
+    
+    async with get_docker_client() as client:
+        try:
+            container = client.containers.get(request.container_id)
+            logger.debug(f"Found container: {container.id} (status: {container.status})")
+            
+            # Execute the requested action
+            result = await _execute_container_action(container, request)
+            logger.info(
+                f"Successfully completed {request.action} operation "
+                f"for container {request.container_id}"
+            )
+            return result
+            
+        except docker.errors.NotFound:
+            error_msg = f"Container {request.container_id} not found"
+            logger.error(error_msg)
+            return ContainerLifecycleResponse(
+                success=False,
+                message=error_msg,
+                container_id=request.container_id,
+                action=request.action.value,
+                error=error_msg
+            )
+        except docker.errors.APIError as e:
+            error_msg = f"Docker API error during {request.action}: {str(e)}"
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            return ContainerLifecycleResponse(
+                success=False,
+                message=error_msg,
+                container_id=request.container_id,
+                action=request.action.value,
+                error=error_msg
+            )
+        except Exception as e:
+            error_msg = f"Unexpected error during {request.action}: {str(e)}"
+            logger.error(f"{error_msg}\n{traceback.format_exc()}")
+            return ContainerLifecycleResponse(
+                success=False,
+                message=error_msg,
+                container_id=request.container_id,
+                action=request.action.value,
+                error=error_msg
+            )
     action = request.action
     container_id = request.container_id
     action_desc = ContainerAction.get_description(action)
@@ -301,26 +420,76 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
         raise ToolError(error_msg) from e
         
     except Exception as e:
-        error_msg = f"Unexpected error while {action}ing container {container_id}: {str(e)}"
-        logger.error(error_msg, exc_info=True)
+        error_msg = f"Error during {action} operation: {str(e)}"
+        logger.error(f"{error_msg}\n{traceback.format_exc()}")
         raise ToolError(error_msg) from e
 
-
-def get_tools() -> list[Tool]:
-    """
-    Get all tools defined in this module for registration with FastMCP.
+def _create_success_response(
+    container: docker.models.containers.Container,
+    action: ContainerAction,
+    message: str
+) -> ContainerLifecycleResponse:
+    """Create a success response with container state."""
+    # Refresh container attributes to get current state
+    container.reload()
     
-    This function returns a list of Tool instances that should be registered
-    with the FastMCP tool registry. Each tool is wrapped with the @Tool.register
-    decorator to provide metadata and enable remote invocation.
+    return ContainerLifecycleResponse(
+        success=True,
+        message=message,
+        container_id=container.id,
+        action=action.value,
+        state={
+            'status': container.status,
+            'running': container.status == 'running',
+            'paused': container.status == 'paused',
+            'restarting': container.attrs.get('State', {}).get('Restarting', False),
+            'started_at': container.attrs.get('State', {}).get('StartedAt'),
+            'exit_code': container.attrs.get('State', {}).get('ExitCode')
+        }
+    )
+
+def get_tools() -> List[Tool]:
+    """
+    Get all tools defined in this module for registration with FastMCP 2.12+.
+    
+    This function returns a list of tool functions that should be registered
+    with the FastMCP tool registry. Each tool is decorated with @tool
+    to provide metadata and enable remote invocation.
     
     Returns:
-        List of Tool instances to register with FastMCP
+        List of tool functions to register with FastMCP
         
     Example:
-        >>> from fastmcp.tools import Toolntainer_lifecycle': {...}}
+        >>> from fastmcp.tools import tool
+        >>> @tool()
+        ... def my_tool():
+        ...     pass
+        >>> get_tools()
+        [<function my_tool at 0x...>]
     """
-    # The manage_container_lifecycle function is already decorated with @Tool.register
-    # so we just need to return it in a list
-    return [manage_container_lifecycle]
-
+    return [
+        Tool(
+            name="manage_container_lifecycle",
+            func=manage_container_lifecycle,
+            description=(
+                "Manage container lifecycle operations. "
+                "Supported actions: start, stop, restart, pause, unpause, remove. "
+                "Includes comprehensive error handling and logging."
+            ),
+            args_schema=ContainerLifecycleRequest,
+            return_schema=ContainerLifecycleResponse,
+            examples=[
+                {
+                    "container_id": "my-container",
+                    "action": "restart",
+                    "timeout": 30,
+                    "force": False
+                },
+                {
+                    "container_id": "another-container",
+                    "action": "stop",
+                    "timeout": 10
+                }
+            ]
+        )
+    ]

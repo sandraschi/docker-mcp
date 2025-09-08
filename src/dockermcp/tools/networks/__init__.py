@@ -1,7 +1,7 @@
 """
 Network management tools for Docker MCP.
 
-This module provides FastMCP 2.12+ compatible tools for managing Docker networks.
+This module provides FastMCP 2.12.0 compatible tools for managing Docker networks.
 """
 from typing import List
 from fastmcp.tools import Tool

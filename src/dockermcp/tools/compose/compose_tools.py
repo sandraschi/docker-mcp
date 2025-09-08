@@ -20,41 +20,19 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 # Import FastMCP components
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+from fastmcp import FastMCP
 from pydantic import ValidationError
 
 from dockermcp.core.compose import ComposeManager
-from dockermcp.tools.compose.compose_models import (
-    ComposeProject, ComposeService, ComposeVolume, ComposeNetwork, ComposeConfig,
-    ComposeUpRequest, ComposeDownRequest, ComposeBuildRequest, 
-    ComposeLogsRequest, ComposePsRequest, ComposeResponse,
-    ComposeServiceState, ComposeHealthStatus, ComposeRestartPolicy,
-    ComposeDeploymentMode, ComposeVolumeType, ComposeNetworkDriver
-)
-from dockermcp.utils.helpers import format_size, parse_size, human_readable_to_bytes
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
+# Initialize FastMCP instance
+mcp = FastMCP("docker-compose")
+
 # Initialize compose manager
 compose_mgr = ComposeManager()
-
-def get_tools() -> list:
-    """
-    Return a list of all tools in this module that should be registered with FastMCP.
-    
-    This function is required by FastMCP to discover and register the tools.
-    
-    Returns:
-        List of Tool objects to be registered
-    """
-    return [
-        compose_up,
-        compose_down,
-        compose_logs,
-        compose_ps
-    ]
 
 def _get_compose_files(request) -> List[str]:
     """Get the list of Compose files from the request."""
@@ -107,29 +85,8 @@ def _build_compose_command(
     
     return cmd
 
-@Tool(
-    name="compose_up",
-    description="Create and start containers for a Docker Compose project",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
-            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
-            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
-            'env_file': {'type': 'string', 'description': 'Path to the .env file'},
-            'env_files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional .env files'},
-            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to start'},
-            'build': {'type': 'boolean', 'default': False, 'description': 'Build images before starting containers'},
-            'no_build': {'type': 'boolean', 'default': False, 'description': 'Do not build an image, even if it\'s missing'},
-            'force_recreate': {'type': 'boolean', 'default': False, 'description': 'Recreate containers even if their configuration and image haven\'t changed'},
-            'no_recreate': {'type': 'boolean', 'default': False, 'description': 'If containers already exist, don\'t recreate them'},
-            'no_start': {'type': 'boolean', 'default': False, 'description': 'Don\'t start the services after creating them'},
-            'remove_orphans': {'type': 'boolean', 'default': False, 'description': 'Remove containers for services not defined in the Compose file'},
-            'scale': {'type': 'object', 'additionalProperties': {'type': 'integer'}, 'description': 'Scale SERVICE to NUM instances. Overrides the scale setting in the Compose file if present'}
-        }
-    }
-)
-def compose_up(request: ComposeUpRequest) -> Dict[str, Any]:
+@mcp.tool
+def compose_up(request: dict) -> Dict[str, Any]:
     """
     Create and start containers for a Docker Compose project.
     
@@ -137,13 +94,13 @@ def compose_up(request: ComposeUpRequest) -> Dict[str, Any]:
     defined in the Compose file, or for the specified services.
     """
     start_time = datetime.utcnow()
-    response = ComposeResponse(
-        success=False,
-        message="Compose up command started",
-        project_name=request.project_name,
-        command="up",
-        start_time=start_time
-    )
+    response = {
+        "success": False,
+        "message": "Compose up command started",
+        "project_name": request.get("project_name", "unknown"),
+        "command": "up",
+        "start_time": start_time
+    }
     
     try:
         # Build the command
@@ -209,53 +166,35 @@ def compose_up(request: ComposeUpRequest) -> Dict[str, Any]:
         exit_code = result.returncode
         
         # Update response
-        response.success = exit_code == 0
-        response.exit_code = exit_code
-        response.stdout = result.stdout if result.stdout else None
-        response.stderr = result.stderr if result.stderr else None
-        response.end_time = datetime.utcnow()
+        response["success"] = exit_code == 0
+        response["exit_code"] = exit_code
+        response["stdout"] = result.stdout if result.stdout else None
+        response["stderr"] = result.stderr if result.stderr else None
+        response["end_time"] = datetime.utcnow()
         
         if exit_code == 0:
-            response.message = "Compose up completed successfully"
+            response["message"] = "Compose up completed successfully"
         else:
-            response.message = f"Compose up failed with exit code {exit_code}"
-            response.errors = [{
+            response["message"] = f"Compose up failed with exit code {exit_code}"
+            response["errors"] = [{
                 "code": exit_code,
                 "message": result.stderr if result.stderr else "Unknown error"
             }]
         
     except Exception as e:
-        response.end_time = datetime.utcnow()
-        response.success = False
-        response.message = f"Error during compose up: {str(e)}"
-        response.errors = [{
+        response["end_time"] = datetime.utcnow()
+        response["success"] = False
+        response["message"] = f"Error during compose up: {str(e)}"
+        response["errors"] = [{
             "code": "COMPOSE_UP_ERROR",
             "message": str(e)
         }]
         logger.error(f"Error in compose_up: {str(e)}", exc_info=True)
     
-    return response.dict()
+    return response
 
-@Tool(
-    name="compose_down",
-    description="Stop and remove containers, networks, and volumes for a Docker Compose project",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
-            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
-            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
-            'remove_orphans': {'type': 'boolean', 'default': False, 'description': 'Remove containers for services not defined in the Compose file'},
-            'rmi': {'type': 'string', 'enum': ['all', 'local'], 'description': 'Remove images used by services'},
-            'timeout': {'type': 'integer', 'minimum': 0, 'description': 'Timeout in seconds for stopping containers'},
-            'volumes': {'type': 'boolean', 'default': False, 'description': 'Remove named volumes declared in the volumes section of the Compose file'},
-            'remove_volumes': {'type': 'boolean', 'default': False, 'description': 'Remove all volumes (including anonymous ones)'},
-            'remove_all': {'type': 'boolean', 'default': False, 'description': 'Remove all images used by services'},
-            'dry_run': {'type': 'boolean', 'default': False, 'description': 'Show what would be done without making changes'}
-        }
-    }
-)
-async def compose_down(request: ComposeDownRequest) -> Dict[str, Any]:
+@mcp.tool
+async def compose_down(request: dict) -> Dict[str, Any]:
     """
     Stop and remove containers, networks, and volumes for a Docker Compose project.
     
@@ -288,13 +227,13 @@ async def compose_down(request: ComposeDownRequest) -> Dict[str, Any]:
             - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
-    response = ComposeResponse(
-        success=False,
-        message="Compose down command started",
-        project_name=request.project_name,
-        command="down",
-        start_time=start_time
-    )
+    response = {
+        "success": False,
+        "message": "Compose down command started",
+        "project_name": request.get("project_name", "unknown"),
+        "command": "down",
+        "start_time": start_time
+    }
     
     try:
         # Build the command
@@ -330,54 +269,35 @@ async def compose_down(request: ComposeDownRequest) -> Dict[str, Any]:
         exit_code = result.returncode
         
         # Update response
-        response.success = exit_code == 0
-        response.exit_code = exit_code
-        response.stdout = result.stdout if result.stdout else None
-        response.stderr = result.stderr if result.stderr else None
-        response.end_time = datetime.utcnow()
+        response["success"] = exit_code == 0
+        response["exit_code"] = exit_code
+        response["stdout"] = result.stdout if result.stdout else None
+        response["stderr"] = result.stderr if result.stderr else None
+        response["end_time"] = datetime.utcnow()
         
         if exit_code == 0:
-            response.message = "Compose down completed successfully"
+            response["message"] = "Compose down completed successfully"
         else:
-            response.message = f"Compose down failed with exit code {exit_code}"
-            response.errors = [{
+            response["message"] = f"Compose down failed with exit code {exit_code}"
+            response["errors"] = [{
                 "code": exit_code,
                 "message": result.stderr if result.stderr else "Unknown error"
             }]
         
     except Exception as e:
-        response.end_time = datetime.utcnow()
-        response.success = False
-        response.message = f"Error during compose down: {str(e)}"
-        response.errors = [{
+        response["end_time"] = datetime.utcnow()
+        response["success"] = False
+        response["message"] = f"Error during compose down: {str(e)}"
+        response["errors"] = [{
             "code": "COMPOSE_DOWN_ERROR",
             "message": str(e)
         }]
         logger.error(f"Error in compose_down: {str(e)}", exc_info=True)
     
-    return response.dict()
+    return response
 
-@Tool(
-    name="compose_logs",
-    description="View output from containers in a Docker Compose project",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
-            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
-            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
-            'follow': {'type': 'boolean', 'default': False, 'description': 'Follow log output (like tail -f)'},
-            'tail': {'type': 'string', 'description': 'Number of lines to show from the end of the logs'},
-            'timestamps': {'type': 'boolean', 'default': False, 'description': 'Show timestamps'},
-            'since': {'type': 'string', 'description': 'Show logs since a timestamp or duration'},
-            'until': {'type': 'string', 'description': 'Show logs before a timestamp or duration'},
-            'no_color': {'type': 'boolean', 'default': False, 'description': 'Produce monochrome output'},
-            'no_log_prefix': {'type': 'boolean', 'default': False, 'description': "Don't print prefix in logs"},
-            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to show logs for'}
-        }
-    }
-)
-async def compose_logs(request: ComposeLogsRequest) -> Dict[str, Any]:
+@mcp.tool
+async def compose_logs(request: dict) -> Dict[str, Any]:
     """
     View output from containers in a Docker Compose project.
     
@@ -411,13 +331,13 @@ async def compose_logs(request: ComposeLogsRequest) -> Dict[str, Any]:
             - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
-    response = ComposeResponse(
-        success=False,
-        message="Compose logs command started",
-        project_name=request.project_name,
-        command="logs",
-        start_time=start_time
-    )
+    response = {
+        "success": False,
+        "message": "Compose logs command started",
+        "project_name": request.get("project_name", "unknown"),
+        "command": "logs",
+        "start_time": start_time
+    }
     
     try:
         # Build the command
@@ -449,52 +369,35 @@ async def compose_logs(request: ComposeLogsRequest) -> Dict[str, Any]:
         exit_code = result.returncode
         
         # Update response
-        response.success = exit_code == 0
-        response.exit_code = exit_code
-        response.stdout = result.stdout if result.stdout else None
-        response.stderr = result.stderr if result.stderr else None
-        response.end_time = datetime.utcnow()
+        response["success"] = exit_code == 0
+        response["exit_code"] = exit_code
+        response["stdout"] = result.stdout if result.stdout else None
+        response["stderr"] = result.stderr if result.stderr else None
+        response["end_time"] = datetime.utcnow()
         
         if exit_code == 0:
-            response.message = "Compose logs retrieved successfully"
+            response["message"] = "Compose logs retrieved successfully"
         else:
-            response.message = f"Failed to retrieve compose logs with exit code {exit_code}"
-            response.errors = [{
+            response["message"] = f"Failed to retrieve compose logs with exit code {exit_code}"
+            response["errors"] = [{
                 "code": exit_code,
                 "message": result.stderr if result.stderr else "Unknown error"
             }]
         
     except Exception as e:
-        response.end_time = datetime.utcnow()
-        response.success = False
-        response.message = f"Error retrieving compose logs: {str(e)}"
-        response.errors = [{
+        response["end_time"] = datetime.utcnow()
+        response["success"] = False
+        response["message"] = f"Error retrieving compose logs: {str(e)}"
+        response["errors"] = [{
             "code": "COMPOSE_LOGS_ERROR",
             "message": str(e)
         }]
         logger.error(f"Error in compose_logs: {str(e)}", exc_info=True)
     
-    return response.dict()
+    return response
 
-@Tool(
-    name="compose_ps",
-    description="List containers for a Docker Compose project",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
-            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
-            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
-            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to show'},
-            'all': {'type': 'boolean', 'default': False, 'description': 'Show all stopped containers'},
-            'filter': {'type': 'string', 'description': 'Filter services by a property'},
-            'quiet': {'type': 'boolean', 'default': False, 'description': 'Only display container IDs'},
-            'services': {'type': 'boolean', 'default': False, 'description': 'Print the service name'},
-            'status': {'type': 'string', 'description': 'Filter containers by status'}
-        }
-    }
-)
-async def compose_ps(request: ComposePsRequest) -> Dict[str, Any]:
+@mcp.tool
+async def compose_ps(request: dict) -> Dict[str, Any]:
     """
     List containers for a Docker Compose project.
     
@@ -522,13 +425,13 @@ async def compose_ps(request: ComposePsRequest) -> Dict[str, Any]:
             - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
-    response = ComposeResponse(
-        success=False,
-        message="Compose ps command started",
-        project_name=request.project_name,
-        command="ps",
-        start_time=start_time
-    )
+    response = {
+        "success": False,
+        "message": "Compose ps command started",
+        "project_name": request.get("project_name"),
+        "command": "ps",
+        "start_time": start_time
+    }
     
     try:
         # Build the command

@@ -1,0 +1,12 @@
+D:\Dev\repos\dockermcp\src\dockermcp\logging_config.py:45:39: F821 undefined name 'socket'
+HOSTNAME = os.environ.get("HOSTNAME", socket.gethostname())
+                                      ^
+D:\Dev\repos\dockermcp\src\dockermcp\logging_config.py:76:26: F821 undefined name 'datetime'
+            'timestamp': datetime.utcfromtimestamp(record.created).isoformat() + 'Z',
+                         ^
+D:\Dev\repos\dockermcp\src\dockermcp\logging_config.py:132:60: F821 undefined name 'Tuple'
+    def process(self, msg: str, kwargs: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+                                                           ^
+D:\Dev\repos\dockermcp\src\dockermcp\logging_config.py:495:24: F821 undefined name 'BoundLogger'
+logging.setLoggerClass(BoundLogger)
+                       ^
