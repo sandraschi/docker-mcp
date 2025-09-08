@@ -8,7 +8,7 @@ import json
 from datetime import datetime
 from typing import Dict, Any, List, Optional, Union
 
-from fastmcp.tools import Tool
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 from dockermcp.logging_config import logger, configure_logging
 from dockermcp.utils import run_docker_command
@@ -47,7 +47,7 @@ DEFAULT_NETWORK_CONFIG = {
     }
 }
 
-@Tool.register(
+@Tool(
     name="list_networks",
     description="List all Docker networks with optional filtering"
 )
@@ -117,7 +117,7 @@ async def list_networks(
     except Exception as e:
         return handle_error(e, "listing networks")
 
-@Tool.register(
+@Tool(
     name="create_network",
     description="Create a new Docker network with advanced configuration"
 )
@@ -216,7 +216,7 @@ async def create_network(
     except Exception as e:
         return handle_error(e, f'creating network {getattr(request, "name", "")}')
 
-@Tool.register(
+@Tool(
     name="inspect_network",
     description="Inspect a Docker network"
 )
@@ -262,7 +262,7 @@ async def inspect_network(
     except Exception as e:
         return handle_error(e, f'inspecting network {getattr(request, "network_id", "")}')
 
-@Tool.register(
+@Tool(
     name="remove_network",
     description="Remove a Docker network"
 )
@@ -309,7 +309,7 @@ async def remove_network(
     except Exception as e:
         return handle_error(e, f'removing network {getattr(request, "network_id", "")}')
 
-@Tool.register(
+@Tool(
     name="connect_container",
     description="Connect a container to a network"
 )
@@ -370,7 +370,7 @@ async def connect_container(
     except Exception as e:
         return handle_error(e, f'connecting container {getattr(request, "container_id", "")} to network {getattr(request, "network_id", "")}')
 
-@Tool.register(
+@Tool(
     name="disconnect_container",
     description="Disconnect a container from a network"
 )
@@ -420,7 +420,7 @@ async def disconnect_container(
     except Exception as e:
         return handle_error(e, f'disconnecting container {getattr(request, "container_id", "")} from network {getattr(request, "network_id", "")}')
 
-@Tool.register(
+@Tool(
     name="prune_networks",
     description="Remove all unused networks"
 )
@@ -465,3 +465,4 @@ async def prune_networks(
         
     except Exception as e:
         return handle_error(e, 'pruning networks')
+

@@ -9,7 +9,7 @@ configure_logging()
 import asyncio
 import uuid
 from typing import Dict, Any, List, Optional
-from fastmcp.tools import Tool
+from fastmcp.tools import tool as Tool
 from dockermcp.core.workflow import WorkflowManager
 from dockermcp.tools.workflow.workflow_models import (
     WorkflowStatus, WorkflowStep, WorkflowDefinition, WorkflowInstance,
@@ -366,3 +366,4 @@ async def cancel_workflow(
             message=f"Failed to cancel workflow: {str(e)}",
             error=str(e)
         ).dict()
+

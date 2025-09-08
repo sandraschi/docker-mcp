@@ -21,7 +21,7 @@ from docker.models.containers import Container
 from docker.errors import DockerException, APIError, NotFound
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -320,3 +320,4 @@ def get_tools() -> List[Tool]:
         List of Tool instances to register
     """
     return [inspect_container]
+

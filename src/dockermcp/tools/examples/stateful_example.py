@@ -8,7 +8,7 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
 # Import FastMCP components
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import Tool
 from fastmcp.exceptions import ToolError
 
 # Configure logging
@@ -180,3 +180,4 @@ def get_tools():
         update_container_stats,
         get_container_history
     ]
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Container management tools for Docker MCP.
 
 This module provides a unified interface to container management functionality,
@@ -184,13 +184,7 @@ container_mgr = cast(ContainerManager, container_mgr)
             }
         }
     },
-    returns={
-        'type': 'object',
-        'properties': {
-            'containers': {
-                'type': 'array',
-                'items': {'$ref': '#/definitions/ContainerInfo'}
-            },
+    },
             'warnings': {
                 'type': 'array',
                 'items': {'type': 'string'}
@@ -419,14 +413,7 @@ def list_containers(
         'required': ['image'],
         'additionalProperties': False
     },
-    returns={
-        'type': 'object',
-        'properties': {
-            'success': {
-                'type': 'boolean',
-                'description': 'Whether the container was created successfully'
-            },
-            'message': {
+    'message': {
                 'type': 'string',
                 'description': 'Status message indicating success or failure'
             },
@@ -573,11 +560,7 @@ def create_container(
             {"required": ["container_name"]}
         ]
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
+    "message": {"type": "string"},
             "container": {
                 "type": "object",
                 "properties": {
@@ -720,14 +703,7 @@ def start_container(
         ],
         'additionalProperties': False
     },
-    returns={
-        'type': 'object',
-        'properties': {
-            'success': {
-                'type': 'boolean',
-                'description': 'Whether the container was stopped successfully'
-            },
-            'message': {
+    'message': {
                 'type': 'string',
                 'description': 'Status message indicating success or failure'
             },
@@ -1095,11 +1071,7 @@ async def stop_container(
         ],
         "additionalProperties": False
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
+    "message": {"type": "string"},
             "container_id": {"type": "string"},
             "container_name": {"type": "string"},
             "state": {"type": "string"},
@@ -1402,11 +1374,7 @@ async def restart_container(
         ],
         "additionalProperties": False
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
+    "message": {"type": "string"},
             "container_id": {"type": "string"},
             "container_name": {"type": "string"},
             "removed": {"type": "boolean"},
@@ -1761,11 +1729,7 @@ async def remove_container(
         ],
         "additionalProperties": False
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "container_id": {"type": "string"},
+    "container_id": {"type": "string"},
             "container_name": {"type": "string"},
             "logs": {
                 "type": ["string", "array"],
@@ -2181,11 +2145,7 @@ def _process_log_chunk(
             }
         }
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "message": {"type": "string"},
+    "message": {"type": "string"},
             "prune_result": {
                 "type": "object",
                 "properties": {
@@ -2355,11 +2315,7 @@ async def prune_containers(
             {"required": ["container_name", "command"]}
         ]
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "exit_code": {"type": "integer"},
+    "exit_code": {"type": "integer"},
             "output": {"type": "string"},
             "error": {"type": "string"},
             "exec_id": {"type": "string"},
@@ -2537,11 +2493,7 @@ async def exec_command(
             {"required": ["container_name"]}
         ]
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "container": {
+    "container": {
                 "type": "object",
                 "description": "Container inspection data",
                 "properties": {
@@ -2746,11 +2698,7 @@ async def inspect_container(
             {"required": ["container_name"]}
         ]
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "container": {
+    "container": {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string"},
@@ -2997,11 +2945,7 @@ async def container_stats(
             {"required": ["container_name"]}
         ]
     },
-    returns={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean"},
-            "container": {
+    "container": {
                 "type": "object",
                 "properties": {
                     "id": {"type": "string"},
@@ -3232,3 +3176,4 @@ async def container_top(
         
     except Exception as e:
         return handle_error(e, "container_top")
+

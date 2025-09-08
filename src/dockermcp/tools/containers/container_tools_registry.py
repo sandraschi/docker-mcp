@@ -6,17 +6,22 @@ It provides a centralized way to register all container-related tools and their 
 """
 from __future__ import annotations
 
+# Standard library imports
 import logging
 from typing import Dict, Any, List, Type, Callable, Union, TypeVar
 
-# FastMCP imports
-from fastmcp import FastMCP
-from fastmcp.tools import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolError
+# Third-party imports
 from pydantic import BaseModel
 
-# Configure logging
+# FastMCP imports
+from fastmcp import FastMCP
+from fastmcp.tools import tool as Tool
+from fastmcp.exceptions import ToolError
+
+# Local application imports
 from dockermcp.logging_config import logger, configure_logging
+
+# Configure logging
 configure_logging()
 
 # Type aliases
@@ -164,14 +169,13 @@ def get_tools() -> List[Tool]:
         List of Tool instances to register with FastMCP
         
     Example:
-        >>> from fastmcp.tools import get_tools_metadata
+        >>> from dockermcp.tools.containers.container_tools_registry import get_tools
         >>> tools = get_tools()
-        >>> assert any(t.name == 'list_containers' for t in tools)
+        >>> any(t.name == 'inspect_container' for t in tools)
+        True
     """
     try:
-        from fastmcp.tools import get_tools_metadata, Tool
-        
-        # Get all tools and models
+        from fastmcp.tools import Tool
         all_items = get_all_tools()
         
         # Filter to only include Tool instances
@@ -197,3 +201,4 @@ def get_tools() -> List[Tool]:
         error_msg = f"Error getting container tools: {str(e)}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
+

@@ -20,7 +20,7 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -318,10 +318,9 @@ def get_tools() -> list[Tool]:
         List of Tool instances to register with FastMCP
         
     Example:
-        >>> from fastmcp.tools import get_tools_metadata
-        >>> get_tools_metadata()
-        {'container_lifecycle': {...}}
+        >>> from fastmcp.tools import Toolntainer_lifecycle': {...}}
     """
     # The manage_container_lifecycle function is already decorated with @Tool.register
     # so we just need to return it in a list
     return [manage_container_lifecycle]
+

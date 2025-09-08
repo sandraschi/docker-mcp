@@ -21,7 +21,7 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -426,3 +426,4 @@ def _parse_log_line(line: bytes, include_timestamps: bool = False) -> Optional[D
             stream='stdout',
             line=f'[Log parse error] {line}'
         )
+

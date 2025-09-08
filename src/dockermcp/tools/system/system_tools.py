@@ -11,7 +11,7 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Union, AsyncGenerator
 
-from fastmcp.tools import Tool
+from fastmcp.tools import tool as Tool
 from typing import Optional, Dict, Any
 import logging
 import docker
@@ -1340,3 +1340,5 @@ async def system_data_usage() -> Dict[str, Any]:
             error_details={"error": str(e)},
             status_code=500
         ).dict()
+
+

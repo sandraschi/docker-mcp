@@ -8,7 +8,7 @@ import logging
 from typing import Any, Dict, List, Optional, Union, cast, AsyncGenerator, TypeVar, Type
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Pydantic models
@@ -326,3 +326,4 @@ async def get_container_manager() -> ContainerManager:
     if container_mgr is None:
         container_mgr = ContainerManager()
     return container_mgr
+

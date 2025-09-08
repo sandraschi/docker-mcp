@@ -27,7 +27,7 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 # Import FastMCP components
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Import all container models and types for re-export
@@ -85,60 +85,17 @@ T = TypeVar('T', bound=BaseModel)
 # Tool Registration Helpers
 # -----------------------------------------------------------------------------
 
-def _register_tool(func: callable, name: str = None, description: str = None) -> callable:
-    """Helper decorator to register a tool with FastMCP.
-    
-    Args:
-        func: The function to register as a tool
-        name: Optional name for the tool (defaults to function name)
-        description: Optional description for the tool (defaults to function docstring)
-        
-    Returns:
-        The decorated function
-    """
-    tool_name = name or func.__name__
-    tool_description = description or (func.__doc__.strip().split('\n')[0] if func.__doc__ else "")
-    
-    return Tool.register(
-        name=tool_name,
-        description=tool_description
-    )(func)
+# Tool registration helpers removed - using direct @Tool decorators in FastMCP 2.11.3+
 
 # Container Tools Metadata
 # -----------------------------------------------------------------------------
 
-@_register_tool(
-    name="get_container_tools",
-    description="Get metadata for all container tools"
-)
-async def get_container_tools() -> Dict[str, Any]:
-    """
-    Get metadata for all available container tools.
-    
-    This is a meta-tool that returns information about all other container
-    tools that are available in the system, including their names, descriptions,
-    and parameter schemas.
-    
-    Returns:
-        Dictionary containing metadata for all container tools, where keys are tool names
-        and values are tool metadata including description and parameter schema.
-        
-    Example:
-        >>> await get_container_tools()
-        {
-            'list_containers': {
-                'description': 'List containers with optional filtering',
-                'parameters': {...}
-            },
-            ...
-        }
-    """
-    return get_tools_metadata()
+# Removed get_container_tools - get_tools_metadata not available in FastMCP 2.11.3+
 
 # Container Lifecycle Tools
 # -----------------------------------------------------------------------------
 
-@_register_tool(
+@Tool(
     name="list_containers",
     description="List containers with optional filtering"
 )
@@ -201,7 +158,7 @@ async def list_containers(request: ListContainersRequest) -> List[ContainerInfo]
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
-@_register_tool(
+@Tool(
     name="create_container",
     description="Create a new container with the specified configuration"
 )
@@ -232,7 +189,7 @@ async def create_container(request: ContainerLifecycleRequest) -> ContainerRespo
         logger.error(f"Error creating container: {str(e)}")
         raise ToolError(f"Failed to create container: {str(e)}")
 
-@Tool.register(
+@Tool(
     name="start_container",
     description="Start a stopped container"
 )
@@ -258,7 +215,7 @@ async def start_container(request: StartContainerRequest) -> ContainerResponse:
         logger.error(f"Error starting container: {str(e)}")
         raise ToolError(f"Failed to start container: {str(e)}")
 
-@Tool.register(
+@Tool(
     name="stop_container",
     description="Stop a running container"
 )
@@ -284,7 +241,7 @@ async def stop_container(request: StopContainerRequest) -> ContainerResponse:
         logger.error(f"Error stopping container: {str(e)}")
         raise ToolError(f"Failed to stop container: {str(e)}")
 
-@Tool.register(
+@Tool(
     name="restart_container",
     description="Restart a container"
 )
@@ -310,7 +267,7 @@ async def restart_container(request: ContainerLifecycleRequest) -> ContainerResp
         logger.error(f"Error restarting container: {str(e)}")
         raise ToolError(f"Failed to restart container: {str(e)}")
 
-@Tool.register(
+@Tool(
     name="remove_container",
     description="Remove a container"
 )
@@ -337,7 +294,7 @@ async def remove_container(request: ContainerLifecycleRequest) -> ContainerRespo
         logger.error(f"Error removing container: {str(e)}")
         raise ToolError(f"Failed to remove container: {str(e)}")
 
-@Tool.register(
+@Tool(
     name="prune_containers",
     description="Remove all stopped containers"
 )
@@ -355,7 +312,7 @@ async def prune_containers(request: PruneContainersRequest) -> PruneContainersRe
     return await _prune_containers(request)
 
 # Register remaining tools
-@Tool.register(
+@Tool(
     name="get_container_logs",
     description="Get logs from a container"
 )
@@ -372,7 +329,7 @@ async def get_container_logs(request: ContainerLogsRequest) -> ContainerLogsResp
     from .container_logs import get_container_logs as _get_container_logs
     return await _get_container_logs(request)
 
-@Tool.register(
+@Tool(
     name="stream_container_logs",
     description="Stream logs from a container in real-time"
 )
@@ -391,7 +348,7 @@ async def stream_container_logs(request: ContainerLogsRequest) -> AsyncGenerator
         yield entry
 
 # Register execution tools
-@Tool.register(
+@Tool(
     name="execute_in_container",
     description="Execute a command in a running container"
 )
@@ -408,7 +365,7 @@ async def execute_in_container(request: ContainerExecRequest) -> ContainerExecRe
     from .container_exec import execute_in_container as _execute_in_container
     return await _execute_in_container(request)
 
-@Tool.register(
+@Tool(
     name="exec_command",
     description="Execute a command in a running container (legacy)"
 )
@@ -426,7 +383,7 @@ async def exec_command(request: ExecCommandRequest) -> ExecCommandResponse:
     return await _exec_command(request)
 
 # Register inspection tools
-@Tool.register(
+@Tool(
     name="inspect_container",
     description="Inspect a container"
 )
@@ -443,7 +400,7 @@ async def inspect_container(request: InspectContainerRequest) -> ContainerInspec
     from .container_inspect import inspect_container as _inspect_container
     return await _inspect_container(request)
 
-@Tool.register(
+@Tool(
     name="container_stats",
     description="Get container resource usage statistics"
 )
@@ -460,7 +417,7 @@ async def container_stats(request: ContainerStatsRequest) -> ContainerStatsRespo
     from .container_inspect import container_stats as _container_stats
     return await _container_stats(request)
 
-@Tool.register(
+@Tool(
     name="container_top",
     description="Display the running processes of a container"
 )
@@ -483,9 +440,6 @@ async def container_top(request: ContainerTopRequest) -> ContainerTopResponse:
 # in __all__ will be available when importing from this module.
 
 __all__ = [
-    # Core Functions
-    'get_container_tools',
-    
     # Container Lifecycle Management
     'list_containers',
     'create_container',
@@ -558,3 +512,5 @@ __all__ = [
     'container_stats',
     'container_top',
 ]
+
+

@@ -20,7 +20,7 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 # Import FastMCP components
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
 
@@ -39,6 +39,22 @@ logger = logging.getLogger(__name__)
 
 # Initialize compose manager
 compose_mgr = ComposeManager()
+
+def get_tools() -> list:
+    """
+    Return a list of all tools in this module that should be registered with FastMCP.
+    
+    This function is required by FastMCP to discover and register the tools.
+    
+    Returns:
+        List of Tool objects to be registered
+    """
+    return [
+        compose_up,
+        compose_down,
+        compose_logs,
+        compose_ps
+    ]
 
 def _get_compose_files(request) -> List[str]:
     """Get the list of Compose files from the request."""
@@ -91,6 +107,28 @@ def _build_compose_command(
     
     return cmd
 
+@Tool(
+    name="compose_up",
+    description="Create and start containers for a Docker Compose project",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
+            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
+            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
+            'env_file': {'type': 'string', 'description': 'Path to the .env file'},
+            'env_files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional .env files'},
+            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to start'},
+            'build': {'type': 'boolean', 'default': False, 'description': 'Build images before starting containers'},
+            'no_build': {'type': 'boolean', 'default': False, 'description': 'Do not build an image, even if it\'s missing'},
+            'force_recreate': {'type': 'boolean', 'default': False, 'description': 'Recreate containers even if their configuration and image haven\'t changed'},
+            'no_recreate': {'type': 'boolean', 'default': False, 'description': 'If containers already exist, don\'t recreate them'},
+            'no_start': {'type': 'boolean', 'default': False, 'description': 'Don\'t start the services after creating them'},
+            'remove_orphans': {'type': 'boolean', 'default': False, 'description': 'Remove containers for services not defined in the Compose file'},
+            'scale': {'type': 'object', 'additionalProperties': {'type': 'integer'}, 'description': 'Scale SERVICE to NUM instances. Overrides the scale setting in the Compose file if present'}
+        }
+    }
+)
 def compose_up(request: ComposeUpRequest) -> Dict[str, Any]:
     """
     Create and start containers for a Docker Compose project.
@@ -198,9 +236,24 @@ def compose_up(request: ComposeUpRequest) -> Dict[str, Any]:
     
     return response.dict()
 
-@Tool.register(
+@Tool(
     name="compose_down",
-    description="Stop and remove containers, networks, and volumes for a Docker Compose project"
+    description="Stop and remove containers, networks, and volumes for a Docker Compose project",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
+            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
+            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
+            'remove_orphans': {'type': 'boolean', 'default': False, 'description': 'Remove containers for services not defined in the Compose file'},
+            'rmi': {'type': 'string', 'enum': ['all', 'local'], 'description': 'Remove images used by services'},
+            'timeout': {'type': 'integer', 'minimum': 0, 'description': 'Timeout in seconds for stopping containers'},
+            'volumes': {'type': 'boolean', 'default': False, 'description': 'Remove named volumes declared in the volumes section of the Compose file'},
+            'remove_volumes': {'type': 'boolean', 'default': False, 'description': 'Remove all volumes (including anonymous ones)'},
+            'remove_all': {'type': 'boolean', 'default': False, 'description': 'Remove all images used by services'},
+            'dry_run': {'type': 'boolean', 'default': False, 'description': 'Show what would be done without making changes'}
+        }
+    }
 )
 async def compose_down(request: ComposeDownRequest) -> Dict[str, Any]:
     """
@@ -304,9 +357,25 @@ async def compose_down(request: ComposeDownRequest) -> Dict[str, Any]:
     
     return response.dict()
 
-@Tool.register(
+@Tool(
     name="compose_logs",
-    description="View output from containers in a Docker Compose project"
+    description="View output from containers in a Docker Compose project",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
+            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
+            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
+            'follow': {'type': 'boolean', 'default': False, 'description': 'Follow log output (like tail -f)'},
+            'tail': {'type': 'string', 'description': 'Number of lines to show from the end of the logs'},
+            'timestamps': {'type': 'boolean', 'default': False, 'description': 'Show timestamps'},
+            'since': {'type': 'string', 'description': 'Show logs since a timestamp or duration'},
+            'until': {'type': 'string', 'description': 'Show logs before a timestamp or duration'},
+            'no_color': {'type': 'boolean', 'default': False, 'description': 'Produce monochrome output'},
+            'no_log_prefix': {'type': 'boolean', 'default': False, 'description': "Don't print prefix in logs"},
+            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to show logs for'}
+        }
+    }
 )
 async def compose_logs(request: ComposeLogsRequest) -> Dict[str, Any]:
     """
@@ -407,9 +476,23 @@ async def compose_logs(request: ComposeLogsRequest) -> Dict[str, Any]:
     
     return response.dict()
 
-@Tool.register(
+@Tool(
     name="compose_ps",
-    description="List containers for a Docker Compose project"
+    description="List containers for a Docker Compose project",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'project_name': {'type': 'string', 'description': 'Name of the Compose project'},
+            'file_path': {'type': 'string', 'description': 'Path to the Compose file'},
+            'files': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of additional Compose files'},
+            'services': {'type': 'array', 'items': {'type': 'string'}, 'description': 'List of services to show'},
+            'all': {'type': 'boolean', 'default': False, 'description': 'Show all stopped containers'},
+            'filter': {'type': 'string', 'description': 'Filter services by a property'},
+            'quiet': {'type': 'boolean', 'default': False, 'description': 'Only display container IDs'},
+            'services': {'type': 'boolean', 'default': False, 'description': 'Print the service name'},
+            'status': {'type': 'string', 'description': 'Filter containers by status'}
+        }
+    }
 )
 async def compose_ps(request: ComposePsRequest) -> Dict[str, Any]:
     """
@@ -527,3 +610,5 @@ async def compose_ps(request: ComposePsRequest) -> Dict[str, Any]:
         logger.error(f"Error in compose_ps: {str(e)}", exc_info=True)
     
     return response.dict()
+
+

@@ -3,9 +3,15 @@ Test suite for container lifecycle management tools.
 
 This module contains tests for container lifecycle operations like create, start, stop, etc.
 """
+import os
+import sys
 import unittest
 import asyncio
 from unittest.mock import MagicMock, patch, AsyncMock
+
+# Add the src directory to the Python path
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
@@ -13,12 +19,16 @@ import aiodocker
 from aiodocker.exceptions import DockerError
 
 # Import the tools we want to test
-from dockermcp.tools.containers.container_lifecycle import (
-    manage_container_lifecycle,
-    ContainerLifecycleRequest,
-    ContainerLifecycleResponse,
-    ContainerAction
-)
+try:
+    from dockermcp.tools.containers.container_lifecycle import (
+        manage_container_lifecycle,
+        ContainerLifecycleRequest,
+        ContainerLifecycleResponse,
+        ContainerAction
+    )
+except ImportError as e:
+    print(f"Error importing modules: {e}")
+    raise
 
 # Test constants
 TEST_CONTAINER_ID = "test-container-id"

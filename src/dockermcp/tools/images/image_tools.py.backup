@@ -10,7 +10,7 @@ import os
 import logging
 from typing import Dict, Any, List, Optional
 
-from fastmcp.tools import tool as Tool
+from fastmcp.tools import Tool
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field
 
@@ -27,31 +27,6 @@ import docker
 from dockermcp.core.images import ImageManager
 
 image_mgr = ImageManager(docker_client=docker.from_env())
-
-def get_tools() -> list:
-    """
-    Return a list of all tools in this module that should be registered with FastMCP.
-    
-    This function is required by FastMCP to discover and register the tools.
-    
-    Returns:
-        List of Tool objects to be registered
-    """
-    return [
-        list_images,
-        pull_image,
-        build_image,
-        remove_image,
-        tag_image,
-        inspect_image,
-        search_images,
-        prune_images,
-        save_image,
-        load_image,
-        image_history,
-        export_filesystem,
-        import_filesystem
-    ]
 
 def process_image_data(img_data: Any) -> ImageInfo:
     """
@@ -153,6 +128,15 @@ async def list_images(
             'platform': {'type': 'string', 'default': None, 'description': "Platform in the format 'os/arch'"}
         },
         'required': ['repository']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def pull_image(
@@ -220,6 +204,15 @@ async def pull_image(
             'pull': {'type': 'boolean', 'default': False, 'description': 'Attempt to pull a newer version of the image'}
         },
         'required': ['path', 'tag']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def build_image(
@@ -304,6 +297,18 @@ async def build_image(
             'noprune': {'type': 'boolean', 'default': False, 'description': 'Do not delete untagged parents'}
         },
         'required': ['image']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image_id': {'type': 'string'},
+            'deleted': {'type': 'array', 'items': {'type': 'string'}},
+            'space_reclaimed': {'type': 'integer'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def remove_image(
@@ -430,6 +435,19 @@ async def remove_image(
             }
         },
         'required': ['image', 'repository'],
+        'additionalProperties': False
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'source_image': {'type': 'string'},
+            'new_tag': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message'],
         'additionalProperties': False
     }
 )
@@ -586,8 +604,8 @@ async def tag_image(
         }
 
 @Tool(
-    name="inspect_image",
-    description="Return low-level information about an image",
+    name='inspect_image',
+    description='Return low-level information about an image',
     parameters={
         'type': 'object',
         'properties': {
@@ -597,6 +615,16 @@ async def tag_image(
             }
         },
         'required': ['image']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image': {'$ref': '#/components/schemas/ImageInfo'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def inspect_image(
@@ -677,6 +705,29 @@ async def inspect_image(
             }
         },
         "required": ["term"]
+    },
+    returns={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean"},
+            "message": {"type": "string"},
+            "results": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "name": {"type": "string"},
+                        "description": {"type": "string"},
+                        "is_official": {"type": "boolean"},
+                        "is_automated": {"type": "boolean"},
+                        "star_count": {"type": "integer"}
+                    },
+                    "required": ["name"]
+                }
+            },
+            "count": {"type": "integer"}
+        },
+        "required": ["success", "message", "results"]
     }
 )
 async def search_images(
@@ -793,7 +844,7 @@ async def search_images(
             'message': error_msg,
             'results': [],
             "count": 0,
-            "search_term": term,
+            "search_term": request.term,
             "error": str(e)
         }
 
@@ -816,6 +867,18 @@ async def search_images(
             }
         },
         'required': []
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'space_reclaimed': {'type': 'integer'},
+            'images_deleted': {
+                'type': 'array',
+                'items': {'type': 'string'}
+            }
+        }
     }
 )
 async def prune_images(
@@ -914,7 +977,36 @@ async def prune_images(
             "error": str(e)
         }
 
-
+@Tool(
+    name="inspect_image",
+    description="Return low-level information about an image",
+    parameters={
+        "type": "object",
+        "properties": {
+            "image": {"type": "string", "description": "Name or ID of the image to inspect"}
+        },
+        "required": ["image"]
+    }
+)
+async def inspect_image(
+    request: ImageInspectRequest
+) -> Dict[str, Any]:
+    """Return low-level information about an image."""
+    try:
+        details = await image_mgr.inspect_image(
+            image=request.image,
+            size=request.size
+        )
+        return {
+            "success": True,
+            "image": details,
+            "message": "Image details retrieved successfully"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": f"Failed to inspect image: {str(e)}"
+        }
 
 @Tool(
     name='save_image',
@@ -938,6 +1030,17 @@ async def prune_images(
             }
         },
         'required': ['image', 'output_path']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'output_path': {'type': 'string'},
+            'size': {'type': 'integer'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message', 'output_path']
     }
 )
 async def save_image(
@@ -1038,6 +1141,16 @@ async def save_image(
             }
         },
         'required': ['input_path']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'image_id': {'type': 'string'},
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def load_image(
@@ -1128,6 +1241,32 @@ async def load_image(
             }
         },
         'required': ['image']
+    },
+    returns={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'message': {'type': 'string'},
+            'history': {
+                'type': 'array',
+                'items': {
+                    'type': 'object',
+                    'properties': {
+                        'id': {'type': 'string'},
+                        'created': {'type': 'string', 'format': 'date-time'},
+                        'created_by': {'type': 'string'},
+                        'size': {'type': 'integer'},
+                        'tags': {
+                            'type': 'array',
+                            'items': {'type': 'string'}
+                        },
+                        'comment': {'type': 'string'}
+                    }
+                }
+            },
+            'error': {'type': 'string'}
+        },
+        'required': ['success', 'message']
     }
 )
 async def image_history(
@@ -1413,4 +1552,3 @@ async def import_filesystem(
             'message': error_msg,
             'error': str(e)
         }
-

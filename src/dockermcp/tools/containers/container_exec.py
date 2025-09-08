@@ -20,7 +20,7 @@ import aiodocker
 from aiodocker.execs import Exec
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Local imports
@@ -493,3 +493,4 @@ async def execute_in_container(
             command=command,
             error=str(e)
         ).model_dump()
+

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Async Container Tools for Docker MCP.
 
 This module provides async container management functionality using aiodocker.
@@ -58,7 +58,7 @@ class ContainerLifecycleResponse(BaseModel):
     state: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
 
-@Tool.register(
+@Tool(
     name="manage_container_lifecycle",
     description="Manage container lifecycle operations (start, stop, restart, remove, pause, unpause)"
 )
@@ -209,3 +209,4 @@ async def manage_container_lifecycle(
             'action': action,
             'error': str(e)
         }
+

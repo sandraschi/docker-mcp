@@ -11,7 +11,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.tools import tool as Tool
 from fastmcp.exceptions import ToolError
 
 # Pydantic models
@@ -331,3 +331,4 @@ Key Features:
 Note: Most users should use the higher-level container tools rather than
 calling these functions directly.
 """
+

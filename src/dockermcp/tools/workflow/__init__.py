@@ -1,7 +1,7 @@
 """
 Workflow tools for Docker MCP.
 
-This module provides FastMCP 2.11.3 compatible tools for workflow automation.
+This module provides FastMCP 2.12+ compatible tools for workflow automation.
 """
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, field_validator
@@ -70,6 +70,21 @@ async def check_stack_health(stack_name: str) -> Dict[str, Any]:
             "error": str(e)
         }
 
-# Register the tool with the mcp instance
-from ..tools import mcp
-mcp.tool(check_stack_health)
+def get_tools() -> List[callable]:
+    """
+    Get all workflow management tools for registration with FastMCP 2.12+.
+    
+    Returns:
+        List of @tool-decorated functions for all workflow operations
+    """
+    return [
+        create_workflow,
+        execute_workflow,
+        get_workflow_status,
+        list_workflows,
+        cancel_workflow,
+        check_stack_health
+    ]
+
+# Add get_tools to __all__
+__all__.append('get_tools')

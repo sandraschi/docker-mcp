@@ -1,8 +1,12 @@
 """
 Volume management tools for Docker MCP.
 
-This module provides FastMCP 2.11.3 compatible tools for managing Docker volumes.
+This module provides FastMCP 2.12+ compatible tools for managing Docker volumes.
 """
+from typing import List
+from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolError
+
 # Import models
 from .volume_models import (
     VolumeInfo,
@@ -24,6 +28,22 @@ from .volume_tools import (
     prune_volumes
 )
 
+# Tool registration
+def get_tools() -> List[callable]:
+    """
+    Get all volume management tools for registration with FastMCP 2.12+.
+    
+    Returns:
+        List of @tool-decorated functions for all volume management operations
+    """
+    return [
+        list_volumes,
+        create_volume,
+        inspect_volume,
+        remove_volume,
+        prune_volumes
+    ]
+
 # Export public API
 __all__ = [
     # Models
@@ -41,5 +61,8 @@ __all__ = [
     'create_volume',
     'inspect_volume',
     'remove_volume',
-    'prune_volumes'
+    'prune_volumes',
+    
+    # Tool registration
+    'get_tools'
 ]

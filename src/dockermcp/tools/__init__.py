@@ -16,16 +16,14 @@ from pathlib import Path
 from typing import List, Type
 
 from fastmcp import FastMCP
-# Try different import paths for Tool
+
+# Try to import the tool decorator
 try:
-    from fastmcp.tools import Tool
-except ImportError:
-    try:
-        from fastmcp.server.tool import Tool
-    except ImportError:
-        # If neither works, define a basic Tool class
-        class Tool:
-            pass
+    from fastmcp.tools import tool as Tool
+    TOOL_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"FastMCP tool decorator not available: {e}")
+    TOOL_AVAILABLE = False
 
 # Initialize FastMCP instance
 mcp = FastMCP(
@@ -34,7 +32,14 @@ mcp = FastMCP(
 )
 
 def discover_and_register_tools() -> None:
-    """Automatically discover and register all tools from submodules."""
+    """
+    Automatically discover and register all tools from submodules.
+    
+    This function:
+    1. Discovers all Python package submodules in the tools directory
+    2. Imports each submodule
+    3. Registers tools either directly as Tool instances or via get_tools() functions
+    """
     # Get the directory containing this file
     tools_dir = Path(__file__).parent
     
@@ -48,12 +53,47 @@ def discover_and_register_tools() -> None:
     for module_name in submodules:
         try:
             module = importlib.import_module(f".{module_name}", package=__name__)
+            logger.info(f"Discovered module: {module_name}")
             
-            # Find all Tool instances in the module
-            for attr_name in dir(module):
-                attr = getattr(module, attr_name)
-                if isinstance(attr, Tool):
-                    mcp.tool(attr)
+            # Check if the module has a get_tools() function
+            if hasattr(module, 'get_tools') and callable(module.get_tools):
+                try:
+                    tools = module.get_tools()
+                    if not TOOL_AVAILABLE:
+                        logger.debug(f"Skipping tool registration - FastMCP tool decorator not available")
+                        continue
+                        
+                    if isinstance(tools, list):
+                        for tool in tools:
+                            try:
+                                if hasattr(tool, '__wrapped__'):  # Check if it's a @tool decorated function
+                                    mcp.tool(tool)
+                                    logger.debug(f"Registered @tool from {module_name}.get_tools(): {tool.__name__}")
+                            except Exception as e:
+                                logger.error(f"Error registering tool {getattr(tool, '__name__', str(tool))} from {module_name}: {str(e)}")
+                    elif hasattr(tools, '__wrapped__'):  # Single @tool decorated function
+                        try:
+                            mcp.tool(tools)
+                            logger.debug(f"Registered @tool from {module_name}.get_tools(): {tools.__name__}")
+                        except Exception as e:
+                            logger.error(f"Error registering tool {getattr(tools, '__name__', str(tools))} from {module_name}: {str(e)}")
+                except Exception as e:
+                    logger.error(f"Error getting tools from {module_name}.get_tools(): {str(e)}", exc_info=True)
+            
+            # Also look for @tool decorated functions in the module if tool decorator is available
+            if TOOL_AVAILABLE:
+                for attr_name in dir(module):
+                    try:
+                        if not attr_name.startswith('_'):  # Skip private attributes
+                            attr = getattr(module, attr_name)
+                            if hasattr(attr, '__wrapped__'):  # Check if it's a @tool decorated function
+                                try:
+                                    mcp.tool(attr)
+                                    logger.debug(f"Registered @tool from {module_name}: {attr_name}")
+                                except Exception as e:
+                                    logger.error(f"Error registering tool {attr_name} from {module_name}: {str(e)}")
+                    except Exception as e:
+                        logger.error(f"Error processing attribute {attr_name} in {module_name}: {str(e)}", exc_info=True)
                     
         except ImportError as e:
             logger.info(f"Warning: Failed to import tools from {module_name}: {e}")
