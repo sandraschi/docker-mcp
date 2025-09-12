@@ -2,172 +2,80 @@
 """
 Docker MCP Server - Main Entry Point
 
-This module initializes and runs the Docker MCP server with FastMCP 2.12.0 compatibility
-and stateful features.
+This module initializes and runs the Docker MCP server with FastMCP 2.12.0 compatibility.
+All tool implementations have been moved to their respective modules in the tools/ directory.
 """
-import json
+import asyncio
 import logging
-import os
 import sys
-import traceback
 import warnings
 from pathlib import Path
-from typing import Dict, Any, Optional, List, Union
+from typing import List, Tuple, Callable
 
 # Suppress Pydantic deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
-# Configure logging to stderr only
-logging.basicConfig(
-    level=os.getenv("LOG_LEVEL", "INFO"),
-    format='%(asctime)s [%(name)s] [%(levelname)s] %(message)s',
-    handlers=[logging.StreamHandler(sys.stderr)]  # CRITICAL: stderr not stdout
+# Import local modules
+from dockermcp.logging_config import configure_logging, logger
+from dockermcp.tools.assorted_crap import SafeFastMCP, SafeJSONEncoder, warn_with_log
+
+# Configure logging with JSON format and proper stream handling
+# Disable JSON for RPC logs to prevent parsing issues
+configure_logging(
+    enable_console=True,
+    json_format=True,
+    log_file=str(Path("logs/dockermcp.log")),
+    disable_json_for_rpc=True
 )
 
-# Import FastMCP after initial logging setup
-from fastmcp import FastMCP
-from pydantic import BaseModel, Field
-
-# Import local modules
-from dockermcp.logging_config import configure_logging
-from dockermcp.utils.json_utils import safe_json_loads, safe_json_dumps
-
-# Configure logging with our centralized config
-configure_logging()
-logger = logging.getLogger(__name__)
+# Get logger for this module
+logger = logger.getChild('server')
 
 # Redirect warnings to the logger
-def warn_with_log(message, category, filename, lineno, file=None, line=None):
-    logger.warning(f"{filename}:{lineno}: {category.__name__}: {message}")
-
 warnings.showwarning = warn_with_log
 
-class SafeFastMCP(FastMCP):
-    """Extended FastMCP class with enhanced error handling."""
-    
-    async def _handle_message(self, message: str) -> str:
-        """Handle incoming JSON-RPC messages with proper error handling."""
-        try:
-            # Log the raw message for debugging
-            if message and len(message) > 200:
-                logger.debug(f"Received message (truncated): {message[:200]}...")
-            elif message:
-                logger.debug(f"Received message: {message}")
-            
-            # Check for common issues
-            if not message or not message.strip():
-                logger.warning("Received empty message")
-                return ''
-                
-            if message.startswith(('Warning:', 'Error:')):
-                logger.warning(f"Received warning/error message: {message}")
-                return ''
-                
-            # Clean and parse the message
-            message = message.strip()
-            
-            # Skip empty messages or warnings
-            if not message or message.startswith(('WARNING:', 'Warning:')):
-                logger.warning(f"Skipping message: {message[:200]}...")
-                return ''
-                
-            # Process the message normally
-            return await super()._handle_message(message)
-            
-        except json.JSONDecodeError as e:
-            logger.error(f"Invalid JSON received: {e}", exc_info=True)
-            return safe_json_dumps({
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {
-                    "code": -32700,
-                    "message": "Parse error: Invalid JSON"
-                }
-            })
-        except Exception as e:
-            error_msg = f"Error processing message: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return safe_json_dumps({
-                "jsonrpc": "2.0",
-                "id": None,
-                "error": {
-                    "code": -32603,
-                    "message": f"Internal error: {str(e)}"
-                }
-            })
-
-# Initialize FastMCP with built-in state management and custom error handling
-mcp = SafeFastMCP(
-    name="DockerMCP",
-    version="2.12.0"
-)
-
-# Import and register tools
-from dockermcp.tools.containers import (
-    list_containers,
-    create_container,
-    start_container,
-    stop_container,
-    restart_container,
-    remove_container,
-    inspect_container,
-    container_logs,
-    execute_in_container
-)
-
-# Register container tools
-mcp.tool(list_containers)
-mcp.tool(create_container)
-mcp.tool(start_container)
-mcp.tool(stop_container)
-mcp.tool(restart_container)
-mcp.tool(remove_container)
-mcp.tool(inspect_container)
-mcp.tool(container_logs)
-mcp.tool(execute_in_container)
-
-def main():
-    """Initialize and run the Docker MCP server."""
-    try:
-        logger.info("Starting Docker MCP server...")
-        mcp.run()
-    except KeyboardInterrupt:
-        logger.info("Shutting down Docker MCP server...")
-    except Exception as e:
-        logger.critical(f"Fatal error: {e}", exc_info=True)
-        sys.exit(1)
-
-if __name__ == "__main__":
-    main()
-
-# Custom JSON encoder that handles common types
-class SafeJSONEncoder(json.JSONEncoder):
-    def default(self, obj):
-        if hasattr(obj, 'model_dump_json'):
-            return json.loads(obj.model_dump_json())
-        elif hasattr(obj, 'isoformat'):
-            return obj.isoformat()
-        elif hasattr(obj, 'total_seconds'):
-            return obj.total_seconds()
-        return super().default(obj)
+# Get the singleton FastMCP instance
+from .mcp_instance import get_mcp
+mcp = get_mcp()
 
 # Override the default JSON encoder
-mcp.json_encoder = SafeJSONEncoder
+mcp.json_encoder = SafeJSONEncoder()
 
-# Import tools
+# Log that we're using the singleton instance
+logger.info("Using singleton FastMCP instance from mcp_instance.py")
+
+# Import all tool modules
 try:
-    # Try absolute import first (when run as module)
-    from dockermcp.tools import containers, networks, volumes, system, workflow
-except ImportError:
-    try:
-        # Try relative import (when run directly)
-        from .tools import containers, networks, volumes, system, workflow
-    except ImportError:
-        # Fallback to direct import from tools directory
-        from tools import containers, networks, volumes, system, workflow
+    # Import tool modules
+    from dockermcp.tools.containers import get_container_tools
+    from dockermcp.tools.workflow import get_tools as get_workflow_tools
+    from dockermcp.tools.networks import get_tools as get_network_tools
+    from dockermcp.tools.volumes import get_tools as get_volume_tools
+    from dockermcp.tools.system import get_tools as get_system_tools
+    
+    # Register all tools
+    tool_modules: List[Tuple[str, List[Callable]]] = [
+        ('Container', get_container_tools()),
+        ('Workflow', get_workflow_tools()),
+        ('Network', get_network_tools()),
+        ('Volume', get_volume_tools()),
+        ('System', get_system_tools())
+    ]
+    
+    # Register tools and log registration
+    for module_name, tools in tool_modules:
+        logger.info(f"Registering {len(tools)} {module_name} tools")
+        for tool in tools:
+            mcp.tool(tool)
+    
+    logger.info("All tools registered successfully")
+    
+except ImportError as e:
+    logger.error(f"Failed to import tool modules: {e}")
+    raise
 
-def main():
+def main() -> None:
     """Initialize and run the Docker MCP server."""
     try:
         logger.info("Starting Docker MCP server...")
@@ -175,8 +83,10 @@ def main():
         # Run the MCP server with stdio communication
         asyncio.run(mcp.serve())
         
+    except KeyboardInterrupt:
+        logger.info("Shutting down Docker MCP server...")
     except Exception as e:
-        logger.error(f"Failed to start Docker MCP server: {str(e)}")
+        logger.critical(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
 
 if __name__ == "__main__":

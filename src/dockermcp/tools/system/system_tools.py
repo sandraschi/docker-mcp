@@ -11,7 +11,14 @@ import logging
 from datetime import datetime, timedelta
 from typing import Dict, Any, List, Optional, Union, AsyncGenerator
 
-from fastmcp.tools import tool as Tool
+# FastMCP 2.12+ import pattern
+from fastmcp.tools.tool import Tool, tool
+from fastmcp.exceptions import ToolException
+
+# Set tool availability flag
+TOOL_AVAILABLE = True
+logger.debug("FastMCP Tool imported from fastmcp.tools")
+
 from typing import Optional, Dict, Any
 import logging
 import docker
@@ -29,33 +36,45 @@ from dockermcp.tools.system.system_models import (
 )
 
 # Configure logging
-logger = logging.getLogger(__name__)
+from dockermcp.logging_config import logger
+
+# Get a child logger for this module
+logger = logger.getChild('system_tools')
 
 # Initialize system manager
 import docker
 system_mgr = SystemManager(docker_client=docker.from_env())
 
 async def _check_daemon_health() -> Dict[str, Any]:
-    """Check Docker daemon health and accessibility."""
+    """Check Docker daemon health and accessibility using graceful connection handling."""
     try:
-        client = docker.from_env()
-        # Test basic API connectivity
-        client.ping()
-        
-        # Test more intensive operation to verify full functionality
+        # Try to get the Docker client
         try:
-            client.containers.list(limit=1)
+            client = docker.from_env()
+            # Test basic API connectivity
+            client.ping()
             daemon_status = 'healthy'
-        except Exception as e:
-            daemon_status = 'degraded'
-            logger.warning(f"Docker daemon is accessible but may be degraded: {str(e)}")
             
-        return {
-            'status': daemon_status,
-            'api_version': client.api.version()['ApiVersion'],
-            'docker_version': client.version()['Version']
-        }
+            # Test more intensive operation to verify full functionality
+            try:
+                client.containers.list(limit=1)
+            except Exception as e:
+                daemon_status = 'degraded'
+                logger.warning(f"Docker daemon is accessible but may be degraded: {str(e)}")
+            
+            return {
+                'status': daemon_status,
+                'api_version': client.api.version()['ApiVersion'],
+                'docker_version': client.version()['Version']
+            }
+            
+        except Exception as e:
+            # If we can't even get a client, return unavailable status
+            logger.error(f"Docker client initialization failed: {str(e)}")
+            raise
+            
     except Exception as e:
+        # Handle any unexpected errors
         logger.error(f"Docker daemon check failed: {str(e)}")
         return {
             'status': 'unavailable',
@@ -81,6 +100,12 @@ async def _check_daemon_health() -> Dict[str, Any]:
                 'default': None
             }
         }
+    },
+    output_schema={
+        'success': True,
+        'message': 'Available commands retrieved successfully',
+        'commands': {},
+        'categories': []
     }
 )
 @Tool(
@@ -115,6 +140,12 @@ async def _check_daemon_health() -> Dict[str, Any]:
                 'default': True
             }
         }
+    },
+    output_schema={
+        'success': True,
+        'message': 'System status retrieved successfully',
+        'timestamp': '',
+        'status': {}
     }
 )
 async def status(
@@ -273,6 +304,12 @@ async def _check_health() -> Dict[str, Any]:
                 'default': None
             }
         }
+    },
+    output_schema={
+        'success': True,
+        'message': 'Available commands retrieved successfully',
+        'commands': {},
+        'categories': []
     }
 )
 async def help(category: Optional[str] = None) -> Dict[str, Any]:
@@ -372,6 +409,12 @@ async def help(category: Optional[str] = None) -> Dict[str, Any]:
                 'default': 'host'
             }
         }
+    },
+    output_schema={
+        'success': True,
+        'message': 'Grafana setup completed successfully',
+        'next_steps': [],
+        'documentation': ''
     }
 )
 async def setup_grafana(port: int = 13000, volume: str = "grafana-storage", network: str = "host") -> Dict[str, Any]:

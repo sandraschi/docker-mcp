@@ -14,9 +14,13 @@ from typing import (
     TypeVar, Generic, Type, get_origin, get_args
 )
 
+# Define a custom exception for container operations
+class ContainerError(Exception):
+    """Base exception for container-related errors."""
+    pass
+
 # FastMCP imports
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+# No direct tool imports needed in models file
 
 # Pydantic models
 from pydantic import (
@@ -676,4 +680,3 @@ class GetContainerLogsRequest(ContainerOperationRequest):
         default=False,
         description="Show timestamps"
     )
-

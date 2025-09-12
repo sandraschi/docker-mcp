@@ -25,8 +25,10 @@ from aiodocker.exceptions import DockerError
 from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import tool, tool
+
+# Import custom exceptions
+from .container_models import ContainerError
 
 # Local imports
 from dockermcp.logging_config import logger, configure_logging
@@ -54,33 +56,32 @@ def handle_docker_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitab
         try:
             return await func(*args, **kwargs)
         except ValidationError as ve:
-            error_msg = f"Validation error: {str(ve)}"
+            error_msg = f"Container lifecycle validation error: {str(ve)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ve
+            raise ContainerError(error_msg) from ve
         except NotFound as nf:
             error_msg = f"Container not found: {str(nf)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from nf
-        except ImageNotFound as inf:
-            error_msg = f"Docker image not found: {str(inf)}"
-            logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from inf
+            raise ContainerError(error_msg) from nf
         except ContainerError as ce:
-            error_msg = f"Container error: {str(ce)}"
+            error_msg = f"Container error during {func.__name__}: {str(ce)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ce
+            raise ContainerError(error_msg) from ce
         except APIError as ae:
-            error_msg = f"Docker API error: {str(ae)}"
+            error_msg = f"Docker API error in {func.__name__}: {str(ae)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ae
+            raise ContainerError(error_msg) from ae
         except DockerError as de:
-            error_msg = f"Docker error: {str(de)}"
+            error_msg = f"Docker error in {func.__name__}: {str(de)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from de
+            raise ContainerError(error_msg) from de
+        except asyncio.CancelledError:
+            logger.info(f"{func.__name__} was cancelled")
+            raise
         except Exception as e:
             error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
             logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
-            raise ToolError(f"Internal server error: {str(e)}") from e
+            raise ContainerError(f"Internal server error: {str(e)}") from e
     return wrapper
 
 @asynccontextmanager
@@ -91,8 +92,9 @@ async def get_docker_client():
         client = docker.from_env()
         yield client
     except Exception as e:
-        logger.error(f"Failed to initialize Docker client: {str(e)}")
-        raise ToolError("Failed to connect to Docker daemon") from e
+        error_msg = f"Failed to initialize Docker client: {str(e)}"
+        logger.error(error_msg)
+        raise ContainerError(error_msg) from e
     finally:
         if client is not None:
             client.close()
@@ -252,7 +254,7 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
         ContainerLifecycleResponse with operation result and container state
         
     Raises:
-        ToolError: If the operation fails or the container is not found
+        ToolException: If the operation fails or the container is not found
         
     Example:
         ```python
@@ -328,7 +330,7 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
                 current_state = container_info["State"]
             except aiodocker.DockerContainerError as e:
                 if e.status == 404:
-                    raise ToolError(f"Container {container_id} not found") from e
+                    raise ToolException(f"Container {container_id} not found") from e
                 raise
                 
                 # Execute the requested action
@@ -376,7 +378,7 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
                 
                 elif action == ContainerAction.REMOVE:
                     if current_state.get("Running", False) and not request.force:
-                        raise ToolError(
+                        raise ToolException(
                             f"Cannot remove running container {container_id} without force=True"
                         )
                     await container.delete(v=request.remove_volumes, force=request.force)
@@ -388,7 +390,7 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
                         state={"status": "removed"}
                     )
                 else:
-                    raise ToolError(f"Unsupported container action: {action}")
+                    raise ToolException(f"Unsupported container action: {action}")
                 
                 return ContainerLifecycleResponse(
                     success=True,
@@ -404,7 +406,7 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
         else:
             error_msg = f"Container operation failed: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        raise ToolException(error_msg) from e
         
     except asyncio.TimeoutError as e:
         error_msg = (
@@ -412,17 +414,17 @@ async def manage_container_lifecycle(request: ContainerLifecycleRequest) -> Cont
             f"(timeout: {request.timeout}s)"
         )
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        raise ToolException(error_msg) from e
         
     except DockerError as e:
         error_msg = f"Docker error while {action}ing container {container_id}: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        raise ToolException(error_msg) from e
         
     except Exception as e:
         error_msg = f"Error during {action} operation: {str(e)}"
         logger.error(f"{error_msg}\n{traceback.format_exc()}")
-        raise ToolError(error_msg) from e
+        raise ToolException(error_msg) from e
 
 def _create_success_response(
     container: docker.models.containers.Container,

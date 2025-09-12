@@ -1,0 +1,14 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- C:\Users\sandr\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Windows-11-10.0.27934-SP0', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'langsmith': '0.3.42', 'asyncio': '0.23.8', 'html': '4.1.1', 'metadata': '3.1.1', 'mock': '3.14.1', 'cov': '2.12.1', 'anyio': '4.10.0', 'aio': '1.9.0', 'httpx': '0.35.0', 'randomly': '3.16.0', 'xdist': '3.8.0'}, 'JAVA_HOME': 'C:\\Program Files\\Microsoft\\jdk-17.0.15.6-hotspot'}
+Using --randomly-seed=498217681
+rootdir: D:\Dev\repos\dockermcp
+configfile: pyproject.toml
+plugins: langsmith-0.3.42, asyncio-0.23.8, html-4.1.1, metadata-3.1.1, mock-3.14.1, cov-2.12.1, anyio-4.10.0, aio-1.9.0, httpx-0.35.0, randomly-3.16.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT
+ERROR: file or directory not found: D:\Dev\repos\dockermcp\tests\test_compose_import.py D:\Dev\repos\dockermcp\tests\test_container_exec.py D:\Dev\repos\dockermcp\tests\test_container_inspect.py D:\Dev\repos\dockermcp\tests\test_container_lifecycle.py D:\Dev\repos\dockermcp\tests\test_container_logs.py D:\Dev\repos\dockermcp\tests\test_hello_world.py D:\Dev\repos\dockermcp\tests\test_logging_metrics.py D:\Dev\repos\dockermcp\tests\test_startup.py
+collecting ... collected 0 items
+
+============================ no tests ran in 0.07s ============================
+

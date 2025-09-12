@@ -5,9 +5,10 @@ Provides tools to monitor and report on the health of Docker stacks.
 import json
 from dockermcp.utils import run_docker_command
 from typing import Dict, Any, List, Optional
-import logging
+from dockermcp.logging_config import logger
 
-logger = logging.getLogger(__name__)
+# Get a child logger for this module
+logger = logger.getChild('health')
 
 class StackHealthChecker:
     """

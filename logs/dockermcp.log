@@ -86,3 +86,29 @@
 {"timestamp": "2025-09-07T22:23:33+0200", "level": "INFO", "name": "dockermcp.logging_config", "message": "Warning: Failed to import tools from containers: cannot import name 'get_tools_metadata' from 'fastmcp.tools' (C:\\Users\\sandr\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastmcp\\tools\\__init__.py)", "module": "__init__", "function": "discover_and_register_tools", "line": 59, "process": 93812, "thread": 135140, "threadName": "MainThread"}
 {"timestamp": "2025-09-07T22:39:14+0200", "level": "INFO", "name": "dockermcp.logging_config", "message": "Warning: Failed to import tools from compose: cannot import name 'get_tools_metadata' from 'fastmcp.tools' (C:\\Users\\sandr\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastmcp\\tools\\__init__.py)", "module": "__init__", "function": "discover_and_register_tools", "line": 59, "process": 93656, "thread": 141440, "threadName": "MainThread"}
 {"timestamp": "2025-09-07T22:39:14+0200", "level": "INFO", "name": "dockermcp.logging_config", "message": "Warning: Failed to import tools from containers: cannot import name 'get_tools_metadata' from 'fastmcp.tools' (C:\\Users\\sandr\\AppData\\Local\\Programs\\Python\\Python313\\Lib\\site-packages\\fastmcp\\tools\\__init__.py)", "module": "__init__", "function": "discover_and_register_tools", "line": 59, "process": 93656, "thread": 141440, "threadName": "MainThread"}
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+INFO: Attempting to connect to Docker daemon...
+INFO: Successfully connected to Docker daemon
+{"timestamp": "2025-09-11T21:52:50.214876+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 63784, "thread": 76592, "module": "__init__", "function": "initialize_docker_connection", "line": 96, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T21:52:50.227039+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 63784, "thread": 76592, "module": "__init__", "function": "initialize_docker_connection", "line": 104, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:19:40.419331+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 72676, "thread": 80148, "module": "__init__", "function": "initialize_docker_connection", "line": 96, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:19:40.432233+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 72676, "thread": 80148, "module": "__init__", "function": "initialize_docker_connection", "line": 104, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:21:35.285369+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 77964, "thread": 77184, "module": "__init__", "function": "initialize_docker_connection", "line": 96, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:21:35.301671+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 77964, "thread": 77184, "module": "__init__", "function": "initialize_docker_connection", "line": 104, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:32:30.619193+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 73424, "thread": 58208, "module": "__init__", "function": "initialize_docker_connection", "line": 96, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:32:30.633349+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 73424, "thread": 58208, "module": "__init__", "function": "initialize_docker_connection", "line": 104, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}

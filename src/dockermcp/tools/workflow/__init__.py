@@ -1,90 +1,81 @@
 """
-Workflow management tools for Docker MCP.
+Workflow management and automation tools for Docker MCP.
 
-This module provides FastMCP 2.12.0 compatible tools for workflow automation.
+This module provides FastMCP 2.12.0+ compatible tools for workflow automation,
+stack health monitoring, problem detection, and recovery operations.
 """
-from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field, field_validator
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
-from workflow_intel.stack_health import StackHealthChecker
+from typing import List, Dict, Any, Optional, Callable
 
 # Import models
-from .workflow_models import (
-    WorkflowStatus,
-    WorkflowStep,
-    WorkflowDefinition,
-    WorkflowInstance,
-    WorkflowExecution,
-    WorkflowResponse,
-    CreateWorkflowRequest,
-    ExecuteWorkflowRequest,
-    WorkflowStatusResponse,
-    WorkflowListResponse
+from .stack_models import (
+    StackHealthResponse,
+    ProjectHealthResponse,
+    StackOperationResponse,
+    RecoveryOptions,
+    IssueSeverity,
+    DetectedIssue,
+    ComponentHealth,
+    StackHealth
 )
 
-# Import tools
-from .workflow_tools import (
-    create_workflow,
-    execute_workflow,
-    get_workflow_status,
-    list_workflows,
-    cancel_workflow
+# Import stack health tools
+from .stack_health import (
+    check_stack_health,
+    check_veogen_stack,
+    check_immich_stack,
+    check_myai_health,
+    stack_health_checker
 )
 
-# Initialize workflow components
-stack_health_checker = StackHealthChecker()
-
-class CheckStackHealthResponse(BaseModel):
-    """Response model for stack health checks."""
-    success: bool
-    message: str
-    health_status: Optional[Dict[str, Any]] = None
-    error: Optional[str] = None
-
-@Tool(
-    name="check_stack_health",
-    description="Check the health of a Docker stack"
+# Import problem detection tools
+from .problem_detection import (
+    find_restart_loops,
+    detect_dependency_issues,
+    find_missing_containers,
+    problem_detector
 )
-async def check_stack_health(stack_name: str) -> Dict[str, Any]:
-    """
-    Check the health of a Docker stack and its services.
+
+# Import recovery tools
+from .recovery import (
+    fix_restart_loops,
+    smart_stack_restart,
+    emergency_stack_recovery,
+    stack_recovery
+)
+
+# Tools are automatically discovered by the @Tool decorator
+# No need for explicit get_tools() function anymore
+# Export all tools and models for easy importing
+__all__ = [
+    # Models
+    'StackHealthResponse',
+    'ProjectHealthResponse',
+    'StackOperationResponse',
+    'RecoveryOptions',
+    'IssueSeverity',
+    'DetectedIssue',
+    'ComponentHealth',
+    'StackHealth',
     
-    Args:
-        stack_name: Name of the stack to check
-        
-    Returns:
-        Dictionary with health status information
-    """
-    try:
-        health_status = await stack_health_checker.check_stack(stack_name)
-        return {
-            "success": True,
-            "message": f"Health check completed for stack '{stack_name}'",
-            "health_status": health_status
-        }
-    except Exception as e:
-        return {
-            "success": False,
-            "message": f"Failed to check stack health: {str(e)}",
-            "error": str(e)
-        }
-
-def get_tools() -> List[callable]:
-    """
-    Get all workflow management tools for registration with FastMCP 2.12+.
+    # Core components
+    'stack_health_checker',
+    'problem_detector',
+    'stack_recovery',
+    'get_tools',
     
-    Returns:
-        List of @tool-decorated functions for all workflow operations
-    """
-    return [
-        create_workflow,
-        execute_workflow,
-        get_workflow_status,
-        list_workflows,
-        cancel_workflow,
-        check_stack_health
-    ]
-
-# Add get_tools to __all__
-__all__.append('get_tools')
+    # Health check functions
+    'check_stack_health',
+    'check_veogen_stack',
+    'check_immich_stack',
+    'check_myai_health',
+    
+    # Problem detection functions
+    'find_restart_loops',
+    'detect_dependency_issues',
+    'find_missing_containers',
+    
+    # Recovery functions
+    'fix_restart_loops',
+    'smart_stack_restart',
+    'emergency_stack_recovery'
+]

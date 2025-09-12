@@ -3,16 +3,16 @@ Container management API endpoints.
 
 This module provides FastMCP tool endpoints for container operations.
 """
-from typing import List, Optional
-from fastmcp import FastMCP
 from pydantic import BaseModel, Field
-from ...models import ContainerInfo, BaseResponse
+from typing import List, Dict, Any, Optional
 import logging
+from ...mcp_instance import get_mcp
+from ...models import ContainerInfo, BaseResponse
 
 logger = logging.getLogger(__name__)
 
-# Initialize FastMCP
-mcp = FastMCP()
+# Get the shared FastMCP instance
+mcp = get_mcp()
 
 class ContainerListResponse(BaseResponse):
     """Response model for listing containers."""

@@ -10,12 +10,26 @@ import os
 import logging
 from typing import Dict, Any, List, Optional
 
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+import json
+import logging
+import os
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Union, AsyncGenerator
+
+# FastMCP 2.12+ import pattern
+from fastmcp.tools import tool
+from fastmcp.exceptions import ToolException
+
+# Set tool availability flag
+TOOL_AVAILABLE = True
+logger.debug("FastMCP Tool imported from fastmcp.tools")
+
 from pydantic import BaseModel, Field
 
-# Configure logger
-logger = logging.getLogger(__name__)
+from dockermcp.logging_config import logger
+
+# Get a child logger for this module
+logger = logger.getChild('image_tools')
 
 # Import models
 from dockermcp.tools.images.image_models import (
@@ -28,16 +42,24 @@ from dockermcp.core.images import ImageManager
 
 image_mgr = ImageManager(docker_client=docker.from_env())
 
-def get_tools() -> list:
+from typing import List
+
+def get_tools() -> List[Tool]:
     """
-    Return a list of all tools in this module that should be registered with FastMCP.
+    Return a list of all Tool instances that should be registered with FastMCP.
     
     This function is required by FastMCP to discover and register the tools.
     
     Returns:
-        List of Tool objects to be registered
+        List[Tool]: List of Tool instances to be registered
+        
+    Raises:
+        RuntimeError: If any tool fails to be registered
     """
-    return [
+    if not TOOL_AVAILABLE:
+        logger.error("FastMCP Tool class not available")
+        return []
+    tools = [
         list_images,
         pull_image,
         build_image,
@@ -52,6 +74,16 @@ def get_tools() -> list:
         export_filesystem,
         import_filesystem
     ]
+    
+    # Verify all tools are properly decorated
+    for tool in tools:
+        if not isinstance(tool, Tool):
+            raise RuntimeError(
+                f"Tool {tool.__name__} is not properly decorated with @Tool. "
+                "Make sure all tools are decorated with @Tool before being added to get_tools()."
+            )
+    
+    return tools
 
 def process_image_data(img_data: Any) -> ImageInfo:
     """
@@ -84,7 +116,7 @@ def process_image_data(img_data: Any) -> ImageInfo:
         )
 
 
-@Tool(
+@tool(
     name='list_images',
     description='List all Docker images on the host system',
     parameters={
@@ -141,7 +173,7 @@ async def list_images(
             error=str(e)
         )
 
-@Tool(
+@tool(
     name='pull_image',
     description='Pull a Docker image from a registry',
     parameters={
@@ -204,7 +236,7 @@ async def pull_image(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name='build_image',
     description='Build a Docker image from a Dockerfile',
     parameters={
@@ -293,7 +325,7 @@ async def build_image(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name='remove_image',
     description='Remove a Docker image from the host system',
     parameters={
@@ -401,7 +433,7 @@ async def remove_image(
             'image_id': image
         }
 
-@Tool(
+@tool(
     name='tag_image',
     description='Tag a Docker image with a new name and tag',
     parameters={
@@ -585,7 +617,7 @@ async def tag_image(
             'new_tag': new_tag
         }
 
-@Tool(
+@tool(
     name="inspect_image",
     description="Return low-level information about an image",
     parameters={
@@ -652,7 +684,7 @@ async def inspect_image(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name="search_images",
     description="Search for Docker images in a registry",
     parameters={
@@ -797,7 +829,7 @@ async def search_images(
             "error": str(e)
         }
 
-@Tool(
+@tool(
     name='prune_images',
     description='Remove unused Docker images to free up disk space',
     parameters={
@@ -916,7 +948,7 @@ async def prune_images(
 
 
 
-@Tool(
+@tool(
     name='save_image',
     description='Save a Docker image to a tar archive',
     parameters={
@@ -1021,7 +1053,7 @@ async def save_image(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name='load_image',
     description='Load a Docker image from a tar archive',
     parameters={
@@ -1116,7 +1148,7 @@ async def load_image(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name='image_history',
     description='Get the history of a Docker image',
     parameters={
@@ -1282,7 +1314,7 @@ async def export_filesystem(
             'error': str(e)
         }
 
-@Tool(
+@tool(
     name='import_filesystem',
     description='Import the contents from a tarball to create a filesystem image',
     parameters={
@@ -1313,7 +1345,7 @@ async def export_filesystem(
         },
         'required': ['source']
     },
-    returns={
+    output_schema={
         'type': 'object',
         'properties': {
             'success': {'type': 'boolean'},

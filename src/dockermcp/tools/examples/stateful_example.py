@@ -8,8 +8,8 @@ from typing import Dict, List, Any, Optional
 from pydantic import BaseModel, Field
 
 # Import FastMCP components
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import Tool, tool, tool, tool
+from fastmcp.exceptions import ToolException
 
 # Configure logging
 from dockermcp.logging_config import logger, configure_logging

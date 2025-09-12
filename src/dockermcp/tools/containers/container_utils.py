@@ -8,8 +8,10 @@ import logging
 from typing import Any, Dict, List, Optional, Union, cast, AsyncGenerator, TypeVar, Type
 
 # FastMCP imports
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import tool, tool
+
+# Import custom exceptions
+from .container_models import ContainerError
 
 # Pydantic models
 from pydantic import BaseModel
@@ -73,8 +75,9 @@ async def create_response(
         try:
             return model(**response)
         except Exception as e:
-            logger.error(f"Failed to create response model: {e}", exc_info=True)
-            raise ToolError(f"Failed to create response: {str(e)}")
+            error_msg = f"Failed to create response model: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ContainerError(error_msg)
     
     return response
 
@@ -303,12 +306,12 @@ class ContainerManager:
         return {'exec_id': exec_id['Id'], 'detached': True}
 
 
-def get_tools() -> List[Tool]:
+def get_tools() -> List[Any]:
     """
     Return all tools in this module for registration.
     
     Returns:
-        List of Tool objects that should be registered with FastMCP
+        List of tool objects that should be registered with FastMCP
     """
     # This module contains internal utilities, no tools to register directly
     return []

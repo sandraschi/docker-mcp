@@ -17,7 +17,7 @@ import socket
 import sys
 import threading
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional, Union, cast, Callable, TypeVar, List, Tuple
 
@@ -25,13 +25,19 @@ from typing import Any, Dict, Optional, Union, cast, Callable, TypeVar, List, Tu
 F = TypeVar('F', bound=Callable[..., Any])
 
 # Third-party imports
-try:
-    from loguru import logger as loguru_logger
-    from loguru._defaults import LOGURU_FORMAT
-    LOGURU_AVAILABLE = True
-except ImportError:
-    LOGURU_AVAILABLE = False
-    loguru_logger = None
+LOGURU_AVAILABLE = False
+loguru_logger = None
+LOGURU_FORMAT = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
+
+# Only try to import loguru if it's actually needed
+if os.environ.get('ENABLE_LOGURU', 'false').lower() == 'true':
+    try:
+        from loguru import logger as loguru_logger
+        from loguru._defaults import LOGURU_FORMAT as _LOGURU_FORMAT
+        LOGURU_AVAILABLE = True
+        LOGURU_FORMAT = _LOGURU_FORMAT
+    except ImportError:
+        pass
 
 # Local imports
 from .loki_handler import add_loki_handler, LokiHandler
@@ -41,10 +47,14 @@ LOG_DIR = Path("logs")
 LOG_DIR.mkdir(exist_ok=True)
 LOG_FILE = LOG_DIR / "dockermcp.log"
 
-# Default log level based on environment
-DEFAULT_LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO").upper()
+# Default log level based on environment - set to WARNING to reduce noise
+DEFAULT_LOG_LEVEL = os.environ.get("LOG_LEVEL", "WARNING").upper()
 ENVIRONMENT = os.environ.get("ENVIRONMENT", "development")
 HOSTNAME = os.environ.get("HOSTNAME", socket.gethostname())
+
+# Silence noisy loggers
+for logger_name in ["fastmcp", "urllib3", "docker", "asyncio"]:
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
 # Thread-local storage for request context
 class LogContext(threading.local):
@@ -71,11 +81,24 @@ log_context = LogContext()
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
     
+    def __init__(self, *args, **kwargs):
+        self.disable_json = kwargs.pop('disable_json', False)
+        super().__init__(*args, **kwargs)
+    
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
+        if self.disable_json or getattr(record, 'disable_json', False):
+            # For RPC logs, still use JSON but with a simpler structure
+            log_record = {
+                'timestamp': datetime.fromtimestamp(record.created, timezone.utc).isoformat() + 'Z',
+                'level': record.levelname.lower(),
+                'message': record.getMessage(),
+                'name': record.name
+            }
+            
         # Create a dict with the log record data
         log_record = {
-            'timestamp': datetime.utcfromtimestamp(record.created).isoformat() + 'Z',
+            'timestamp': datetime.fromtimestamp(record.created, timezone.utc).isoformat() + 'Z',
             'level': record.levelname.lower(),
             'name': record.name,
             'message': record.getMessage(),
@@ -85,7 +108,7 @@ class JsonFormatter(logging.Formatter):
             'function': record.funcName,
             'line': record.lineno,
             'environment': ENVIRONMENT,
-            'hostname': HOSTNAME,
+            'hostname': HOSTNAME
         }
         
         # Add correlation ID if available
@@ -123,10 +146,26 @@ class JsonFormatter(logging.Formatter):
                           'filename', 'funcName', 'id', 'levelname', 'levelno',
                           'lineno', 'module', 'msecs', 'message', 'msg', 'name',
                           'pathname', 'process', 'processName', 'relativeCreated',
-                          'stack_info', 'thread', 'threadName'):
-                log_record[key] = value
+                          'stack_info', 'thread', 'threadName') and not key.startswith('_'):
+                try:
+                    # Ensure value is JSON serializable
+                    json.dumps(value)
+                    log_record[key] = value
+                except (TypeError, OverflowError):
+                    log_record[key] = str(value)
         
-        return json.dumps(log_record, default=str)
+        # Ensure the final output is valid JSON
+        try:
+            return json.dumps(log_record, ensure_ascii=False, default=str)
+        except (TypeError, ValueError) as e:
+            # Fallback to a minimal valid JSON if serialization fails
+            return json.dumps({
+                'timestamp': datetime.now(timezone.utc).isoformat() + 'Z',
+                'level': 'error',
+                'name': 'logging',
+                'message': f'Failed to serialize log record: {str(e)}',
+                'original_message': str(record.msg)
+            }, default=str)
 
 class ContextLogger(logging.LoggerAdapter):
     """Logger adapter that adds context to log records."""
@@ -239,6 +278,7 @@ def configure_logging(
     loki_tags: Optional[Dict[str, str]] = None,
     loki_labels: Optional[Dict[str, str]] = None,
     json_format: bool = True,
+    disable_json_for_rpc: bool = True,  # New parameter to control RPC logging format
 ) -> logging.Logger:
     """
     Configure logging for the application.
@@ -253,25 +293,35 @@ def configure_logging(
         loki_tags: Additional tags to include with Loki logs
         loki_labels: Additional labels to identify the log stream
         json_format: Whether to use JSON format for logs
+        disable_json_for_rpc: Whether to disable JSON formatting for RPC logs
         
     Returns:
         The root logger
     """
-    # Convert string log level to int
+    # Convert string log level to int if needed
     if isinstance(level, str):
         level = getattr(logging, level.upper(), logging.INFO)
     
-    # Configure the root logger
+    # Get the root logger
     root_logger = logging.getLogger()
+    
+    # Set the root logger level
     root_logger.setLevel(level)
     
-    # Clear existing handlers
+    # Clear existing handlers to prevent duplicates
     for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
+        try:
+            handler.close()
+            root_logger.removeHandler(handler)
+        except Exception as e:
+            logger.error(f"Error removing handler: {e}")
     
-    # Create formatter
+    # Ensure basic config is called with force=True to clear any existing config
+    logging.basicConfig(level=level, force=True, handlers=[])
+    
+    # Configure formatters
     if json_format:
-        formatter = JsonFormatter()
+        formatter = JsonFormatter(disable_json=disable_json_for_rpc)
     else:
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
@@ -476,8 +526,19 @@ def _configure_loki(
 # Create a default logger instance
 logger = ContextLogger(logging.getLogger(__name__), {})
 
-# Configure default logging
-configure_logging()
+# Configure default logging if not already configured
+root_logger = logging.getLogger()
+if not root_logger.handlers:
+    # Remove any existing handlers to prevent duplicates
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    # Configure with JSON format and proper stream handling
+    configure_logging(
+        enable_console=True,
+        json_format=True,
+        log_file=str(LOG_FILE)
+    )
 
 # Add a filter to add correlation ID to log records
 class CorrelationIdFilter(logging.Filter):

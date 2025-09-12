@@ -1,0 +1,15 @@
+{"timestamp": "2025-09-11T22:21:35.285369+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 77964, "thread": 77184, "module": "__init__", "function": "initialize_docker_connection", "line": 96, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-11T22:21:35.301671+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 77964, "thread": 77184, "module": "__init__", "function": "initialize_docker_connection", "line": 104, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "D:\Dev\repos\dockermcp\src\server.py", line 23, in <module>
+    from dockermcp.logging_config import configure_logging, logger
+  File "D:\Dev\repos\dockermcp\src\dockermcp\__init__.py", line 218, in <module>
+    register_tools()
+    ~~~~~~~~~~~~~~^^
+  File "D:\Dev\repos\dockermcp\src\dockermcp\__init__.py", line 200, in register_tools
+    from .tools import containers, images, networks, volumes, system
+  File "D:\Dev\repos\dockermcp\src\dockermcp\tools\__init__.py", line 15, in <module>
+    from fastmcp.tools.tool import tool
+ImportError: cannot import name 'tool' from 'fastmcp.tools.tool' (C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastmcp\tools\tool.py). Did you mean: 'tools'?

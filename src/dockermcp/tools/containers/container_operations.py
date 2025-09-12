@@ -11,8 +11,10 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional, Type, TypeVar, Union, cast
 
 # FastMCP imports
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import tool, tool
+
+# Import custom exceptions
+from .container_models import ContainerError
 
 # Pydantic models
 from pydantic import BaseModel, Field
@@ -60,12 +62,12 @@ ContainerT = TypeVar('ContainerT', bound=BaseModel)
 # Re-export container_mgr with proper type annotation
 container_mgr: ContainerManager = cast(ContainerManager, container_mgr)
 
-def get_tools() -> List[Tool]:
+def get_tools() -> List[tool]:
     """
     Return all tools in this module for registration.
     
     Returns:
-        List of Tool objects that should be registered with FastMCP
+        List of @tool objects that should be registered with FastMCP
     """
     # This module contains internal operations, no tools to register directly
     return []
@@ -99,7 +101,7 @@ def _process_log_chunk(
         Returns None if the log entry is filtered out by filter_term.
         
     Raises:
-        ToolError: If there's an error processing the log chunk
+        ContainerError: If there's an error processing the log chunk
         
     Example:
         >>> log_chunk = b'2023-01-01T12:00:00.000000000Z Hello, World!\n'
@@ -161,7 +163,7 @@ def _process_log_chunk(
     except Exception as e:
         error_msg = f"Error processing log chunk: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        raise ContainerError(error_msg) from e
 
 def _validate_container_identifier(
     container_id: Optional[str] = None, 
@@ -223,7 +225,7 @@ def _get_container_id(
         str: The container ID
         
     Raises:
-        ToolError: If neither container_id nor container_name is provided,
+        ContainerError: If neither container_id nor container_name is provided,
                   if the container is not found, or if there's an error
                   accessing the Docker daemon
                   
@@ -256,7 +258,7 @@ def _get_container_id(
             )
             
             if not containers:
-                raise ToolError(f"No container found with name: {container_name}")
+                raise ContainerError(f"No container found with name: {container_name}")
                 
             if len(containers) > 1:
                 logger.warning(
@@ -269,10 +271,10 @@ def _get_container_id(
         except Exception as e:
             error_msg = f"Error looking up container by name '{container_name}': {str(e)}"
             logger.error(error_msg, exc_info=True)
-            raise ToolError(error_msg) from e
+            raise ContainerError(error_msg) from e
     
     # This should never be reached due to _validate_container_identifier
-    raise ToolError(
+    raise ContainerError(
         "Container identification error: "
         "Either container_id or container_name must be provided"
     )

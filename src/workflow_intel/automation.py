@@ -6,9 +6,10 @@ import json
 from dockermcp.utils import run_docker_command
 import time
 from typing import Dict, Any, List, Optional, Callable
-import logging
+from dockermcp.logging_config import logger
 
-logger = logging.getLogger(__name__)
+# Get a child logger for this module
+logger = logger.getChild('automation')
 
 class AutomationManager:
     """

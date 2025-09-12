@@ -9,6 +9,7 @@ Key Features:
 - STDIO-based client communication
 - Comprehensive Docker management
 - Asynchronous I/O operations
+- Graceful Docker daemon connection handling
 
 Package Structure:
     - api/       # MCP protocol endpoints
@@ -20,54 +21,186 @@ Package Structure:
 
 __version__ = "2.12.0"
 
-import os
 import logging
-from dockermcp.logging_config import logger, configure_logging
+import os
+import sys
+from pathlib import Path
+from typing import Any, Dict, List, Optional, TypeVar, Callable, Type
 
-# Configure logging
-configure_logging()
+# Add the src directory to the Python path
+src_dir = str(Path(__file__).parent.parent)
+if src_dir not in sys.path:
+    sys.path.insert(0, src_dir)
 
-from typing import Dict, Any, Optional
+# Configure logging before importing other modules
+from .logging_config import configure_logging, logger
 
-# Configure package-level logging
-logger = logging.getLogger(__name__)
-logger.setLevel(logging.INFO)
-handler = logging.StreamHandler()
-handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
-)
-logger.addHandler(handler)
+# Set up logging with minimal output by default
+configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
+
+# Silence noisy loggers
+for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'asyncio']:
+    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
 
 # Import core components after logging is configured
 import docker
-from fastmcp import FastMCP
+from .mcp_instance import get_mcp
 from .core.containers import ContainerManager
 from .core.images import ImageManager
 from .core.networks import NetworkManager
 from .core.volumes import VolumeManager
 from .core.system import SystemManager
 
-# Initialize the MCP server with built-in state management
-mcp = FastMCP(
-    name="docker-mcp",
-    version=__version__
-)
+# Get the shared FastMCP instance
+mcp = get_mcp()
 
-# Initialize Docker client
-docker_client = docker.from_env()
+# GRACEFUL DOCKER CONNECTION HANDLING
+docker_client: Optional[docker.DockerClient] = None
+docker_available: bool = False
+docker_error: Optional[str] = None
 
-# Initialize managers with Docker client
-container_mgr = ContainerManager(docker_client)
-image_mgr = ImageManager(docker_client)
-network_mgr = NetworkManager(docker_client)
-volume_mgr = VolumeManager(docker_client)
-system_mgr = SystemManager(docker_client)
+# Type variable for decorator
+F = TypeVar('F', bound=Callable[..., Any])
+
+# Use the configured logger from logging_config
+logger = logger
+
+# Decorator for Docker availability check
+def check_docker_available(func: F) -> F:
+    """Decorator to check Docker availability before tool execution."""
+    @wraps(func)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
+        if not docker_available:
+            return (
+                f"❌ Docker daemon not available: {docker_error}\n\n"
+                f"💡 Troubleshooting:\n"
+                f"1. Start Docker Desktop\n"
+                f"2. Run 'docker version' to test\n"
+                f"3. Use docker_status tool for diagnostics"
+            )
+        try:
+            return func(*args, **kwargs)
+        except docker.errors.DockerException as e:
+            return f"❌ Docker operation failed: {str(e)}"
+    return cast(F, wrapper)
+
+def initialize_docker_connection() -> bool:
+    """
+    Initialize Docker connection with graceful error handling.
+    
+    Returns:
+        bool: True if Docker is available, False otherwise
+    """
+    global docker_client, docker_available, docker_error
+    
+    try:
+        logger.info("Attempting to connect to Docker daemon...")
+        docker_client = docker.from_env()
+        
+        # Test the connection with a simple operation
+        docker_client.ping()
+        
+        docker_available = True
+        docker_error = None
+        logger.info("Successfully connected to Docker daemon")
+        return True
+        
+    except docker.errors.DockerException as e:
+        docker_client = None
+        docker_available = False
+        docker_error = str(e)
+        logger.warning(f"Docker not available: {docker_error}")
+        return False
+        
+    except Exception as e:
+        docker_client = None
+        docker_available = False
+        docker_error = f"Unexpected error: {str(e)}"
+        logger.error(f"Docker connection error: {docker_error}")
+        return False
+
+def check_docker_service_windows() -> str:
+    """Check Docker service status on Windows."""
+    try:
+        result = subprocess.run(
+            ['sc', 'query', 'Docker Desktop Service'], 
+            capture_output=True, 
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW
+        )
+        if "RUNNING" in result.stdout:
+            return "running"
+        elif "STOPPED" in result.stdout:
+            return "stopped"
+        return "unknown"
+    except Exception as e:
+        logger.warning(f"Failed to check Docker service status: {e}")
+        return "check_failed"
+
+def get_docker_status() -> Dict[str, Any]:
+    """
+    Get comprehensive Docker connection status.
+    
+    Returns:
+        Dict containing Docker status information
+    """
+    status = {
+        "docker_available": docker_available,
+        "error": docker_error if not docker_available else None,
+        "version": None,
+        "api_version": None,
+        "connection_type": "named_pipes" if sys.platform == "win32" else "socket",
+        "platform": sys.platform,
+        "service_status": None
+    }
+    
+    if docker_available and docker_client:
+        try:
+            info = docker_client.info()
+            version_info = docker_client.version()
+            
+            status.update({
+                "version": version_info.get("Version"),
+                "api_version": version_info.get("ApiVersion"),
+                "platform": info.get("OperatingSystem"),
+                "connection_type": "named_pipes" if os.name == 'nt' else "unix_socket",
+                "server_version": info.get("ServerVersion"),
+                "containers_running": info.get("ContainersRunning", 0),
+                "containers_total": info.get("Containers", 0),
+                "images_count": info.get("Images", 0)
+            })
+        except Exception as e:
+            status["error"] = f"Error getting Docker info: {str(e)}"
+            
+    return status
+
+def retry_docker_connection() -> bool:
+    """
+    Attempt to reconnect to Docker daemon.
+    
+    Returns:
+        bool: True if reconnection successful, False otherwise
+    """
+    logger.info("Attempting to reconnect to Docker daemon...")
+    return initialize_docker_connection()
+
+# Initialize Docker connection on import (gracefully)
+initialize_docker_connection()
+
+# Initialize managers with Docker client (or None if unavailable)
+container_mgr = ContainerManager(docker_client) if docker_available else None
+image_mgr = ImageManager(docker_client) if docker_available else None
+network_mgr = NetworkManager(docker_client) if docker_available else None
+volume_mgr = VolumeManager(docker_client) if docker_available else None
+system_mgr = SystemManager(docker_client) if docker_available else None
 
 # Register core tools
 def register_tools():
     """Register all MCP tools with the server."""
     # Import tools here to avoid circular imports
     from .tools import containers, images, networks, volumes, system
+    from .tools.docker_status import register_tool as register_status_tool
+    from .tools.docker_reconnect import register_tool as register_reconnect_tool
     
     # Register tool modules
     mcp.register_tool(containers)
@@ -75,6 +208,12 @@ def register_tools():
     mcp.register_tool(networks)
     mcp.register_tool(volumes)
     mcp.register_tool(system)
+    
+    # Register Docker management tools
+    for tool in register_status_tool():
+        mcp.register_tool(tool)
+    for tool in register_reconnect_tool():
+        mcp.register_tool(tool)
 
 # Initialize tools on import
 register_tools()
@@ -96,6 +235,13 @@ __all__ = [
     'VolumeManager',
     'SystemManager',
     
+    # Docker connection management
+    'docker_client',
+    'docker_available',
+    'initialize_docker_connection',
+    'retry_docker_connection',
+    'get_docker_status',
+    
     # Version
     '__version__',
     
@@ -103,14 +249,10 @@ __all__ = [
     'register_tools'
 ]
 
-logger = logging.getLogger(__name__)
+# Add the src directory to the Python path
 import sys
 from pathlib import Path
-
-# Add the src directory to the Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Import server components
 from .server import main  # noqa: F401
-
-__all__ = ["__version__", "main"]

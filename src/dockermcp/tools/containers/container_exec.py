@@ -32,8 +32,10 @@ from aiodocker.execs import Exec
 from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import Tool, tool
+
+# Import custom exceptions
+from .container_models import ContainerError
 
 # Local imports
 from dockermcp.logging_config import logger, configure_logging
@@ -63,30 +65,30 @@ def handle_exec_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable
         except ValidationError as ve:
             error_msg = f"Command execution validation error: {str(ve)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ve
+            raise ContainerError(error_msg) from ve
         except NotFound as nf:
             error_msg = f"Container not found: {str(nf)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from nf
+            raise ContainerError(error_msg) from nf
         except ContainerError as ce:
             error_msg = f"Container error during command execution: {str(ce)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ce
+            raise ContainerError(error_msg) from ce
         except APIError as ae:
             error_msg = f"Docker API error during command execution: {str(ae)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ae
+            raise ContainerError(error_msg) from ae
         except DockerError as de:
             error_msg = f"Docker error during command execution: {str(de)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from de
+            raise ContainerError(error_msg) from de
         except asyncio.CancelledError:
             logger.info("Command execution was cancelled")
             raise
         except Exception as e:
             error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
             logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
-            raise ToolError(f"Internal server error: {str(e)}") from e
+            raise ContainerError(f"Internal server error: {str(e)}") from e
     return wrapper
 
 @asynccontextmanager
@@ -97,8 +99,9 @@ async def get_docker_client():
         client = docker.from_env()
         yield client
     except Exception as e:
-        logger.error(f"Failed to initialize Docker client: {str(e)}")
-        raise ToolError("Failed to connect to Docker daemon") from e
+        error_msg = f"Failed to initialize Docker client: {str(e)}"
+        logger.error(error_msg)
+        raise ContainerError(error_msg) from e
     finally:
         if client is not None:
             client.close()
@@ -418,7 +421,7 @@ async def execute_in_container(
         }
         
     Raises:
-        ToolError: If there's an error executing the command or the container is not found
+        ToolException: If there's an error executing the command or the container is not found
         
     Example:
         # Synchronous execution
@@ -434,7 +437,7 @@ async def execute_in_container(
             command=['tail', '-f', '/var/log/app.log'],
             stream=True
         )):
-            print(f"{chunk['type']}: {chunk['data']}")
+            logger.info(f"{chunk['type']}: {chunk['data']}")
     """
     logger.info(
         f"Executing command in container {request.container_id}: {request.command}"

@@ -1,0 +1,47 @@
+# Files to fix imports in:
+# Format: [status] path/to/file.py
+
+# Core files
+[x] src/dockermcp/__init__.py  # No changes needed
+[x] src/dockermcp/tools/__init__.py  # Updated imports
+
+# Container tools
+[x] src/dockermcp/tools/containers/__init__.py  # No FastMCP imports found
+[x] src/dockermcp/tools/containers/container_operations.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_tools.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_tools_registry.py  # Empty file, no changes needed
+[x] src/dockermcp/tools/containers/container_inspect.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_inspect_v2.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_lifecycle.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_logs.py  # Updated imports
+[x] src/dockermcp/tools/containers/container_utils.py  # Updated imports
+[x] src/dockermcp/tools/containers/list_containers.py  # No changes needed
+
+# Compose tools
+[x] src/dockermcp/tools/compose/__init__.py  # Updated imports
+[x] src/dockermcp/tools/compose/compose_tools.py  # No changes needed
+[x] src/dockermcp/tools/compose/compose_models.py  # No FastMCP imports found
+
+# Other tools
+[x] src/dockermcp/tools/images/__init__.py  # Updated imports
+[x] src/dockermcp/tools/networks/__init__.py  # Updated imports
+[x] src/dockermcp/tools/system/__init__.py  # Updated imports
+[x] src/dockermcp/tools/volumes/__init__.py  # Updated imports
+[x] src/dockermcp/tools/workflow/__init__.py  # No FastMCP imports found
+
+# API
+[x] src/dockermcp/api/containers.py  # No changes needed
+
+# Core
+[x] src/dockermcp/core/containers.py  # No FastMCP imports found
+[x] src/dockermcp/core/images.py  # No FastMCP imports found
+[x] src/dockermcp/core/networks.py  # No FastMCP imports found
+[x] src/dockermcp/core/system.py  # No FastMCP imports found
+[x] src/dockermcp/core/volumes.py  # No FastMCP imports found
+
+# Docker Ops
+[x] src/docker_ops/containers.py  # No FastMCP imports found
+[x] src/docker_ops/images.py  # No FastMCP imports found
+[x] src/docker_ops/networks.py  # No FastMCP imports found
+[x] src/docker_ops/system.py  # No FastMCP imports found
+[x] src/docker_ops/volumes.py  # No FastMCP imports found

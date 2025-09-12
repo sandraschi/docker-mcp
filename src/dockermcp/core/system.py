@@ -7,8 +7,9 @@ system information, disk usage, and cleanup.
 from typing import Dict, List, Optional, Any
 import asyncio
 import logging
+from ..logging_config import ContextLogger
 
-logger = logging.getLogger(__name__)
+logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 # TODO: Move system operations from docker_ops/system.py to here
 

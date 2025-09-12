@@ -7,8 +7,14 @@ from dockermcp.logging_config import logger, configure_logging
 configure_logging()
 
 from typing import Dict, Any, List, Optional
-from fastmcp.tools import tool as Tool
-from fastmcp.exceptions import ToolError
+
+# FastMCP 2.12+ import pattern
+from fastmcp.tools import tool, Tool
+from fastmcp.exceptions import ToolException
+
+# Set tool availability flag
+TOOL_AVAILABLE = True
+logger.debug("FastMCP Tool imported from fastmcp.tools")
 from dockermcp.core.volumes import VolumeManager
 from dockermcp.tools.volumes.volume_models import (
     VolumeInfo, VolumeResponse, VolumeListResponse, VolumeInspectResponse,
@@ -19,7 +25,7 @@ from dockermcp.tools.volumes.volume_models import (
 import docker
 volume_mgr = VolumeManager(docker_client=docker.from_env())
 
-@Tool(
+@tool(
     name="list_volumes",
     description="List all Docker volumes with their configurations and usage information"
 )
@@ -41,7 +47,7 @@ async def list_volumes() -> Dict[str, Any]:
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="create_volume",
     description="Create a new Docker volume with the specified configuration"
 )
@@ -68,7 +74,7 @@ async def create_volume(
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="inspect_volume",
     description="Get detailed information about a specific volume"
 )
@@ -92,7 +98,7 @@ async def inspect_volume(
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="remove_volume",
     description="Remove a Docker volume, with an option to force removal"
 )
@@ -116,7 +122,7 @@ async def remove_volume(
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="prune_volumes",
     description="Remove all unused volumes, with optional filters"
 )
@@ -127,16 +133,17 @@ async def prune_volumes(
     try:
         filters = request.filters if request else None
         result = await volume_mgr.prune_volumes(filters=filters)
-        return {
+        output_schema={
             "success": True,
             "message": "Volumes pruned successfully",
             "volumes_deleted": result.get('VolumesDeleted', []),
             "space_reclaimed": result.get('SpaceReclaimed', 0)
         }
+        return output_schema
     except Exception as e:
-        return {
+        output_schema={
             "success": False,
             "message": f"Failed to prune volumes: {str(e)}",
             "error": str(e)
         }
-
+        return output_schema

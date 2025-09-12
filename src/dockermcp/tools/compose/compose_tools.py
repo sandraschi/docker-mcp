@@ -14,22 +14,20 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Union, AsyncGenerator
 import yaml
 
-from dockermcp.logging_config import logger, configure_logging
+from dockermcp.logging_config import configure_logging, logging
 
 # Configure logging
 configure_logging()
 
 # Import FastMCP components
-from fastmcp import FastMCP
+from fastmcp.tools import Tool, tool, tool, tool
+from fastmcp.exceptions import ToolException
 from pydantic import ValidationError
 
 from dockermcp.core.compose import ComposeManager
 
-# Configure logging
-logger = logging.getLogger(__name__)
-
-# Initialize FastMCP instance
-mcp = FastMCP("docker-compose")
+# Get a logger for this module
+logger = logging.getLogger('dockermcp.tools.compose')
 
 # Initialize compose manager
 compose_mgr = ComposeManager()
@@ -58,7 +56,7 @@ def _build_compose_command(
     additional_args: Optional[List[str]] = None
 ) -> List[str]:
     """Build a Docker Compose command with common options."""
-    cmd = ["docker-compose", "--project-name", request.project_name]
+    cmd = ["docker-compose", "--project-name", request.get("project_name", "default")]
     
     # Add compose files
     files = _get_compose_files(request)
@@ -85,8 +83,119 @@ def _build_compose_command(
     
     return cmd
 
-@mcp.tool
-def compose_up(request: dict) -> Dict[str, Any]:
+@Tool(
+    name="compose_build",
+    description="Build or rebuild services in a Docker Compose project",
+    parameters={
+        "type": "object",
+        "properties": {
+            "project_name": {"type": "string", "description": "Name of the Compose project"},
+            "file_path": {"type": "string", "description": "Path to the Compose file"},
+            "files": {"type": "array", "items": {"type": "string"}, "description": "List of Compose files"},
+            "no_cache": {"type": "boolean", "description": "Do not use cache when building the image"},
+            "force_rm": {"type": "boolean", "description": "Always remove intermediate containers"},
+            "pull": {"type": "boolean", "description": "Always attempt to pull a newer version of the image"},
+            "parallel": {"type": "boolean", "description": "Build images in parallel"},
+            "quiet": {"type": "boolean", "description": "Suppress build output"},
+            "services": {"type": "array", "items": {"type": "string"}, "description": "List of services to build"}
+        },
+        "required": ["project_name"]
+    }
+)
+async def compose_build(request: dict) -> Dict[str, Any]:
+    """
+    Build or rebuild services in a Docker Compose project.
+    
+    This command builds images for services defined in the Compose file.
+    """
+    start_time = datetime.utcnow()
+    response = {
+        "success": False,
+        "message": "Compose build command started",
+        "project_name": request.get("project_name", "unknown"),
+        "command": "build",
+        "start_time": start_time
+    }
+    
+    try:
+        # Build the command
+        cmd_args = []
+        
+        if request.get('no_cache'):
+            cmd_args.append("--no-cache")
+        if request.get('force_rm'):
+            cmd_args.append("--force-rm")
+        if request.get('pull'):
+            cmd_args.append("--pull")
+        if request.get('parallel'):
+            cmd_args.append("--parallel")
+        if request.get('quiet'):
+            cmd_args.append("--quiet")
+        
+        # Execute the command
+        cmd = _build_compose_command("build", request, cmd_args)
+        
+        if request.get('dry_run'):
+            return {
+                "success": True,
+                "message": "Dry run completed successfully",
+                "command": " ".join(cmd),
+                "dry_run": True
+            }
+        
+        result = subprocess.run(cmd, capture_output=True, text=True)
+        exit_code = result.returncode
+        
+        # Update response
+        response["success"] = exit_code == 0
+        response["exit_code"] = exit_code
+        response["stdout"] = result.stdout if result.stdout else None
+        response["stderr"] = result.stderr if result.stderr else None
+        response["end_time"] = datetime.utcnow()
+        
+        if exit_code == 0:
+            response["message"] = "Compose build completed successfully"
+        else:
+            response["message"] = f"Compose build failed with exit code {exit_code}"
+            response["errors"] = [{
+                "code": exit_code,
+                "message": result.stderr if result.stderr else "Unknown error"
+            }]
+        
+    except Exception as e:
+        response["end_time"] = datetime.utcnow()
+        response["success"] = False
+        response["message"] = f"Error during compose build: {str(e)}"
+        response["errors"] = [{
+            "code": "COMPOSE_BUILD_ERROR",
+            "message": str(e)
+        }]
+        logger.error(f"Error in compose_build: {str(e)}", exc_info=True)
+    
+    return response
+
+@Tool(
+    name="compose_up",
+    description="Create and start containers for a Docker Compose project",
+    parameters={
+        "type": "object",
+        "properties": {
+            "project_name": {"type": "string", "description": "Name of the Compose project"},
+            "file_path": {"type": "string", "description": "Path to the Compose file"},
+            "files": {"type": "array", "items": {"type": "string"}, "description": "List of Compose files"},
+            "services": {"type": "array", "items": {"type": "string"}, "description": "List of services to start"},
+            "build": {"type": "boolean", "description": "Build images before starting containers"},
+            "no_build": {"type": "boolean", "description": "Don't build an image, even if it's missing"},
+            "force_recreate": {"type": "boolean", "description": "Recreate containers even if their configuration and image haven't changed"},
+            "no_recreate": {"type": "boolean", "description": "If containers already exist, don't recreate them"},
+            "no_start": {"type": "boolean", "description": "Don't start the services after creating them"},
+            "detach": {"type": "boolean", "description": "Detached mode: Run containers in the background"},
+            "remove_orphans": {"type": "boolean", "description": "Remove containers for services not defined in the Compose file"}
+        },
+        "required": ["project_name"]
+    }
+)
+async def compose_up(request: dict) -> Dict[str, Any]:
     """
     Create and start containers for a Docker Compose project.
     
@@ -106,54 +215,23 @@ def compose_up(request: dict) -> Dict[str, Any]:
         # Build the command
         cmd_args = []
         
-        if hasattr(request, 'detach') and request.detach:
+        if request.get('detach'):
             cmd_args.append("-d")
-        if hasattr(request, 'build') and request.build:
+        if request.get('build'):
             cmd_args.append("--build")
-        if hasattr(request, 'no_build') and request.no_build:
+        if request.get('no_build'):
             cmd_args.append("--no-build")
-        if hasattr(request, 'force_recreate') and request.force_recreate:
+        if request.get('force_recreate'):
             cmd_args.append("--force-recreate")
-        if hasattr(request, 'always_recreate_deps') and request.always_recreate_deps:
-            cmd_args.append("--always-recreate-deps")
-        if hasattr(request, 'no_recreate') and request.no_recreate:
-            cmd_args.append("--no-recreate")
-        if hasattr(request, 'renew_anon_volumes') and request.renew_anon_volumes:
-            cmd_args.append("-V")
-        if hasattr(request, 'remove_orphans') and request.remove_orphans:
+        if request.get('remove_orphans'):
             cmd_args.append("--remove-orphans")
-        if hasattr(request, 'no_deps') and request.no_deps:
-            cmd_args.append("--no-deps")
-        if hasattr(request, 'timeout') and request.timeout:
-            cmd_args.extend(["--timeout", str(request.timeout)])
-        if hasattr(request, 'exit_code_from') and request.exit_code_from:
-            cmd_args.extend(["--exit-code-from", request.exit_code_from])
-        if hasattr(request, 'scale') and request.scale:
-            for service, num in request.scale.items():
-                cmd_args.extend(["--scale", f"{service}={num}"])
-        if hasattr(request, 'no_color') and request.no_color:
-            cmd_args.append("--no-color")
-        if hasattr(request, 'quiet_pull') and request.quiet_pull:
-            cmd_args.append("--quiet-pull")
-        if hasattr(request, 'no_log_prefix') and request.no_log_prefix:
-            cmd_args.append("--no-log-prefix")
-        if hasattr(request, 'log_level') and request.log_level:
-            cmd_args.extend(["--log-level", request.log_level])
-        if hasattr(request, 'json') and request.json:
-            cmd_args.append("--json")
-        if hasattr(request, 'parallel') and request.parallel:
-            cmd_args.extend(["--parallel", str(request.parallel)])
-        if hasattr(request, 'dry_run') and request.dry_run:
+        if request.get('dry_run'):
             cmd_args.append("--dry-run")
         
-        # Add profiles if specified
-        if hasattr(request, 'profiles') and request.profiles:
-            cmd_args.extend(["--profile", ",".join(request.profiles)])
-        
-        # Execute the command (simplified sync version for now)
+        # Execute the command
         cmd = _build_compose_command("up", request, cmd_args)
         
-        if hasattr(request, 'dry_run') and request.dry_run:
+        if request.get('dry_run'):
             return {
                 "success": True,
                 "message": "Dry run completed successfully",
@@ -161,7 +239,6 @@ def compose_up(request: dict) -> Dict[str, Any]:
                 "dry_run": True
             }
         
-        # Run synchronously for now
         result = subprocess.run(cmd, capture_output=True, text=True)
         exit_code = result.returncode
         
@@ -193,38 +270,27 @@ def compose_up(request: dict) -> Dict[str, Any]:
     
     return response
 
-@mcp.tool
+@Tool(
+    name="compose_down",
+    description="Stop and remove containers, networks, and volumes for a Docker Compose project",
+    parameters={
+        "type": "object",
+        "properties": {
+            "project_name": {"type": "string", "description": "Name of the Compose project"},
+            "file_path": {"type": "string", "description": "Path to the Compose file"},
+            "files": {"type": "array", "items": {"type": "string"}, "description": "List of Compose files"},
+            "remove_orphans": {"type": "boolean", "description": "Remove containers for services not defined in the Compose file"},
+            "rmi": {"type": "string", "enum": ["all", "local"], "description": "Remove images used by services"},
+            "volumes": {"type": "boolean", "description": "Remove named volumes declared in the volumes section of the Compose file"},
+            "remove_volumes": {"type": "boolean", "description": "Remove named volumes and anonymous volumes attached to containers"},
+            "timeout": {"type": "integer", "description": "Specify a shutdown timeout in seconds"}
+        },
+        "required": ["project_name"]
+    }
+)
 async def compose_down(request: dict) -> Dict[str, Any]:
     """
     Stop and remove containers, networks, and volumes for a Docker Compose project.
-    
-    This command stops and removes all the resources created by `compose up`.
-    
-    Args:
-        request: ComposeDownRequest with the following optional parameters:
-            - project_name: Name of the Compose project
-            - file_path: Path to the Compose file
-            - files: List of additional Compose files
-            - remove_orphans: Remove containers for services not defined in the Compose file
-            - rmi: Remove images used by services ("local" or "all")
-            - timeout: Timeout in seconds for stopping containers
-            - volumes: Remove named volumes declared in the `volumes` section
-            - remove_volumes: Remove all volumes (including anonymous ones)
-            - remove_all: Remove all images used by services
-            - dry_run: Show what would be done without making changes
-            
-    Returns:
-        Dict containing the operation result with:
-            - success: Boolean indicating if the operation was successful
-            - message: Status message
-            - project_name: Name of the Compose project
-            - command: The command that was executed
-            - start_time: When the command started
-            - end_time: When the command completed
-            - exit_code: The exit code from the command
-            - stdout: Standard output from the command
-            - stderr: Standard error from the command
-            - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
     response = {
@@ -239,31 +305,15 @@ async def compose_down(request: dict) -> Dict[str, Any]:
         # Build the command
         cmd_args = []
         
-        if hasattr(request, 'remove_orphans') and request.remove_orphans:
+        if request.get('remove_orphans'):
             cmd_args.append("--remove-orphans")
-        if hasattr(request, 'rmi') and request.rmi:
-            cmd_args.extend(["--rmi", request.rmi])
-        if hasattr(request, 'timeout') and request.timeout:
-            cmd_args.extend(["--timeout", str(request.timeout)])
-        if hasattr(request, 'volumes') and request.volumes:
+        if request.get('volumes'):
             cmd_args.append("--volumes")
-        if hasattr(request, 'remove_volumes') and request.remove_volumes:
-            cmd_args.append("-v")
-        if hasattr(request, 'remove_all') and request.remove_all:
-            cmd_args.append("--rmi=all")
-        if hasattr(request, 'dry_run') and request.dry_run:
-            cmd_args.append("--dry-run")
+        if request.get('rmi'):
+            cmd_args.extend(["--rmi", request.get('rmi')])
         
         # Execute the command
         cmd = _build_compose_command("down", request, cmd_args)
-        
-        if hasattr(request, 'dry_run') and request.dry_run:
-            return {
-                "success": True,
-                "message": "Dry run completed successfully",
-                "command": " ".join(cmd),
-                "dry_run": True
-            }
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         exit_code = result.returncode
@@ -296,39 +346,32 @@ async def compose_down(request: dict) -> Dict[str, Any]:
     
     return response
 
-@mcp.tool
+@Tool(
+    name="compose_logs",
+    description="View output from containers in a Docker Compose project",
+    parameters={
+        "type": "object",
+        "properties": {
+            "project_name": {"type": "string", "description": "Name of the Compose project"},
+            "file_path": {"type": "string", "description": "Path to the Compose file"},
+            "files": {"type": "array", "items": {"type": "string"}, "description": "List of Compose files"},
+            "services": {"type": "array", "items": {"type": "string"}, "description": "List of services to show logs for"},
+            "follow": {"type": "boolean", "description": "Follow log output"},
+            "tail": {"type": "string", "description": "Number of lines to show from the end of the logs"},
+            "since": {"type": "string", "description": "Show logs since a timestamp or duration"},
+            "until": {"type": "string", "description": "Show logs before a timestamp or duration"},
+            "timestamps": {"type": "boolean", "description": "Show timestamps"},
+            "no_color": {"type": "boolean", "description": "Produce monochrome output"},
+            "no_log_prefix": {"type": "boolean", "description": "Don't print prefix in logs"}
+        },
+        "required": ["project_name"]
+    }
+)
 async def compose_logs(request: dict) -> Dict[str, Any]:
     """
     View output from containers in a Docker Compose project.
     
     This command shows the logs for all services or the specified services.
-    
-    Args:
-        request: ComposeLogsRequest with the following parameters:
-            - project_name: Name of the Compose project
-            - file_path: Path to the Compose file
-            - files: List of additional Compose files
-            - follow: Follow log output (like tail -f)
-            - tail: Number of lines to show from the end of the logs
-            - timestamps: Show timestamps
-            - since: Show logs since a timestamp or duration
-            - until: Show logs before a timestamp or duration
-            - no_color: Produce monochrome output
-            - no_log_prefix: Don't print prefix in logs
-            - services: List of services to show logs for
-            
-    Returns:
-        Dict containing the log output with:
-            - success: Boolean indicating if the operation was successful
-            - message: Status message
-            - project_name: Name of the Compose project
-            - command: The command that was executed
-            - start_time: When the command started
-            - end_time: When the command completed
-            - exit_code: The exit code from the command
-            - stdout: Standard output from the command
-            - stderr: Standard error from the command
-            - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
     response = {
@@ -343,24 +386,14 @@ async def compose_logs(request: dict) -> Dict[str, Any]:
         # Build the command
         cmd_args = []
         
-        if hasattr(request, 'follow') and request.follow:
+        if request.get('follow'):
             cmd_args.append("--follow")
-        if hasattr(request, 'tail') and request.tail:
-            cmd_args.extend(["--tail", str(request.tail)])
-        if hasattr(request, 'timestamps') and request.timestamps:
+        if request.get('tail'):
+            cmd_args.extend(["--tail", str(request.get('tail'))])
+        if request.get('timestamps'):
             cmd_args.append("--timestamps")
-        if hasattr(request, 'since') and request.since:
-            cmd_args.extend(["--since", request.since])
-        if hasattr(request, 'until') and request.until:
-            cmd_args.extend(["--until", request.until])
-        if hasattr(request, 'no_color') and request.no_color:
-            cmd_args.append("--no-color")
-        if hasattr(request, 'no_log_prefix') and request.no_log_prefix:
-            cmd_args.append("--no-log-prefix")
-        
-        # Add services if specified
-        if hasattr(request, 'services') and request.services:
-            cmd_args.extend(request.services)
+        if request.get('since'):
+            cmd_args.extend(["--since", request.get('since')])
         
         # Execute the command
         cmd = _build_compose_command("logs", request, cmd_args)
@@ -396,39 +429,36 @@ async def compose_logs(request: dict) -> Dict[str, Any]:
     
     return response
 
-@mcp.tool
+@Tool(
+    name="compose_ps",
+    description="List containers for a Docker Compose project",
+    parameters={
+        "type": "object",
+        "properties": {
+            "project_name": {"type": "string", "description": "Name of the Compose project"},
+            "file_path": {"type": "string", "description": "Path to the Compose file"},
+            "files": {"type": "array", "items": {"type": "string"}, "description": "List of Compose files"},
+            "services": {"type": "array", "items": {"type": "string"}, "description": "List of services to show"},
+            "all": {"type": "boolean", "description": "Show all stopped containers"},
+            "filter": {"type": "string", "description": "Filter services by a property"},
+            "format": {"type": "string", "description": "Format the output using the given Go template"},
+            "quiet": {"type": "boolean", "description": "Only display container IDs"},
+            "status": {"type": "array", "items": {"type": "string"}, "description": "Filter services by status (running, paused, restarting, removing, exited, dead, created)"}
+        },
+        "required": ["project_name"]
+    }
+)
 async def compose_ps(request: dict) -> Dict[str, Any]:
     """
     List containers for a Docker Compose project.
     
     This command shows the status of all containers or the specified services.
-    
-    Args:
-        request: ComposePsRequest with the following parameters:
-            - project_name: Name of the Compose project
-            - file_path: Path to the Compose file
-            - files: List of additional Compose files
-            - services: List of services to show
-            - all: Show all stopped containers
-            - filter: Filter services by a property
-            - quiet: Only display container IDs
-            - services: Print the service name
-            - status: Filter containers by status
-            
-    Returns:
-        Dict containing the container list with:
-            - success: Boolean indicating if the operation was successful
-            - message: Status message
-            - project_name: Name of the Compose project
-            - command: The command that was executed
-            - containers: List of container information
-            - errors: List of any errors that occurred
     """
     start_time = datetime.utcnow()
     response = {
         "success": False,
         "message": "Compose ps command started",
-        "project_name": request.get("project_name"),
+        "project_name": request.get("project_name", "unknown"),
         "command": "ps",
         "start_time": start_time
     }
@@ -437,29 +467,13 @@ async def compose_ps(request: dict) -> Dict[str, Any]:
         # Build the command
         cmd_args = []
         
-        if hasattr(request, 'all') and request.all:
+        if request.get('all'):
             cmd_args.append("-a")
-        if hasattr(request, 'filter') and request.filter:
-            cmd_args.extend(["--filter", request.filter])
-        if hasattr(request, 'format') and request.format:
-            cmd_args.extend(["--format", request.format])
-        if hasattr(request, 'quiet') and request.quiet:
+        if request.get('quiet'):
             cmd_args.append("-q")
-        if hasattr(request, 'status') and request.status:
-            cmd_args.extend(["--status", ",".join(request.status)])
-        if hasattr(request, 'dry_run') and request.dry_run:
-            cmd_args.append("--dry-run")
         
         # Execute the command
         cmd = _build_compose_command("ps", request, cmd_args)
-        
-        if hasattr(request, 'dry_run') and request.dry_run:
-            return {
-                "success": True,
-                "message": "Dry run completed successfully",
-                "command": " ".join(cmd),
-                "dry_run": True
-            }
         
         result = subprocess.run(cmd, capture_output=True, text=True)
         exit_code = result.returncode
@@ -469,14 +483,14 @@ async def compose_ps(request: dict) -> Dict[str, Any]:
         if exit_code == 0 and result.stdout:
             lines = result.stdout.splitlines()
             
-            # Simple parsing of the output (this can be enhanced based on the format)
+            # Simple parsing of the output
             for line in lines[1:]:  # Skip header
                 parts = line.split()
                 if len(parts) >= 4:
                     service_name = parts[0]
                     container_id = parts[0][:12]  # Short ID
-                    status = " ".join(parts[1:-2])
-                    ports = parts[-1]
+                    status = " ".join(parts[1:-2]) if len(parts) > 2 else "unknown"
+                    ports = parts[-1] if len(parts) > 1 else ""
                     
                     services[service_name] = {
                         "container_id": container_id,
@@ -486,32 +500,30 @@ async def compose_ps(request: dict) -> Dict[str, Any]:
                     }
         
         # Update response
-        response.success = exit_code == 0
-        response.exit_code = exit_code
-        response.stdout = result.stdout if result.stdout else None
-        response.stderr = result.stderr if result.stderr else None
-        response.services = services
-        response.end_time = datetime.utcnow()
+        response["success"] = exit_code == 0
+        response["exit_code"] = exit_code
+        response["stdout"] = result.stdout if result.stdout else None
+        response["stderr"] = result.stderr if result.stderr else None
+        response["services"] = services
+        response["end_time"] = datetime.utcnow()
         
         if exit_code == 0:
-            response.message = f"Found {len(services)} containers"
+            response["message"] = f"Found {len(services)} containers"
         else:
-            response.message = f"Failed to list containers with exit code {exit_code}"
-            response.errors = [{
+            response["message"] = f"Failed to list containers with exit code {exit_code}"
+            response["errors"] = [{
                 "code": exit_code,
                 "message": result.stderr if result.stderr else "Unknown error"
             }]
         
     except Exception as e:
-        response.end_time = datetime.utcnow()
-        response.success = False
-        response.message = f"Error listing containers: {str(e)}"
-        response.errors = [{
+        response["end_time"] = datetime.utcnow()
+        response["success"] = False
+        response["message"] = f"Error listing containers: {str(e)}"
+        response["errors"] = [{
             "code": "COMPOSE_PS_ERROR",
             "message": str(e)
         }]
         logger.error(f"Error in compose_ps: {str(e)}", exc_info=True)
     
-    return response.dict()
-
-
+    return response

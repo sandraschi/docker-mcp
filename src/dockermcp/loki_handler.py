@@ -3,11 +3,28 @@ Loki handler for Loguru to ship logs to a Loki instance.
 """
 import json
 import logging
+import os
+import sys
 import time
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union, cast
 
 import requests
-from loguru import logger
+
+# Make loguru optional
+LOGURU_AVAILABLE = False
+try:
+    from loguru import logger
+    LOGURU_AVAILABLE = True
+except ImportError:
+    # Create a dummy logger if loguru is not available
+    class DummyLogger:
+        def __getattr__(self, name):
+            return lambda *args, **kwargs: None
+    
+    logger = DummyLogger()
+
+# Only enable Loki if explicitly requested
+ENABLE_LOKI = os.environ.get('ENABLE_LOKI', 'false').lower() == 'true' and LOGURU_AVAILABLE
 
 class LokiHandler:
     """A handler for Loguru that sends logs to a Loki instance."""
@@ -164,7 +181,7 @@ def add_loki_handler(
     tags: Optional[Dict[str, str]] = None,
     labels: Optional[Dict[str, str]] = None,
     level: str = "INFO",
-) -> int:
+):
     """Add a Loki handler to a Loguru logger.
     
     Args:
@@ -175,18 +192,26 @@ def add_loki_handler(
         level: The minimum log level to send to Loki
         
     Returns:
-        The handler ID that can be used to remove the handler later
+        The handler ID that can be used to remove the handler later or None if not available
     """
-    handler = LokiHandler(url=url, tags=tags, labels=labels)
-    handler_id = logger_instance.add(
-        handler,
-        level=level,
-        format="{message}",  # We'll handle formatting in the handler
-        serialize=True,      # Get structured logs
-    )
-    
-    # Ensure logs are flushed on shutdown
-    import atexit
-    atexit.register(handler.stop)
-    
+    if not ENABLE_LOKI or not LOGURU_AVAILABLE:
+        logger.warning("Loki logging is not enabled or loguru is not available.")
+        return None
+        
+    try:
+        handler = LokiHandler(url=url, tags=tags, labels=labels)
+        
+        # Add the handler to the logger
+        handler_id = logger_instance.add(
+            handler,
+            level=level.upper(),
+            format="{message}",
+            filter=lambda record: "loki" in record["extra"]
+        )
+        
+        logger.info(f"Loki logging enabled. Sending logs to {url}")
+        return handler_id
+    except Exception as e:
+        logger.error(f"Failed to initialize Loki handler: {str(e)}")
+        return None
     return handler_id

@@ -12,6 +12,39 @@
 
 ## 🚀 Features
 
+### 🧪 Testing
+
+DockerMCP uses a comprehensive testing strategy with the following structure:
+
+```text
+tests/
+├── unit/           # Unit tests for individual components
+├── integration/    # Integration tests for component interactions
+└── e2e/            # End-to-end tests for complete workflows
+```
+
+To run the tests:
+
+```bash
+# Run all tests
+pytest tests/
+
+# Run unit tests only
+pytest tests/unit/
+
+# Run with coverage report
+pytest --cov=src tests/
+```
+
+### 📝 Logging
+
+DockerMCP uses structured JSON logging for better observability:
+
+- All logs are emitted as JSON for easy parsing and analysis
+- Includes context information (correlation IDs, request IDs)
+- Configurable log levels and output formats
+- Automatic log rotation for file output
+
 ### State Management (Powered by FastMCP 2.11.3)
 
 DockerMCP leverages FastMCP 2.11.3's built-in state management system for all its stateful operations. This provides several key benefits:
@@ -47,6 +80,7 @@ DockerMCP leverages FastMCP 2.11.3's built-in state management system for all it
 - **Cross-Platform Support**: Works on both Windows and Linux systems
 
 ## 🚨 Docker Watchdog
+
 
 ### Features
 

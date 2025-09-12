@@ -44,7 +44,8 @@ class ComposeManager:
         """
         self.docker = docker_client
         self._compose_cmd = self._find_compose_cmd()
-        self.logger = logger.getChild("compose")
+        # Initialize logger using standard library logging
+        self.logger = logging.getLogger("dockermcp.compose")
 
     @staticmethod
     def _find_compose_cmd() -> str:

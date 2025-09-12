@@ -1,0 +1,12 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.2, pluggy-1.6.0 -- D:\Dev\repos\dockermcp\.venv\Scripts\python.exe
+cachedir: .pytest_cache
+rootdir: D:\Dev\repos\dockermcp
+configfile: pyproject.toml
+plugins: anyio-4.10.0, asyncio-1.1.0
+asyncio: mode=Mode.STRICT, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 0 items
+ERROR: file or directory not found: tests/test_hello_world.py
+
+============================ no tests ran in 0.01s ============================
+

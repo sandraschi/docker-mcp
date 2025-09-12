@@ -5,9 +5,10 @@ Handles Docker system operations with proper error handling and type hints.
 import json
 import subprocess
 from typing import Dict, Any, List, Optional
-import logging
+from dockermcp.logging_config import logger
 
-logger = logging.getLogger(__name__)
+# Get a child logger for this module
+logger = logger.getChild('system')
 
 class SystemManager:
     """

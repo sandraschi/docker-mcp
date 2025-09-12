@@ -9,7 +9,14 @@ configure_logging()
 import asyncio
 import uuid
 from typing import Dict, Any, List, Optional
-from fastmcp.tools import tool as Tool
+
+# FastMCP 2.12+ import pattern
+from fastmcp.tools import tool
+from fastmcp.exceptions import ToolException
+
+# Set tool availability flag
+TOOL_AVAILABLE = True
+logger.debug("FastMCP Tool imported from fastmcp.tools")
 from dockermcp.core.workflow import WorkflowManager
 from dockermcp.tools.workflow.workflow_models import (
     WorkflowStatus, WorkflowStep, WorkflowDefinition, WorkflowInstance,
@@ -20,7 +27,7 @@ from dockermcp.tools.workflow.workflow_models import (
 # Initialize workflow manager
 workflow_mgr = WorkflowManager()
 
-@Tool(
+@tool(
     name="create_workflow",
     description="Create a new workflow definition"
 )
@@ -54,9 +61,10 @@ async def create_workflow(
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="execute_workflow",
-    description="Execute a workflow with the given parameters"
+    description="Execute a workflow with the given parameters",
+    output_schema=WorkflowResponse
 )
 async def execute_workflow(
     request: ExecuteWorkflowRequest
@@ -243,9 +251,10 @@ async def _execute_step(
     
     return execution
 
-@Tool(
+@tool(
     name="get_workflow_status",
-    description="Get the status of a workflow instance"
+    description="Get the status of a workflow instance",
+    output_schema=WorkflowStatusResponse
 )
 async def get_workflow_status(
     instance_id: str
@@ -296,9 +305,10 @@ async def get_workflow_status(
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="list_workflows",
-    description="List all available workflows"
+    description="List all available workflows",
+    output_schema=WorkflowListResponse
 )
 async def list_workflows() -> Dict[str, Any]:
     """List all available workflows."""
@@ -319,9 +329,10 @@ async def list_workflows() -> Dict[str, Any]:
             error=str(e)
         ).dict()
 
-@Tool(
+@tool(
     name="cancel_workflow",
-    description="Cancel a running workflow instance"
+    description="Cancel a running workflow instance",
+    output_schema=WorkflowResponse
 )
 async def cancel_workflow(
     instance_id: str
@@ -366,4 +377,3 @@ async def cancel_workflow(
             message=f"Failed to cancel workflow: {str(e)}",
             error=str(e)
         ).dict()
-

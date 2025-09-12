@@ -3,6 +3,7 @@ Docker MCP Server - Main entry point.
 
 This module initializes and runs the Docker MCP server.
 """
+import logging
 import os
 import sys
 from pathlib import Path
@@ -12,13 +13,13 @@ src_dir = str(Path(__file__).parent.absolute())
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-from dockermcp.logging_config import logger, configure_logging
+from dockermcp.logging_config import configure_logging, logger
 
 # Configure logging
 configure_logging()
 
-from fastmcp import FastMCP
-from .json_encoder import dumps as custom_dumps, loads as custom_loads
+# Import the MCP instance first to ensure it's created
+from .mcp_instance import get_mcp
 
 # Import API endpoints to register them
 try:
@@ -27,39 +28,53 @@ except ImportError:
     # Fallback for direct script execution
     from api import containers
 
-# Configure logging
-s - %(name)s - %(levelname)s - %(message)s',
-    stream=sys.stdout
-)
-logger = logging.getLogger(__name__)
+# Import tools to ensure they're registered with the MCP instance
+try:
+    from dockermcp import tools  # This will register all tools via the import
+    logger.info("Successfully imported tools")
+except ImportError as e:
+    logger.error(f"Failed to import tools: {e}", exc_info=True)
+    raise
 
 def main():
     """Initialize and run the Docker MCP server."""
     try:
-logger.info("=== Docker MCP Server Starting ===")
-logger.info(f"Python Path: {sys.path}")
-        
-        # Initialize FastMCP with custom JSON encoder
-logger.info("Initializing FastMCP...")
-        mcp = FastMCP(
-            name="docker-mcp",
-            version="1.0.0",
-            description="Docker Management and Control Plane",
-            json_dumps=custom_dumps,
-            json_loads=custom_loads
+        # Configure root logger to be silent
+        logging.basicConfig(
+            level=logging.CRITICAL,
+            force=True,
+            handlers=[logging.NullHandler()]
         )
         
-        logger.info("Starting Docker MCP server...")
-logger.info("MCP server initialized. Starting main loop...")
-        mcp.run()
+        # Silence common noisy loggers
+        for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'asyncio']:
+            logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+        
+        logger.info("=== Docker MCP Server Starting ===")
+        logger.info(f"Python Path: {sys.path}")
+        
+        # Get the singleton instance
+        logger.info("Getting FastMCP instance...")
+        mcp = get_mcp()
+        
+        # Configure FastMCP logging
+        mcp.logger.setLevel("CRITICAL")
+        
+        logger.info("MCP server initialized. Starting main loop...")
+        
+        # Run with proper logging configuration
+        mcp.run(
+            log_level="CRITICAL",
+            json_response=True
+        )
         
     except Exception as e:
         import traceback
-logger.info(f"=== ERROR: {str(e)}")
-logger.info("Stack trace:")
-        traceback.print_exc()
-        logger.error(f"Failed to start Docker MCP server: {str(e)}")
-        sys.exit(1)
+        logger.error(f"=== ERROR: {str(e)}")
+        logger.error("Stack trace:")
+        logger.error(traceback.format_exc())
+        return 1
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

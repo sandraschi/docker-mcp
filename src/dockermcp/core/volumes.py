@@ -7,8 +7,9 @@ creation, inspection, and removal.
 from typing import Dict, List, Optional, Any
 import asyncio
 import logging
+from ..logging_config import ContextLogger
 
-logger = logging.getLogger(__name__)
+logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 # TODO: Move volume operations from docker_ops/volumes.py to here
 

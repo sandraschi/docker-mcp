@@ -1,0 +1,43 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- C:\Users\sandr\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Windows-11-10.0.27934-SP0', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'langsmith': '0.3.42', 'asyncio': '0.23.8', 'html': '4.1.1', 'metadata': '3.1.1', 'mock': '3.14.1', 'cov': '2.12.1', 'anyio': '4.10.0', 'aio': '1.9.0', 'httpx': '0.35.0', 'randomly': '3.16.0', 'xdist': '3.8.0'}, 'JAVA_HOME': 'C:\\Program Files\\Microsoft\\jdk-17.0.15.6-hotspot'}
+Using --randomly-seed=1111344596
+rootdir: D:\Dev\repos\dockermcp
+configfile: pyproject.toml
+plugins: langsmith-0.3.42, asyncio-0.23.8, html-4.1.1, metadata-3.1.1, mock-3.14.1, cov-2.12.1, anyio-4.10.0, aio-1.9.0, httpx-0.35.0, randomly-3.16.0, xdist-3.8.0
+asyncio: mode=Mode.STRICT
+collecting ... collected 0 items / 1 error
+
+=================================== ERRORS ====================================
+_____________ ERROR collecting tests/test_container_lifecycle.py ______________
+tests\test_container_lifecycle.py:23: in <module>
+    from dockermcp.tools.containers.container_lifecycle import (
+src\dockermcp\__init__.py:80: in <module>
+    register_tools()
+src\dockermcp\__init__.py:70: in register_tools
+    from .tools import containers, images, networks, volumes, system
+src\dockermcp\tools\__init__.py:145: in <module>
+    discover_and_register_tools()
+src\dockermcp\tools\__init__.py:68: in discover_and_register_tools
+    module = importlib.import_module(f".{module_name}", package=__name__)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+src\dockermcp\tools\networks\__init__.py:22: in <module>
+    from .network_tools import (
+src\dockermcp\tools\networks\network_tools.py:60: in <module>
+    @Tool(
+E   TypeError: 'Tool' object is not callable
+------------------------------- Captured stdout -------------------------------
+{"timestamp": "2025-09-08T14:22:48.517330+00:00Z", "level": "error", "name": "root", "message": "Failed to import FastMCP components. Make sure fastmcp is installed.", "pid": 190664, "thread": 189332, "module": "__init__", "function": "<module>", "line": 21, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+------------------------------- Captured stderr -------------------------------
+[32m2025-09-08 16:22:48.006[0m | [1mINFO    [0m | [36mdockermcp.tools[0m:[36mdiscover_and_register_tools[0m:[36m63[0m | [1mDiscovered tool modules: ['compose', 'containers', 'images', 'networks', 'system', 'volumes', 'workflow'][0m
+[32m2025-09-08 16:22:48.483[0m | [31m[1mERROR   [0m | [36mdockermcp.tools[0m:[36mdiscover_and_register_tools[0m:[36m108[0m | [31m[1mFailed to import module compose: cannot import name 'compose_build' from 'dockermcp.tools.compose.compose_tools' (D:\Dev\repos\dockermcp\src\dockermcp\tools\compose\compose_tools.py)[0m
+[32m2025-09-08 16:22:48.515[0m | [31m[1mERROR   [0m | [36mdockermcp.tools[0m:[36mdiscover_and_register_tools[0m:[36m108[0m | [31m[1mFailed to import module containers: cannot import name 'get_tools_metadata' from 'fastmcp.tools' (C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastmcp\tools\__init__.py)[0m
+[32m2025-09-08 16:22:48.517[0m | [31m[1mERROR   [0m | [36mdockermcp.tools[0m:[36mdiscover_and_register_tools[0m:[36m108[0m | [31m[1mFailed to import module images: cannot import name 'Tool' from 'fastmcp' (C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\fastmcp\__init__.py)[0m
+=========================== short test summary info ===========================
+ERROR tests/test_container_lifecycle.py - TypeError: 'Tool' object is not cal...
+!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+============================== 1 error in 3.09s ===============================

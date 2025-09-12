@@ -30,8 +30,10 @@ from aiodocker.exceptions import DockerError
 from docker.errors import APIError, NotFound, ImageNotFound, ContainerError
 
 # FastMCP imports
-from fastmcp.tools import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolError
+from fastmcp.tools import tool, tool
+
+# Import custom exceptions
+from .container_models import ContainerError
 
 # Local imports
 from dockermcp.logging_config import logger, configure_logging
@@ -61,30 +63,30 @@ def handle_log_errors(func: Callable[P, Awaitable[R]]) -> Callable[P, Awaitable[
         except ValidationError as ve:
             error_msg = f"Log request validation error: {str(ve)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ve
+            raise ContainerError(error_msg) from ve
         except NotFound as nf:
             error_msg = f"Container not found: {str(nf)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from nf
+            raise ContainerError(error_msg) from nf
         except ContainerError as ce:
-            error_msg = f"Container error while streaming logs: {str(ce)}"
+            error_msg = f"Container error during log streaming: {str(ce)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ce
+            raise ContainerError(error_msg) from ce
         except APIError as ae:
             error_msg = f"Docker API error during log streaming: {str(ae)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from ae
+            raise ContainerError(error_msg) from ae
         except DockerError as de:
             error_msg = f"Docker error during log streaming: {str(de)}"
             logger.error(f"{func.__name__} - {error_msg}")
-            raise ToolError(error_msg) from de
+            raise ContainerError(error_msg) from de
         except asyncio.CancelledError:
             logger.info("Log streaming was cancelled")
             raise
         except Exception as e:
             error_msg = f"Unexpected error in {func.__name__}: {str(e)}"
             logger.error(f"{func.__name__} - {error_msg}\n{traceback.format_exc()}")
-            raise ToolError(f"Internal server error: {str(e)}") from e
+            raise ContainerError(f"Internal server error: {str(e)}") from e
     return wrapper
 
 @asynccontextmanager
@@ -95,8 +97,9 @@ async def get_docker_client():
         client = docker.from_env()
         yield client
     except Exception as e:
-        logger.error(f"Failed to initialize Docker client: {str(e)}")
-        raise ToolError("Failed to connect to Docker daemon") from e
+        error_msg = f"Failed to initialize Docker client: {str(e)}"
+        logger.error(error_msg)
+        raise ContainerError(error_msg) from e
     finally:
         if client is not None:
             client.close()
@@ -324,32 +327,105 @@ class ContainerLogsResponse(BaseModel):
 
 @tool(
     name="stream_container_logs",
-    description=(
-        "Stream logs from a Docker container in real-time with filtering options. "
-        "Supports following logs (like tail -f), filtering by time range, and "
-        "separating stdout/stderr streams with comprehensive error handling."
-    ),
-    args_schema=ContainerLogsRequest,
-    return_schema=ContainerLogsResponse,
+    description="Stream logs from a Docker container in real-time with comprehensive error handling",
+    parameters={
+        'type': 'object',
+        'properties': {
+            'container_id': {
+                'type': 'string',
+                'description': 'ID or name of the container to stream logs from'
+            },
+            'follow': {
+                'type': 'boolean',
+                'description': 'Whether to follow log output (like tail -f)',
+                'default': True
+            },
+            'tail': {
+                'type': 'string',
+                'description': 'Number of lines to show from the end of the logs',
+                'default': '100'
+            },
+            'since': {
+                'type': 'string',
+                'description': 'Show logs since this timestamp or relative time in seconds',
+                'default': ''
+            },
+            'until': {
+                'type': 'string',
+                'description': 'Show logs before this timestamp or relative time in seconds',
+                'default': ''
+            },
+            'timestamps': {
+                'type': 'boolean',
+                'description': 'Include timestamps in the output',
+                'default': False
+            },
+            'stream_type': {
+                'type': 'string',
+                'enum': ['stdout', 'stderr', 'all'],
+                'description': 'Which streams to include',
+                'default': 'all'
+            },
+            'include_raw': {
+                'type': 'boolean',
+                'description': 'Whether to include raw log bytes in the response',
+                'default': False
+            },
+            'timeout': {
+                'type': 'number',
+                'description': 'Timeout in seconds for the log stream',
+                'default': 60
+            }
+        },
+        'required': ['container_id']
+    },
+    output_schema={
+        'type': 'object',
+        'properties': {
+            'success': {'type': 'boolean'},
+            'result': {
+                'type': 'object',
+                'properties': {
+                    'container_id': {'type': 'string'},
+                    'timestamp': {'type': 'string', 'format': 'date-time'},
+                    'stream': {'type': 'string', 'enum': ['stdout', 'stderr']},
+                    'line': {'type': 'string'},
+                    'raw': {'type': 'string', 'format': 'byte'}
+                },
+                'required': ['container_id', 'stream', 'line']
+            },
+            'error': {'type': 'string'}
+        },
+        'required': ['success']
+    },
     examples=[
         {
-            "container_id": "my-container",
-            "follow": True,
-            "tail": 100,
-            "stream_type": "all",
-            "timeout": 60
+            'container_id': 'my-container',
+            'follow': True,
+            'tail': '100',
+            'stream_type': 'stdout',
+            'timeout': 60
         },
         {
-            "container_id": "another-container",
-            "follow": False,
-            "since": "5m",
-            "timestamps": True
+            'container_id': 'another-container',
+            'follow': False,
+            'since': '5m',
+            'timestamps': True
         }
     ]
 )
 @handle_log_errors
+@check_docker_available
 async def stream_container_logs(
-    request: ContainerLogsRequest
+    container_id: str,
+    follow: bool = True,
+    tail: str = '100',
+    since: str = '',
+    until: str = '',
+    timestamps: bool = False,
+    stream_type: str = 'all',
+    include_raw: bool = False,
+    timeout: int = 60
 ) -> AsyncGenerator[Dict[str, Any], None]:
     """
     Stream logs from a Docker container in real-time with comprehensive error handling.
@@ -362,68 +438,110 @@ async def stream_container_logs(
     - Graceful error handling and recovery
     
     Args:
-        request: ContainerLogsRequest with the following parameters:
-            - container_id: ID or name of the container to stream logs from
-            - follow: Whether to follow log output (like tail -f)
-            - tail: Number of lines to show from the end of the logs
-            - since: Show logs since this timestamp or relative time in seconds
-            - until: Show logs before this timestamp or relative time in seconds
-            - timestamps: Include timestamps in the output
-            - stream_type: Which streams to include (stdout, stderr, or all)
-            - include_raw: Whether to include raw log bytes in the response
-            - timeout: Timeout in seconds for the log stream
+        container_id: ID or name of the container to stream logs from
+        follow: Whether to follow log output (like tail -f)
+        tail: Number of lines to show from the end of the logs
+        since: Show logs since this timestamp or relative time in seconds
+        until: Show logs before this timestamp or relative time in seconds
+        timestamps: Include timestamps in the output
+        stream_type: Which streams to include (stdout, stderr, or all)
+        include_raw: Whether to include raw log bytes in the response
+        timeout: Timeout in seconds for the log stream
             
     Yields:
-        Dictionary with log entry details:
+        Dictionary with the following structure:
         {
-            'container_id': str,
-            'timestamp': datetime,
-            'stream': str,  # 'stdout' or 'stderr'
-            'line': str,    # The log line content
-            'raw': bytes    # Raw log line bytes (if include_raw=True)
+            'success': bool,  # Whether the operation was successful
+            'result': {       # Only present if success is True
+                'container_id': str,
+                'timestamp': str,     # ISO 8601 formatted timestamp
+                'stream': str,        # 'stdout' or 'stderr'
+                'line': str,          # The log line content
+                'raw': bytes          # Raw log line bytes (if include_raw=True)
+            },
+            'error': str      # Error message if success is False
         }
-        
-    Raises:
-        ToolError: If there's an error accessing the container logs
     """
+    if not docker_available:
+        yield {
+            'success': False,
+            'result': None,
+            'error': 'Docker daemon not available'
+        }
+        return
+        
     logger.info(
-        f"Starting log stream for container {request.container_id} "
-        f"(follow={request.follow}, tail={request.tail}, stream_type={request.stream_type})"
+        f"Starting log stream for container {container_id} "
+        f"(follow={follow}, tail={tail}, stream_type={stream_type})"
     )
-    container_id = request.container_id
     
     try:
+        # Convert stream_type string to LogStreamType enum
+        stream_type_enum = LogStreamType(stream_type.lower())
+        
         # Initialize Docker client
         docker_client = aiodocker.Docker()
         
         # Get container logs
         logs = await docker_client.containers.log(
             container_id,
-            stdout=request.stream_type in [LogStreamType.STDOUT, LogStreamType.ALL],
-            stderr=request.stream_type in [LogStreamType.STDERR, LogStreamType.ALL],
-            follow=request.follow,
-            tail=request.tail,
-            since=request.since,
-            until=request.until,
-            timestamps=request.timestamps
+            stdout=stream_type_enum in [LogStreamType.STDOUT, LogStreamType.ALL],
+            stderr=stream_type_enum in [LogStreamType.STDERR, LogStreamType.ALL],
+            follow=follow,
+            tail=tail,
+            since=since,
+            until=until,
+            timestamps=timestamps
         )
         
         # Process and yield log entries
-        async for log_line in logs:
-            parsed = _parse_log_line(log_line, include_timestamps=request.timestamps)
-            if parsed:
-                yield {
-                    'container_id': container_id,
-                    **parsed,
-                    'raw': log_line if request.include_raw else None
-                }
-                
+        try:
+            async for log_line in logs:
+                parsed = _parse_log_line(log_line, include_timestamps=timestamps)
+                if parsed:
+                    result = {
+                        'container_id': container_id,
+                        **parsed,
+                    }
+                    if include_raw:
+                        result['raw'] = log_line
+                        
+                    yield {
+                        'success': True,
+                        'result': result,
+                        'error': None
+                    }
+        except asyncio.CancelledError:
+            logger.info(f"Log stream for container {container_id} was cancelled")
+            raise
+        except Exception as e:
+            error_msg = f"Error processing log stream: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            yield {
+                'success': False,
+                'result': None,
+                'error': error_msg
+            }
+            
     except aiodocker.DockerError as e:
+        error_msg = f"Docker API error: {str(e)}"
         if 'No such container' in str(e):
-            raise ToolError(f'Container not found: {container_id}') from e
-        raise ToolError(f'Docker API error: {str(e)}') from e
+            error_msg = f"Container not found: {container_id}"
+        
+        logger.error(error_msg, exc_info=True)
+        yield {
+            'success': False,
+            'result': None,
+            'error': error_msg
+        }
     except Exception as e:
-        raise ToolError(f'Unexpected error: {str(e)}') from e
+        error_msg = f"Unexpected error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        yield {
+            'success': False,
+            'result': None,
+            'error': error_msg
+        }
 
 async def _stream_logs_with_timeout(
     container: docker.models.containers.Container,

@@ -1,0 +1,4 @@
+{"timestamp": "2025-09-08T19:03:30.413270+00:00", "level": "INFO", "name": "test", "message": "This is an info message", "funcName": "test_logging", "taskName": null, "key1": "value1"}
+{"timestamp": "2025-09-08T19:03:30.413384+00:00", "level": "WARNING", "name": "test", "message": "This is a warning", "funcName": "test_logging", "taskName": null, "key2": [1, 2, 3]}
+{"timestamp": "2025-09-08T19:03:30.413451+00:00", "level": "ERROR", "name": "test", "message": "An error occurred", "exception": "Traceback (most recent call last):\n  File \"D:\\Dev\\repos\\dockermcp\\test_server_logging.py\", line 65, in test_logging\n    result = 1 / 0\n             ~~^~~\nZeroDivisionError: division by zero", "funcName": "test_logging", "taskName": null, "key3": {"nested": "value"}}
+{"timestamp": "2025-09-08T19:03:30.419804+00:00", "level": "CRITICAL", "name": "test", "message": "This is a critical message", "funcName": "test_logging", "taskName": null, "key4": true}
