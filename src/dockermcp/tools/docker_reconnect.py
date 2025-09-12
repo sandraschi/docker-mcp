@@ -1,78 +1,85 @@
 """
-Docker Reconnect Tool for FastMCP 2.12
+Docker Reconnect Tool - Handles reconnection to Docker daemon.
 
-Provides functionality to attempt reconnection to the Docker daemon.
+This module provides functionality to attempt reconnection to the Docker daemon
+if the connection is lost.
 """
-
-import sys
 from typing import Dict, Any
 
-from fastmcp.tools import Tool, tool, tool, tool
-from dockermcp import retry_docker_connection, get_docker_status, docker_client
+from fastmcp.tools.tool import Tool
+from dockermcp import retry_docker_connection, docker_available
 
 @Tool(
-    name="docker_reconnect",
+    name="reconnect_docker",
     description="Attempt to reconnect to the Docker daemon",
     parameters={
         "type": "object",
-        "properties": {},
+        "properties": {
+            "max_retries": {
+                "type": "integer", 
+                "default": 3,
+                "description": "Maximum number of retry attempts"
+            },
+            "retry_delay": {
+                "type": "number", 
+                "default": 1.0,
+                "description": "Delay between retry attempts in seconds"
+            }
+        },
         "required": []
+    },
+    output_schema={
+        "type": "object",
+        "properties": {
+            "success": {"type": "boolean", "description": "Whether reconnection was successful"},
+            "message": {"type": "string", "description": "Status message"},
+            "docker_available": {"type": "boolean", "description": "Whether Docker is now available"}
+        },
+        "required": ["success", "message", "docker_available"]
     }
 )
-async def docker_reconnect() -> str:
+async def reconnect_docker(max_retries: int = 3, retry_delay: float = 1.0) -> Dict[str, Any]:
     """
-    Attempt to reconnect to the Docker daemon and return the connection status.
+    Attempt to reconnect to the Docker daemon.
+    
+    Args:
+        max_retries: Maximum number of retry attempts
+        retry_delay: Delay between retry attempts in seconds
+        
+    Returns:
+        Dict containing reconnection status
+    """
+    if docker_available:
+        return {
+            "success": True,
+            "message": "Docker is already available",
+            "docker_available": True
+        }
+    
+    success = False
+    for attempt in range(1, max_retries + 1):
+        success = retry_docker_connection()
+        if success:
+            return {
+                "success": True,
+                "message": f"Successfully reconnected to Docker daemon on attempt {attempt}",
+                "docker_available": True
+            }
+        
+        if attempt < max_retries:
+            import time
+            time.sleep(retry_delay)
+    
+    return {
+        "success": False,
+        "message": f"Failed to reconnect to Docker daemon after {max_retries} attempts",
+        "docker_available": False
+    }
+
+def register_tool():
+    """Register the Docker reconnect tool with the MCP server.
     
     Returns:
-        str: Status message indicating success or failure of reconnection
+        List of tool functions to register
     """
-    if not sys.platform.startswith('win'):
-        return (
-            "⚠️  Docker reconnection is only supported on Windows.\n"
-            "On other platforms, please restart the Docker service manually."
-        )
-    
-    result = retry_docker_connection()
-    status = get_docker_status()
-    
-    if result and docker_client:
-        try:
-            version = docker_client.version()
-            return (
-                "✅ Successfully reconnected to Docker daemon!\n\n"
-                f"Version: {version.get('Version', 'unknown')}\n"
-                f"API Version: {version.get('ApiVersion', 'unknown')}\n\n"
-                "Docker operations are now available."
-            )
-        except Exception as e:
-            return f"⚠️  Reconnected but encountered an error: {str(e)}"
-    
-    # If we get here, reconnection failed
-    error_msg = status.get('error', 'Unknown error')
-    service_status = status.get('service_status', 'unknown')
-    
-    output = [
-        "❌ Failed to reconnect to Docker daemon",
-        "",
-        "Error:",
-        f"  {error_msg}",
-        "",
-        "Troubleshooting steps:",
-        "1. Make sure Docker Desktop is running",
-        "2. Check Docker Desktop logs for errors",
-        "3. Try restarting Docker Desktop",
-        "4. If the issue persists, restart your computer"
-    ]
-    
-    if service_status == 'stopped':
-        output.extend([
-            "",
-            "💡 The Docker service is currently stopped. Try starting it first."
-        ])
-    
-    return "\n".join(output)
-
-# Register the tool
-def register_tool():
-    """Register the docker_reconnect tool with FastMCP."""
-    return [docker_reconnect]
+    return [reconnect_docker]

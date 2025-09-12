@@ -55,7 +55,28 @@ DockerMCP utilizes FastMCP 2.11.3's built-in state management system, providing 
   - Mount volumes to containers
   - Backup and restore volumes
 
-### 3.2 Advanced Features
+### 3.2 Monitoring Stack
+
+DockerMCP includes a comprehensive monitoring solution built on industry-standard tools:
+
+#### Components
+- **Prometheus**: Metrics collection and alerting (Port: 9091)
+- **Grafana**: Visualization and dashboards (Port: 3001)
+- **Loki**: Log aggregation (Port: 3101)
+- **Promtail**: Log collection and shipping
+- **cAdvisor**: Container metrics and resource monitoring (Port: 8082)
+- **Node Exporter**: Host-level metrics (Port: 9100)
+- **Redis**: Caching and metrics storage (Port: 6379)
+
+#### Key Features
+- **Unified Monitoring**: Single pane of glass for all Docker resources
+- **Pre-configured Dashboards**: Out-of-the-box dashboards for containers, hosts, and applications
+- **Log Aggregation**: Centralized logging with powerful querying capabilities
+- **Alerting**: Configurable alerts for system and application metrics
+- **Performance Metrics**: Detailed resource utilization and performance data
+- **Historical Data**: Long-term storage and analysis of metrics and logs
+
+### 3.3 Advanced Features
 
 - **Docker Watchdog**
   - Automatic monitoring of Docker daemon health

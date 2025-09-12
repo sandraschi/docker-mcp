@@ -12,6 +12,31 @@
 
 ## 🚀 Features
 
+### 📊 Monitoring Stack
+
+DockerMCP includes a comprehensive monitoring stack with the following components:
+
+- **Prometheus**: Metrics collection and alerting (Port: 9091)
+- **Grafana**: Visualization and dashboards (Port: 3001)
+- **Loki**: Log aggregation (Port: 3101)
+- **Promtail**: Log collection
+- **cAdvisor**: Container metrics (Port: 8082)
+- **Node Exporter**: Host metrics (Port: 9100)
+- **Redis**: Caching and metrics storage (Port: 6379)
+
+To start the monitoring stack:
+
+```bash
+cd monitoring
+docker-compose -f docker-compose-monitoring.yml up -d
+```
+
+Access the monitoring interfaces:
+- Grafana: http://localhost:3001 (admin/admin)
+- Prometheus: http://localhost:9091
+- Loki: http://localhost:3101
+- cAdvisor: http://localhost:8082
+
 ### 🧪 Testing
 
 DockerMCP uses a comprehensive testing strategy with the following structure:

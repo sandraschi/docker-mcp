@@ -30,7 +30,7 @@ configure_logging(
 )
 
 # Get logger for this module
-logger = logger.getChild('server')
+logger = logging.getLogger('dockermcp.server')
 
 # Redirect warnings to the logger
 warnings.showwarning = warn_with_log
@@ -48,28 +48,61 @@ logger.info("Using singleton FastMCP instance from mcp_instance.py")
 # Import all tool modules
 try:
     # Import tool modules
-    from dockermcp.tools.containers import get_container_tools
-    from dockermcp.tools.workflow import get_tools as get_workflow_tools
-    from dockermcp.tools.networks import get_tools as get_network_tools
-    from dockermcp.tools.volumes import get_tools as get_volume_tools
-    from dockermcp.tools.system import get_tools as get_system_tools
+    from dockermcp.tools.containers.list_containers import list_containers
+    from dockermcp.tools.workflows.workflow_management import (
+        create_workflow,
+        start_workflow,
+        stop_workflow,
+        get_workflow_status
+    )
+    from dockermcp.tools.networks.network_management import (
+        list_networks,
+        create_network,
+        remove_network,
+        connect_container_to_network,
+        disconnect_container_from_network
+    )
+    from dockermcp.tools.volumes.volume_management import (
+        list_volumes,
+        create_volume,
+        remove_volume,
+        prune_volumes
+    )
+    from dockermcp.tools.system.system_management import (
+        get_system_info,
+        get_disk_usage,
+        prune_system
+    )
     
-    # Register all tools
-    tool_modules: List[Tuple[str, List[Callable]]] = [
-        ('Container', get_container_tools()),
-        ('Workflow', get_workflow_tools()),
-        ('Network', get_network_tools()),
-        ('Volume', get_volume_tools()),
-        ('System', get_system_tools())
-    ]
+    # Register all tools with FastMCP
+    # Container tools
+    mcp.register_tool(list_containers)
     
-    # Register tools and log registration
-    for module_name, tools in tool_modules:
-        logger.info(f"Registering {len(tools)} {module_name} tools")
-        for tool in tools:
-            mcp.tool(tool)
+    # Workflow tools
+    mcp.register_tool(create_workflow)
+    mcp.register_tool(start_workflow)
+    mcp.register_tool(stop_workflow)
+    mcp.register_tool(get_workflow_status)
     
-    logger.info("All tools registered successfully")
+    # Network tools
+    mcp.register_tool(list_networks)
+    mcp.register_tool(create_network)
+    mcp.register_tool(remove_network)
+    mcp.register_tool(connect_container_to_network)
+    mcp.register_tool(disconnect_container_from_network)
+    
+    # Volume tools
+    mcp.register_tool(list_volumes)
+    mcp.register_tool(create_volume)
+    mcp.register_tool(remove_volume)
+    mcp.register_tool(prune_volumes)
+    
+    # System tools
+    mcp.register_tool(get_system_info)
+    mcp.register_tool(get_disk_usage)
+    mcp.register_tool(prune_system)
+    
+    logger.info("Successfully registered all tools with FastMCP")
     
 except ImportError as e:
     logger.error(f"Failed to import tool modules: {e}")

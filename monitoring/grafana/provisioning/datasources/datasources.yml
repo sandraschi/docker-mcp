@@ -1,0 +1,46 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: true
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: "POST"
+      queryTimeout: "60s"
+
+  # Loki
+  - name: Loki
+    type: loki
+    access: proxy
+    url: http://loki:3100
+    jsonData:
+      maxLines: 1000
+
+  # Node Exporter
+  - name: Node Exporter
+    type: prometheus
+    access: proxy
+    url: http://node-exporter:9100
+    jsonData:
+      timeInterval: "15s"
+
+  # cAdvisor
+  - name: cAdvisor
+    type: prometheus
+    access: proxy
+    url: http://cadvisor:8080
+    jsonData:
+      timeInterval: "15s"
+
+  # Redis
+  - name: Redis
+    type: prometheus
+    access: proxy
+    url: http://redis-exporter:9121
+    jsonData:
+      timeInterval: "15s"

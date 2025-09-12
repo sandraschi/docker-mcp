@@ -1,16 +1,14 @@
 """
-Docker MCP Tools - FastMCP 2.12.0 compatible tools
+Docker MCP Tools - FastMCP 2.12.0+ compatible tools
 
-Docker MCP Tools Package
-
-This package contains all the FastMCP 2.12.0 compatible tools for Docker operations.
+This package contains all the FastMCP 2.12.0+ compatible tools for Docker operations.
 """
 import importlib
 import logging
 import pkgutil
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Type, TypeVar, Callable
+from typing import List, Dict, Any, Optional, Type, TypeVar, Callable, Set
 
 # Add the src directory to the Python path
 src_dir = str(Path(__file__).parent.parent.parent)
@@ -19,48 +17,209 @@ if src_dir not in sys.path:
 
 # Configure logging first to ensure all modules use the same config
 from dockermcp.logging_config import configure_logging, logger
-configure_logging(level="WARNING")
+configure_logging(level="INFO")
 
 # Silence noisy loggers
 for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'asyncio']:
-    logging.getLogger(logger_name).setLevel(logging.CRITICAL)
+    logging.getLogger(logger_name).setLevel(logging.WARNING)
 
-# Import the singleton instance after logging is configured
-from dockermcp.mcp_instance import get_mcp
-mcp = get_mcp()
-
-# Ensure the MCP instance has minimal logging
-mcp.logger.setLevel("CRITICAL")
-
-def discover_and_register_tools():
+def discover_tools() -> Set[str]:
     """
-    Automatically discover and register all tools from submodules.
+    Automatically discover all tools from submodules.
     
-    FastMCP 2.12+ uses decorator pattern - tools are automatically
-    registered when modules are imported via the @Tool decorator.
+    Returns:
+        Set of tool names that were discovered and registered
     """
     tools_dir = Path(__file__).parent
+    discovered_tools = set()
     
-    # Skip __pycache__, __init__.py, and models
+    # Skip __pycache__, __init__.py, and files starting with _
     modules = [
         name for _, name, is_pkg in pkgutil.iter_modules([str(tools_dir)])
-        if not name.startswith('_') and not name == 'models' and not name.startswith('test_')
+        if not name.startswith('_') and name != 'models' and not name.startswith('test_')
     ]
     
     for name in modules:
         try:
             # Import the module to register the tools
-            importlib.import_module(f'.{name}', package=__name__)
+            module = importlib.import_module(f'.{name}', package=__name__)
             logger.debug(f'Imported tools module: {name}')
+            
+            # Get all tools from the module
+            for attr_name in dir(module):
+                attr = getattr(module, attr_name)
+                if hasattr(attr, '_tool_meta'):
+                    discovered_tools.add(attr._tool_meta['name'])
+                    
         except ImportError as e:
             logger.warning(f'Failed to import tools module {name}: {e}')
         except Exception as e:
             logger.error(f'Error importing tools module {name}: {e}', exc_info=True)
     
-    logger.info(f'Discovered {len(modules)} tools modules')
+    logger.info(f'Discovered {len(discovered_tools)} tools')
+    return discovered_tools
 
-# Register all tools when this module is imported
-discover_and_register_tools()
+# Discover and register tools when the package is imported
+discovered_tools = discover_tools()
 
-# Re-export the mcp instance for use in the application
-__all__ = ['mcp']
+# Re-export common types and functions for tool development
+from .containers.list_containers import list_containers
+from .containers.container_lifecycle import manage_container_lifecycle, ContainerAction
+from .containers.container_logs import get_container_logs as container_logs
+from .containers.container_stats import get_container_stats as container_stats
+from .containers.container_exec import execute_in_container as exec_command
+
+# Create convenience functions for common container operations
+async def start_container(container_id: str, **kwargs):
+    """Start a container."""
+    return await manage_container_lifecycle(container_id, ContainerAction.START, **kwargs)
+
+async def stop_container(container_id: str, force: bool = False, timeout: int = 10, **kwargs):
+    """Stop a container."""
+    return await manage_container_lifecycle(container_id, ContainerAction.STOP, force=force, timeout=timeout, **kwargs)
+
+async def restart_container(container_id: str, timeout: int = 10, **kwargs):
+    """Restart a container."""
+    return await manage_container_lifecycle(container_id, ContainerAction.RESTART, timeout=timeout, **kwargs)
+
+async def remove_container(container_id: str, force: bool = False, remove_volumes: bool = False, **kwargs):
+    """Remove a container."""
+    return await manage_container_lifecycle(container_id, ContainerAction.REMOVE, force=force, remove_volumes=remove_volumes, **kwargs)
+
+# Import available image management functions
+from .images.image_management import list_images, tag_image, search_images
+
+# Define stubs for missing functions to avoid import errors
+def pull_image(*args, **kwargs):
+    raise NotImplementedError("pull_image has not been implemented yet")
+
+def remove_image(*args, **kwargs):
+    raise NotImplementedError("remove_image has not been implemented yet")
+
+def build_image(*args, **kwargs):
+    raise NotImplementedError("build_image has not been implemented yet")
+
+def push_image(*args, **kwargs):
+    raise NotImplementedError("push_image has not been implemented yet")
+
+# Import network management functions
+from .networks.network_management import (
+    list_networks,
+    inspect_network,
+    create_network,
+    remove_network,
+    connect_container_to_network as connect_container,
+    disconnect_container_from_network as disconnect_container
+)
+
+# Alias for backward compatibility
+get_network = inspect_network
+
+# Import volume management functions
+from .volumes.volume_management import (
+    list_volumes,
+    create_volume,
+    remove_volume,
+    prune_volumes
+)
+
+# Import system management functions
+from .system.system_management import (
+    get_system_info as system_info,
+    get_disk_usage as disk_usage,
+    prune_system
+)
+
+# Import workflow management functions
+from .workflows.workflow_management import (
+    create_workflow,
+    start_workflow,
+    stop_workflow,
+    get_workflow_status
+)
+
+# GPU tools are conditionally imported to avoid import errors on systems without NVIDIA GPUs
+gpu_tools = []
+try:
+    from .gpu import (
+        list_gpus,
+        get_gpu_info,
+        monitor_gpu_usage,
+        create_gpu_container,
+        get_container_gpu_info
+    )
+    gpu_tools = [
+        list_gpus,
+        get_gpu_info,
+        monitor_gpu_usage,
+        create_gpu_container,
+        get_container_gpu_info
+    ]
+except ImportError as e:
+    import logging
+    logging.getLogger(__name__).warning(
+        f"GPU tools not available: {str(e)}. "
+        "Install GPU dependencies with: pip install -r requirements-gpu.txt"
+    )
+except Exception as e:
+    import logging
+    logging.getLogger(__name__).warning(
+        f"Failed to initialize GPU tools: {str(e)}"
+    )
+
+__all__ = [
+    # Container tools
+    'list_containers',
+    'get_container',
+    'create_container',
+    'start_container',
+    'stop_container',
+    'restart_container',
+    'remove_container',
+    'container_logs',
+    'container_stats',
+    'exec_command',
+    
+    # Image tools
+    'list_images',
+    'pull_image',
+    'remove_image',
+    'build_image',
+    'tag_image',
+    'push_image',
+    'search_images',
+    
+    # Network tools
+    'list_networks',
+    'get_network',
+    'create_network',
+    'remove_network',
+    'connect_container',
+    'disconnect_container',
+    
+    # Volume tools
+    'list_volumes',
+    'create_volume',
+    'remove_volume',
+    'prune_volumes',
+    
+    # System tools
+    'system_info',
+    'disk_usage',
+    'prune_system',
+    
+    # Workflow tools
+    'create_workflow',
+    'start_workflow',
+    'stop_workflow',
+    'get_workflow_status',
+    
+    # GPU tools
+    'list_gpus',
+    'get_gpu_info',
+    'monitor_gpu_usage',
+    'create_gpu_container',
+    'get_container_gpu_info',
+    
+    'discovered_tools'
+]

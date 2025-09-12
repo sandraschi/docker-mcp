@@ -2,48 +2,20 @@
 Container listing functionality for Docker MCP.
 
 This module provides tools for listing Docker containers with various filtering options.
-It is designed to work with FastMCP 2.12+ and follows the project's coding standards.
+It follows FastMCP 2.12+ standards for tool registration.
 """
 from __future__ import annotations
 
 import logging
 from typing import Any, Dict, List, Optional
 
-# Docker SDK
 import docker
 from docker.errors import DockerException
+from fastmcp.tools.tool import Tool
 
-# FastMCP imports
-from fastmcp.tools import Tool, tool
+from dockermcp.logging_config import logger
 
-# Import custom exceptions
-from .container_models import ContainerError
-
-# Local imports
-from dockermcp.logging_config import logger, configure_logging
-
-# Configure logging
-configure_logging()
-
-class ListContainersRequest:
-    """Request model for listing containers."""
-    
-    def __init__(
-        self,
-        all_states: bool = True,
-        filters: Optional[Dict[str, str]] = None
-    ) -> None:
-        """
-        Initialize ListContainersRequest.
-        
-        Args:
-            all_states: If True, include stopped containers
-            filters: Dictionary of filter key-value pairs
-        """
-        self.all_states = all_states
-        self.filters = filters or {}
-
-@tool(
+@Tool(
     name="list_containers",
     description="List Docker containers with optional filtering",
     parameters={
@@ -63,7 +35,7 @@ class ListContainersRequest:
         },
         'required': []
     },
-    response_model={
+    output_schema={
         'type': 'object',
         'properties': {
             'containers': {
@@ -76,6 +48,7 @@ class ListContainersRequest:
                         'status': {'type': 'string'},
                         'image': {'type': 'string'},
                         'created': {'type': 'string', 'format': 'date-time'},
+                        'state': {'type': 'string'},
                         'ports': {
                             'type': 'array',
                             'items': {
@@ -86,44 +59,14 @@ class ListContainersRequest:
                                     'type': {'type': 'string'}
                                 }
                             }
-                        },
-                        'labels': {
-                            'type': 'object',
-                            'additionalProperties': {'type': 'string'}
-                        },
-                        'state': {'type': 'string'},
-                        'status': {'type': 'string'}
+                        }
                     }
                 }
-            }
+            },
+            'count': {'type': 'integer'}
         },
-        'required': ['containers']
-    },
-    examples=[
-        {
-            'summary': 'List all containers',
-            'value': {
-                'all_states': True,
-                'filters': {}
-            }
-        },
-        {
-            'summary': 'List only running containers',
-            'value': {
-                'all_states': False,
-                'filters': {}
-            }
-        },
-        {
-            'summary': 'Filter containers by label',
-            'value': {
-                'all_states': True,
-                'filters': {
-                    'label': 'com.example.app=test'
-                }
-            }
-        }
-    ]
+        'required': ['containers', 'count']
+    }
 )
 async def list_containers(
     all_states: bool = True,
@@ -137,105 +80,68 @@ async def list_containers(
         filters: Dictionary of filter key-value pairs
         
     Returns:
-        Dictionary containing:
-        - success: Boolean indicating if the operation was successful
-        - containers: List of container information dictionaries
-        - error: Error message if success is False
+        Dictionary containing container information and status
         
     Example:
-        ```python
-        # List all containers (including stopped ones)
-        result = await list_containers(all_states=True)
-        
-        # List only running containers
-        result = await list_containers(all_states=False)
-        
-        # Filter containers by label
-        result = await list_containers(
-            filters={"label": "environment=production"}
-        )
-        ```
+        >>> list_containers(all_states=True, filters={"status": "running"})
+        {
+            "status": "success",
+            "containers": [
+                {
+                    "id": "abc123",
+                    "name": "my-container",
+                    "status": "running",
+                    "image": "alpine:latest",
+                    "created": "2023-01-01T00:00:00Z"
+                }
+            ]
+        }
     """
     try:
-        request = ListContainersRequest(
-            all_states=all_states,
-            filters=filters or {}
-        )
-        
-        # Get container list using the implementation function
-        containers = await _list_containers_impl(request)
-        
-        return {
-            'success': True,
-            'containers': containers
-        }
-        
-    except Exception as e:
-        error_msg = f"Failed to list containers: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            'success': False,
-            'containers': [],
-            'error': error_msg
-        }
-
-async def _list_containers_impl(request: ListContainersRequest) -> List[Dict[str, Any]]:
-    """
-    Implementation of container listing with error handling.
-    
-    Args:
-        request: ListContainersRequest with filtering options
-        
-    Returns:
-        List of container information dictionaries
-    """
-    try:
+        # Convert empty dict to None for Docker SDK
+        filters = filters or {}
+        if not filters:
+            filters = None
+            
         client = docker.from_env()
         containers = client.containers.list(
-            all=request.all_states,
-            filters=request.filters
+            all=all_states,
+            filters=filters
         )
         
-        result = []
-        for container in containers:
-            try:
-                container.reload()
-                attrs = container.attrs
-                
-                # Extract basic container info
-                container_info = {
-                    'id': container.id,
-                    'name': container.name.lstrip('/'),
-                    'image': container.image.tags[0] if container.image.tags else container.image.id,
-                    'status': container.status,
-                    'state': attrs.get('State', {}).get('Status', 'unknown'),
-                    'created': attrs.get('Created'),
-                    'ports': attrs.get('NetworkSettings', {}).get('Ports', {}),
-                    'networks': list(attrs.get('NetworkSettings', {}).get('Networks', {}).keys())
+        result = {
+            "status": "success",
+            "containers": [
+                {
+                    "id": container.id,
+                    "name": container.name,
+                    "status": container.status,
+                    "image": container.image.tags[0] if container.image.tags else str(container.image.id),
+                    "created": container.attrs["Created"],
+                    "ports": container.ports,
+                    "labels": container.labels,
+                    "state": container.attrs["State"]
                 }
-                
-                result.append(container_info)
-                
-            except Exception as e:
-                logger.warning(f"Error processing container {container.id}: {str(e)}")
-                continue
-                
+                for container in containers
+            ]
+        }
+        
+        if not result["containers"]:
+            result["message"] = "No containers found matching the criteria"
+            
         return result
         
-    except DockerException as e:
-        error_msg = f"Docker error listing containers: {str(e)}"
-        logger.error(error_msg)
-        raise ContainerError(error_msg)
+    except docker.errors.APIError as e:
+        error_msg = f"Docker API error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"status": "error", "message": error_msg}
+        
+    except docker.errors.DockerException as e:
+        error_msg = f"Docker error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return {"status": "error", "message": "Docker daemon not available"}
+        
     except Exception as e:
         error_msg = f"Unexpected error listing containers: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ContainerError(error_msg)
-
-def get_tools():
-    """
-    Get all tools defined in this module for registration with FastMCP 2.12+.
-    
-    Returns:
-        List of tool functions to register with FastMCP
-    """
-    return [list_containers]
+        return {"status": "error", "message": error_msg}
