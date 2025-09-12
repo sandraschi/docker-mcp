@@ -8,27 +8,42 @@ This module provides comprehensive tools for managing Docker networks including:
 - Listing and filtering networks
 - Managing IPAM (IP Address Management) configurations
 """
+"""Docker Network Management for FastMCP 2.12+.
+
+This module provides comprehensive tools for managing Docker networks including:
+- Creating and removing networks
+- Connecting and disconnecting containers
+- Inspecting network details
+- Listing and filtering networks
+- Managing IPAM (IP Address Management) configurations
+"""
+
+"""Docker Network Management for FastMCP 2.12+.
+
+This module provides comprehensive tools for managing Docker networks including:
+- Creating and removing networks
+- Connecting and disconnecting containers
+- Inspecting network details
+- Listing and filtering networks
+- Managing IPAM (IP Address Management) configurations
+"""
+
 from __future__ import annotations
 
 import ipaddress
-import json
-import logging
 from datetime import datetime
 from enum import Enum
 from ipaddress import IPv4Network, IPv6Network
-from typing import Any, Dict, List, Optional, Union, Literal, TypeVar, Generic, Type, cast
+from typing import Any, Dict, List, Optional, Type, TypeVar, Union
 
 import docker
-from docker.errors import (
-    DockerException, APIError, NotFound, 
-    InvalidArgument, ContainerError
-)
-from fastmcp.tools import Tool
+from docker.errors import DockerException, InvalidArgument
 from fastmcp.exceptions import ToolException
-from pydantic import BaseModel, Field, validator, HttpUrl, IPvAnyAddress, IPvAnyNetwork, ConfigDict
+from fastmcp.tools import Tool
+from pydantic import BaseModel, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork
 
-from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
 
 # Type variables for generic response models
 T = TypeVar('T')
@@ -42,17 +57,17 @@ class BaseResponse(BaseModel, Generic[T]):
 
     @classmethod
     def success(
-        cls: Type['BaseResponse[T]'], 
-        data: T = None, 
+        cls: Type['BaseResponse[T]'],
+        data: T = None,
         message: str = "Operation completed successfully"
     ) -> 'BaseResponse[T]':
         """Create a success response."""
         return cls(status='success', message=message, data=data)
 
     @classmethod
-    def error(
-        cls: Type['BaseResponse[T]'], 
-        error: str, 
+    def error_response(
+        cls: Type['BaseResponse[T]'],
+        error: str,
         message: str = None
     ) -> 'BaseResponse[T]':
         """Create an error response."""
@@ -544,25 +559,25 @@ class NetworkInspectResponse(BaseResponse[NetworkInspectResult]):
 
 class NetworkListRequest(BaseModel):
     """Request model for listing Docker networks."""
-    names: List[str] = Field(
-        default_factory=list,
-        description="List of network names to filter by"
-    )
-    ids: List[str] = Field(
-        default_factory=list,
-        description="List of network IDs to filter by"
-    )
-    driver: str = Field(
+    names: Optional[List[str]] = Field(
         default=None,
-        description="Driver to filter by (e.g., 'bridge', 'host')"
+        description="Filter networks by name"
+    )
+    ids: Optional[List[str]] = Field(
+        default=None,
+        description="Filter networks by ID"
+    )
+    driver: Optional[str] = Field(
+        default=None,
+        description="Filter by network driver"
     )
     network_type: str = Field(
         default="all",
-        description="Type of networks to list (all, builtin, custom)"
+        description="Filter by network type: 'all', 'custom', or 'builtin'"
     )
-    labels: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Labels to filter by"
+    labels: Optional[Dict[str, str]] = Field(
+        default=None,
+        description="Filter networks by labels"
     )
 
     model_config = ConfigDict(
@@ -1035,7 +1050,10 @@ async def disconnect_container_from_network(
         logger.error(error_msg, exc_info=True)
         return NetworkDisconnectResponse.error(
             error=error_msg,
-            message="Failed to disconnect container from network due to an unexpected error",
+            message=(
+                "Failed to disconnect container from network due to an unexpected "
+                "error"
+            ),
             container_id=params.container,
             network_id=params.network
         )
@@ -1047,8 +1065,7 @@ async def disconnect_container_from_network(
 async def inspect_network(
     params: NetworkInspectRequest
 ) -> NetworkInspectResponse:
-    """
-    Inspect a Docker network.
+    """Inspect a Docker network.
     
     This function retrieves detailed information about a specific Docker network.
     
