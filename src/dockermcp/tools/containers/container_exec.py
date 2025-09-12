@@ -11,12 +11,12 @@ import asyncio
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, AsyncGenerator
+from typing import Any, Optional, Union, AsyncGenerator, Annotated
 
 import docker
 from docker.errors import DockerException, APIError, NotFound, ContainerError
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, ConfigDict
+from dockermcp.mcp_instance import mcp
+from pydantic import Field, field_validator
 
 from dockermcp.logging_config import logger
 
@@ -31,93 +31,24 @@ class ExecUser(str, Enum):
     ROOT = "root"
     CONTAINER_DEFAULT = ""
 
-@Tool(
+@mcp.tool(
     name="execute_in_container",
-    description="Execute a command in a running Docker container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'command': {
-                'type': ['string', 'array'],
-                'items': {'type': 'string'},
-                'description': 'Command to execute (string or array of arguments)'
-            },
-            'user': {
-                'type': 'string',
-                'default': '',
-                'description': 'User to run the command as (empty for container default, "root" for root)'
-            },
-            'workdir': {
-                'type': 'string',
-                'default': None,
-                'description': 'Working directory inside the container'
-            },
-            'environment': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Environment variables to set for the command'
-            },
-            'privileged': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Run the command with extended privileges (use with caution)'
-            },
-            'tty': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Allocate a pseudo-TTY (required for interactive commands)'
-            },
-            'stream': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Stream command output in real-time'
-            },
-            'stream_type': {
-                'type': 'string',
-                'enum': [e.value for e in StreamType],
-                'default': 'both',
-                'description': 'Which streams to capture (stdout, stderr, or both)'
-            },
-            'detach': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Run command in background (returns immediately)'
-            },
-            'stdin': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Open stdin for the command (required for interactive input)'
-            },
-            'timeout': {
-                'type': 'integer',
-                'minimum': 1,
-                'maximum': 3600,
-                'default': 60,
-                'description': 'Timeout in seconds for command execution (1-3600)'
-            }
-        },
-        'required': ['container_id', 'command']
-    }
+    description="Execute a command in a running Docker container"
 )
 async def execute_in_container(
-    container_id: str,
-    command: Union[str, List[str]],
-    user: str = '',
-    workdir: Optional[str] = None,
-    environment: Dict[str, str] = {},
-    privileged: bool = False,
-    tty: bool = False,
-    stream: bool = False,
-    stream_type: str = 'both',
-    detach: bool = False,
-    stdin: bool = False,
-    timeout: int = 60
-) -> Dict[str, Any]:
+    container_id: Annotated[str, Field(description="ID or name of the container")],
+    command: Annotated[Union[str, list[str]], Field(description="Command to execute (string or list of arguments)")],
+    user: Annotated[str, Field(description="User to run the command as (empty for container default, 'root' for root)", default="")],
+    workdir: Annotated[Optional[str], Field(description="Working directory inside the container", default=None)],
+    environment: Annotated[dict[str, str], Field(description="Environment variables for the command", default={})],
+    privileged: Annotated[bool, Field(description="Run with extended privileges (use with caution)", default=False)],
+    tty: Annotated[bool, Field(description="Allocate a pseudo-TTY (required for interactive commands)", default=False)],
+    stream: Annotated[bool, Field(description="Stream command output in real-time", default=False)],
+    stream_type: Annotated[str, Field(description="Which streams to capture (stdout, stderr, or both)", default="both")],
+    detach: Annotated[bool, Field(description="Run command in background (returns immediately)", default=False)],
+    stdin: Annotated[bool, Field(description="Open stdin for the command (required for interactive input)", default=False)],
+    timeout: Annotated[int, Field(description="Timeout in seconds for command execution (1-3600)", default=60, ge=1, le=3600)]
+) -> dict[str, Any]:
     """
     Execute a command in a running Docker container.
     
@@ -275,7 +206,7 @@ async def _stream_exec_output(
     docker_client: docker.DockerClient,
     exec_id: str,
     timeout: int
-) -> AsyncGenerator[Dict[str, Any], None]:
+) -> AsyncGenerator[dict[str, Any], None]:
     """
     Stream command output from a Docker exec instance.
     

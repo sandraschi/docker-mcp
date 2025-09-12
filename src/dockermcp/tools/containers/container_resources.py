@@ -7,17 +7,33 @@ for tool registration and error handling.
 """
 from __future__ import annotations
 
+import logging
 import math
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Annotated
 
 import docker
-from docker.errors import DockerException, APIError, NotFound, ContainerError
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, confloat, conint
+from docker.errors import APIError, ContainerError, DockerException, NotFound
+from fastmcp.tools import Tool, get_tools_metadata
+from fastmcp.exceptions import ToolException
+from fastmcp import FastMCP
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    confloat,
+    conint,
+    field_validator,
+    model_validator,
+)
 
 from dockermcp.logging_config import logger
 
+# Initialize FastMCP instance
+mcp = FastMCP("Container Resource Tools")
+
+# Enums for resource management
 class CpuPriority(str, Enum):
     """CPU priority levels for container CPU shares."""
     LOW = "low"
@@ -32,972 +48,646 @@ class MemoryUnit(str, Enum):
     MEGABYTES = "m"
     GIGABYTES = "g"
 
+# Request/Response Models
 class IoDeviceWeight(BaseModel):
     """I/O weight configuration for a device."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "path": "/dev/sda",
+                "weight": 200
+            }
+        }
+    )
     path: str = Field(..., description="Path to the device")
     weight: conint(ge=10, le=1000) = Field(
         default=100,
-        description="I/O weight (10-1000, default: 100)"
+        description="I/O weight (10-1000, default: 100)",
+        example=200
     )
 
-class UpdateResourceResult(BaseModel):
+class ResourceUpdateResult(BaseModel):
     """Result of a resource update operation."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "a1b2c3d4e5f6",
+                "resource_type": "memory_limit",
+                "previous_value": 536870912,
+                "new_value": 1073741824,
+                "warnings": []
+            }
+        }
+    )
     container_id: str = Field(..., description="ID of the container")
     resource_type: str = Field(..., description="Type of resource that was updated")
     previous_value: Any = Field(None, description="Previous resource value")
     new_value: Any = Field(..., description="New resource value")
     warnings: List[str] = Field(
         default_factory=list,
-        description="Any warnings that occurred during the update"
+        description="List of warning messages, if any"
     )
 
-@Tool(
-    name="get_container_resources",
-    description="Get resource limits and usage for a container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'include_usage': {
-                'type': 'boolean',
-                'default': True,
-                'description': 'Include current resource usage statistics'
+class ContainerResourcesParams(BaseModel):
+    """Parameters for managing container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "my-container",
+                "cpu_priority": "high",
+                "memory_limit": "1g",
+                "memory_reservation": "512m",
+                "blkio_weight": 500,
+                "device_weights": [{"path": "/dev/sda", "weight": 200}],
+                "pids_limit": 1024
             }
-        },
-        'required': ['container_id']
-    }
-)
-async def get_container_resources(
-    container_id: str,
-    include_usage: bool = True
-) -> Dict[str, Any]:
-    """
-    Get resource limits and usage for a container.
+        }
+    )
     
-    This function retrieves the current resource limits and, optionally,
-    the current resource usage statistics for a container.
-    
-    Args:
-        container_id: ID or name of the container
-        include_usage: Include current resource usage statistics
-        
-    Returns:
-        Dictionary with resource limits and usage information
-        
-    Example:
-        >>> await get_container_resources("my-container")
-        {
-            "status": "success",
-            "container_id": "a1b2c3d4e5f6",
-            "resources": {
-                "cpu": {
-                    "shares": 1024,
-                    "quota": 100000,
-                    "period": 100000,
-                    "cpus": "0-3",
-                    "mems": "0-1",
-                    "realtime_period": 1000000,
-                    "realtime_runtime": 950000
-                },
-                "memory": {
-                    "limit": 1073741824,
-                    "reservation": 536870912,
-                    "swappiness": 60,
-                    "oom_kill_disable": False,
-                    "kernel": 0,
-                    "kernel_tcp": 0,
-                    "swappiness": 60,
-                    "use_hierarchy": True
-                },
-                "blkio": {
-                    "weight": 300,
-                    "weight_device": [
-                        {"path": "/dev/sda", "weight": 200}
-                    ],
-                    "read_bps": 10485760,
-                    "write_bps": 10485760,
-                    "read_iops": 1000,
-                    "write_iops": 1000
-                },
-                "pids_limit": 1024,
-                "ulimits": [
-                    {"name": "nofile", "soft": 1024, "hard": 2048}
-                ]
-            },
-            "usage": {
-                "cpu_usage": {
-                    "total_usage": 1000000000,
-                    "percpu_usage": [500000000, 500000000],
-                    "usage_in_kernelmode": 100000000,
-                    "usage_in_usermode": 900000000,
-                    "system_cpu_usage": 5000000000,
-                    "online_cpus": 2,
-                    "throttling_data": {
-                        "periods": 100,
-                        "throttled_periods": 0,
-                        "throttled_time": 0
-                    }
-                },
-                "memory_usage": {
-                    "usage": 536870912,
-                    "max_usage": 805306368,
-                    "stats": {
-                        "cache": 100000000,
-                        "rss": 400000000,
-                        "rss_huge": 0,
-                        "mapped_file": 0,
-                        "pgpgin": 1000,
-                        "pgpgout": 900,
-                        "pgfault": 100,
-                        "pgmajfault": 1,
-                        "inactive_anon": 0,
-                        "active_anon": 400000000,
-                        "inactive_file": 100000000,
-                        "active_file": 0,
-                        "unevictable": 0,
-                        "hierarchical_memory_limit": 1073741824,
-                        "hierarchical_memsw_limit": 2147483648,
-                        "total_cache": 100000000,
-                        "total_rss": 400000000,
-                        "total_rss_huge": 0,
-                        "total_mapped_file": 0,
-                        "total_pgpgin": 1000,
-                        "total_pgpgout": 900,
-                        "total_pgfault": 100,
-                        "total_pgmajfault": 1,
-                        "total_inactive_anon": 0,
-                        "total_active_anon": 400000000,
-                        "total_inactive_file": 100000000,
-                        "total_active_file": 0,
-                        "total_unevictable": 0
-                    },
-                    "limit": 1073741824,
-                    "failcnt": 0
-                },
-                "blkio_usage": {
-                    "io_service_bytes_recursive": [
-                        {"major": 8, "minor": 0, "op": "read", "value": 1000000},
-                        {"major": 8, "minor": 0, "op": "write", "value": 500000}
-                    ],
-                    "io_serviced_recursive": [
-                        {"major": 8, "minor": 0, "op": "read", "value": 100},
-                        {"major": 8, "minor": 0, "op": "write", "value": 50}
-                    ],
-                    "io_queue_recursive": [],
-                    "io_service_time_recursive": [],
-                    "io_wait_time_recursive": [],
-                    "io_merged_recursive": [],
-                    "io_time_recursive": [],
-                    "sectors_recursive": []
-                },
-                "pids_stats": {
-                    "current": 5,
-                    "limit": 1024
-                }
-            }
-        }
-    """
-    try:
-        # Initialize Docker client
-        client = docker.from_env()
-        
-        try:
-            container = client.containers.get(container_id)
-        except NotFound:
-            return {
-                "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
-            }
-        
-        # Get container info
-        container.reload()
-        host_config = container.attrs['HostConfig']
-        
-        # Prepare response
-        result = {
-            "status": "success",
-            "container_id": container.id,
-            "resources": {}
-        }
-        
-        # CPU resources
-        result["resources"]["cpu"] = {
-            "shares": host_config.get('CpuShares'),
-            "quota": host_config.get('CpuQuota'),
-            "period": host_config.get('CpuPeriod'),
-            "cpus": host_config.get('CpusetCpus'),
-            "mems": host_config.get('CpusetMems'),
-            "realtime_period": host_config.get('CpuRealtimePeriod'),
-            "realtime_runtime": host_config.get('CpuRealtimeRuntime')
-        }
-        
-        # Memory resources
-        result["resources"]["memory"] = {
-            "limit": host_config.get('Memory'),
-            "reservation": host_config.get('MemoryReservation'),
-            "swappiness": host_config.get('MemorySwappiness'),
-            "oom_kill_disable": host_config.get('OomKillDisable', False),
-            "kernel": host_config.get('KernelMemory'),
-            "kernel_tcp": host_config.get('KernelMemoryTCP'),
-            "use_hierarchy": host_config.get('MemoryUseHierarchy')
-        }
-        
-        # Block I/O resources
-        result["resources"]["blkio"] = {
-            "weight": host_config.get('BlkioWeight'),
-            "weight_device": host_config.get('BlkioWeightDevice'),
-            "device_read_bps": host_config.get('BlkioDeviceReadBps'),
-            "device_write_bps": host_config.get('BlkioDeviceWriteBps'),
-            "device_read_iops": host_config.get('BlkioDeviceReadIOps'),
-            "device_write_iops": host_config.get('BlkioDeviceWriteIOps'),
-        }
-        
-        # PID limit
-        result["resources"]["pids_limit"] = host_config.get('PidsLimit')
-        
-        # Ulimits
-        result["resources"]["ulimits"] = [
-            {"name": ulimit["Name"], "soft": ulimit["Soft"], "hard": ulimit["Hard"]}
-            for ulimit in (host_config.get('Ulimits') or [])
-        ]
-        
-        # Get current resource usage if requested
-        if include_usage:
+    container_id: str = Field(..., description="ID or name of the container")
+    cpu_priority: Optional[CpuPriority] = Field(
+        None,
+        description="CPU priority level (overrides cpu_shares if set)",
+        example="high"
+    )
+    cpu_shares: Optional[conint(ge=2, le=262144)] = Field(
+        None,
+        description="CPU shares (relative weight)",
+        example=512
+    )
+    cpu_quota: Optional[conint(ge=1000)] = Field(
+        None,
+        description="Microseconds of CPU time the container gets per cpu_period",
+        example=50000
+    )
+    cpu_period: conint(ge=1000, le=1000000) = Field(
+        100000,
+        description="The length of a CPU period in microseconds",
+        example=100000
+    )
+    cpus: Optional[str] = Field(
+        None,
+        description="CPUs in which to allow execution (0-3, 0,1)",
+        example="0-2"
+    )
+    memory_limit: Optional[str] = Field(
+        None,
+        description="Memory limit (e.g., 512m, 2g)",
+        example="1g"
+    )
+    memory_reservation: Optional[str] = Field(
+        None,
+        description="Memory soft limit (e.g., 512m, 2g)",
+        example="512m"
+    )
+    memory_swappiness: Optional[conint(ge=0, le=100)] = Field(
+        None,
+        description="Tune container memory swappiness (0-100)",
+        example=60
+    )
+    blkio_weight: Optional[conint(ge=10, le=1000)] = Field(
+        None,
+        description="Block IO weight (relative weight), between 10 and 1000",
+        example=500
+    )
+    device_weights: List[IoDeviceWeight] = Field(
+        default_factory=list,
+        description="List of per-device block IO weights"
+    )
+    device_read_bps: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Limit read rate (bytes per second) from a device"
+    )
+    device_write_bps: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="Limit write rate (bytes per second) to a device"
+    )
+    device_read_iops: List[Dict[str, Union[str, int]]] = Field(
+        default_factory=list,
+        description="Limit read rate (IO per second) from a device"
+    )
+    device_write_iops: List[Dict[str, Union[str, int]]] = Field(
+        default_factory=list,
+        description="Limit write rate (IO per second) to a device"
+    )
+    pids_limit: Optional[int] = Field(
+        None,
+        description="Limit the number of processes (set -1 for unlimited)",
+        example=1024
+    )
+    restart_policy: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Restart policy to apply when a container exits"
+    )
+
+    @field_validator('memory_limit', 'memory_reservation', mode='before')
+    @classmethod
+    def validate_memory_string(cls, v):
+        """Validate memory string format."""
+        if v is not None:
             try:
-                stats = container.stats(stream=False)
-                result["usage"] = {
-                    "cpu_usage": stats.get('cpu_stats', {}),
-                    "memory_usage": stats.get('memory_stats', {}),
-                    "blkio_usage": stats.get('blkio_stats', {}),
-                    "pids_stats": stats.get('pids_stats', {})
-                }
-            except Exception as e:
-                logger.warning(f"Failed to get container stats: {str(e)}")
-                result["usage"] = {"error": f"Failed to get usage stats: {str(e)}"}
-        
-        return result
-        
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
-        
-    except Exception as e:
-        error_msg = f"Unexpected error getting container resources: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
+                return _parse_memory_string(v)
+            except ValueError as e:
+                raise ValueError(f"Invalid memory format: {str(e)}") from e
+        return v
 
-@Tool(
-    name="update_container_resources",
-    description="Update resource limits for a container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'cpu_shares': {
-                'type': 'integer',
-                'minimum': 2,
-                'maximum': 262144,
-                'default': None,
-                'description': 'CPU shares (relative weight)'
-            },
-            'cpu_priority': {
-                'type': 'string',
-                'enum': [e.value for e in CpuPriority],
-                'default': None,
-                'description': 'CPU priority (overrides cpu_shares)'
-            },
-            'cpu_quota': {
-                'type': 'integer',
-                'minimum': 1000,
-                'default': None,
-                'description': 'Microseconds of CPU time the container gets per cpu_period'
-            },
-            'cpu_period': {
-                'type': 'integer',
-                'minimum': 1000,
-                'default': 100000,
-                'description': 'The length of a CPU period in microseconds'
-            },
-            'cpus': {
-                'type': 'string',
-                'default': None,
-                'description': 'CPUs in which to allow execution (0-3, 0,1)'
-            },
-            'memory': {
-                'type': 'string',
-                'default': None,
-                'description': 'Memory limit (e.g., 512m, 2g)'
-            },
-            'memory_reservation': {
-                'type': 'string',
-                'default': None,
-                'description': 'Memory soft limit (e.g., 512m, 2g)'
-            },
-            'memory_swappiness': {
-                'type': 'integer',
-                'minimum': 0,
-                'maximum': 100,
-                'default': None,
-                'description': 'Tune container memory swappiness (0-100)'
-            },
-            'blkio_weight': {
-                'type': 'integer',
-                'minimum': 10,
-                'maximum': 1000,
-                'default': None,
-                'description': 'Block IO weight (relative weight), between 10 and 1000'
-            },
-            'device_weights': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'path': {'type': 'string'},
-                        'weight': {'type': 'integer', 'minimum': 10, 'maximum': 1000}
+class UpdateContainerResourcesResponse(BaseModel):
+    """Response model for updating container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "a1b2c3d4e5f6",
+                "updates": [
+                    {
+                        "resource_type": "cpu_shares",
+                        "previous_value": 1024,
+                        "new_value": 2048,
+                        "warnings": []
                     },
-                    'required': ['path', 'weight']
-                },
-                'default': [],
-                'description': 'Per-device block IO weight'
-            },
-            'device_read_bps': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'path': {'type': 'string'},
-                        'rate': {'type': 'string'}
+                    {
+                        "resource_type": "memory_limit",
+                        "previous_value": 536870912,
+                        "new_value": 1073741824,
+                        "warnings": []
+                    }
+                ]
+            }
+        }
+    )
+    
+    container_id: str = Field(..., description="ID of the container")
+    updates: List[ResourceUpdateResult] = Field(
+        ...,
+        description="List of resource updates that were applied"
+    )
+
+class GetContainerResourcesParams(BaseModel):
+    """Parameters for getting container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "my-container",
+                "include_usage": True
+            }
+        }
+    )
+    
+    container_id: str = Field(
+        ...,
+        description="ID or name of the container"
+    )
+    include_usage: bool = Field(
+        default=True,
+        description="Include current resource usage statistics"
+    )
+
+class ContainerResourcesResponse(BaseModel):
+    """Response model for container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "a1b2c3d4e5f6",
+                "resources": {
+                    "cpu": {
+                        "shares": 1024,
+                        "quota": 100000,
+                        "period": 100000,
+                        "cpus": "0-3"
                     },
-                    'required': ['path', 'rate']
-                },
-                'default': [],
-                'description': 'Limit read rate (bytes per second) from a device (e.g., [{"path": "/dev/sda", "rate": "1mb"}])'
-            },
-            'device_write_bps': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'path': {'type': 'string'},
-                        'rate': {'type': 'string'}
-                    },
-                    'required': ['path', 'rate']
-                },
-                'default': [],
-                'description': 'Limit write rate (bytes per second) to a device'
-            },
-            'device_read_iops': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'path': {'type': 'string'},
-                        'rate': {'type': 'integer', 'minimum': 1}
-                    },
-                    'required': ['path', 'rate']
-                },
-                'default': [],
-                'description': 'Limit read rate (IO per second) from a device'
-            },
-            'device_write_iops': {
-                'type': 'array',
-                'items': {
-                    'type': 'object',
-                    'properties': {
-                        'path': {'type': 'string'},
-                        'rate': {'type': 'integer', 'minimum': 1}
-                    },
-                    'required': ['path', 'rate']
-                },
-                'default': [],
-                'description': 'Limit write rate (IO per second) to a device'
-            },
-            'pids_limit': {
-                'type': 'integer',
-                'minimum': -1,
-                'default': None,
-                'description': 'Limit the number of processes (set -1 for unlimited)'
-            },
-            'restart_policy': {
-                'type': 'object',
-                'properties': {
-                    'name': {
-                        'type': 'string',
-                        'enum': ['no', 'on-failure', 'always', 'unless-stopped'],
-                        'default': 'no'
-                    },
-                    'maximum_retry_count': {
-                        'type': 'integer',
-                        'minimum': 0,
-                        'default': 0
+                    "memory": {
+                        "limit": 1073741824,
+                        "reservation": 536870912
                     }
                 },
-                'default': None,
-                'description': 'Restart policy to apply when a container exits'
-            }
-        },
-        'required': ['container_id']
-    }
-)
-async def update_container_resources(
-    container_id: str,
-    cpu_shares: Optional[int] = None,
-    cpu_priority: Optional[str] = None,
-    cpu_quota: Optional[int] = None,
-    cpu_period: int = 100000,
-    cpus: Optional[str] = None,
-    memory: Optional[str] = None,
-    memory_reservation: Optional[str] = None,
-    memory_swappiness: Optional[int] = None,
-    blkio_weight: Optional[int] = None,
-    device_weights: List[Dict[str, Union[str, int]]] = [],
-    device_read_bps: List[Dict[str, str]] = [],
-    device_write_bps: List[Dict[str, str]] = [],
-    device_read_iops: List[Dict[str, Union[str, int]]] = [],
-    device_write_iops: List[Dict[str, Union[str, int]]] = [],
-    pids_limit: Optional[int] = None,
-    restart_policy: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
-    """
-    Update resource limits for a container.
-    
-    This function updates the resource limits for a running container. It can be used
-    to adjust CPU, memory, I/O, and other resource constraints.
-    
-    Args:
-        container_id: ID or name of the container
-        cpu_shares: CPU shares (relative weight)
-        cpu_priority: CPU priority (overrides cpu_shares if set)
-        cpu_quota: Microseconds of CPU time the container gets per cpu_period
-        cpu_period: The length of a CPU period in microseconds
-        cpus: CPUs in which to allow execution (0-3, 0,1)
-        memory: Memory limit (e.g., 512m, 2g)
-        memory_reservation: Memory soft limit (e.g., 512m, 2g)
-        memory_swappiness: Tune container memory swappiness (0-100)
-        blkio_weight: Block IO weight (relative weight), between 10 and 1000
-        device_weights: Per-device block IO weight
-        device_read_bps: Limit read rate (bytes per second) from a device
-        device_write_bps: Limit write rate (bytes per second) to a device
-        device_read_iops: Limit read rate (IO per second) from a device
-        device_write_iops: Limit write rate (IO per second) to a device
-        pids_limit: Limit the number of processes (set -1 for unlimited)
-        restart_policy: Restart policy to apply when a container exits
-        
-    Returns:
-        Dictionary with the update results
-        
-    Example:
-        >>> await update_container_resources(
-        ...     container_id="my-container",
-        ...     cpu_priority="high",
-        ...     memory="1g",
-        ...     memory_reservation="512m",
-        ...     blkio_weight=500,
-        ...     device_weights=[{"path": "/dev/sda", "weight": 200}],
-        ...     pids_limit=1024
-        ... )
-        {
-            "status": "success",
-            "container_id": "a1b2c3d4e5f6",
-            "updates": [
-                {
-                    "resource_type": "cpu_shares",
-                    "previous_value": 1024,
-                    "new_value": 768,
-                    "container_id": "a1b2c3d4e5f6"
-                },
-                {
-                    "resource_type": "memory",
-                    "previous_value": 536870912,
-                    "new_value": 1073741824,
-                    "container_id": "a1b2c3d4e5f6"
+                "usage": {
+                    "cpu_usage": {
+                        "total_usage": 1000000000,
+                        "percpu_usage": [500000000, 500000000],
+                        "system_cpu_usage": 5000000000,
+                        "online_cpus": 2
+                    }
                 }
-            ]
+            }
         }
-    """
-    try:
-        # Initialize Docker client
-        client = docker.from_env()
-        
-        try:
-            container = client.containers.get(container_id)
-        except NotFound:
-            return {
-                "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
-            }
-        
-        # Get current container info
-        container.reload()
-        host_config = container.attrs['HostConfig']
-        
-        # Prepare update parameters
-        update_kwargs = {}
-        results = []
-        
-        # Handle CPU shares based on priority if specified
-        if cpu_priority is not None:
-            priority_map = {
-                CpuPriority.LOW: 256,
-                CpuPriority.NORMAL: 512,
-                CpuPriority.HIGH: 768,
-                CpuPriority.CRITICAL: 1024
-            }
-            new_cpu_shares = priority_map.get(CpuPriority(cpu_priority))
-            if new_cpu_shares != host_config.get('CpuShares'):
-                update_kwargs['cpu_shares'] = new_cpu_shares
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="cpu_shares",
-                    previous_value=host_config.get('CpuShares'),
-                    new_value=new_cpu_shares
-                ).dict())
-        elif cpu_shares is not None and cpu_shares != host_config.get('CpuShares'):
-            update_kwargs['cpu_shares'] = cpu_shares
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="cpu_shares",
-                previous_value=host_config.get('CpuShares'),
-                new_value=cpu_shares
-            ).dict())
-        
-        # Handle CPU quota/period
-        if cpu_quota is not None and cpu_quota != host_config.get('CpuQuota'):
-            update_kwargs['cpu_quota'] = cpu_quota
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="cpu_quota",
-                previous_value=host_config.get('CpuQuota'),
-                new_value=cpu_quota
-            ).dict())
-        
-        if cpu_period is not None and cpu_period != host_config.get('CpuPeriod'):
-            update_kwargs['cpu_period'] = cpu_period
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="cpu_period",
-                previous_value=host_config.get('CpuPeriod'),
-                new_value=cpu_period
-            ).dict())
-        
-        # Handle CPU set
-        if cpus is not None and cpus != host_config.get('CpusetCpus'):
-            update_kwargs['cpuset_cpus'] = cpus
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="cpuset_cpus",
-                previous_value=host_config.get('CpusetCpus'),
-                new_value=cpus
-            ).dict())
-        
-        # Handle memory limits
-        if memory is not None:
-            # Convert memory string to bytes
-            memory_bytes = _parse_memory_string(memory)
-            if memory_bytes != host_config.get('Memory'):
-                update_kwargs['mem_limit'] = memory_bytes
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="memory_limit",
-                    previous_value=host_config.get('Memory'),
-                    new_value=memory_bytes
-                ).dict())
-        
-        if memory_reservation is not None:
-            memory_reservation_bytes = _parse_memory_string(memory_reservation)
-            if memory_reservation_bytes != host_config.get('MemoryReservation'):
-                update_kwargs['mem_reservation'] = memory_reservation_bytes
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="memory_reservation",
-                    previous_value=host_config.get('MemoryReservation'),
-                    new_value=memory_reservation_bytes
-                ).dict())
-        
-        if memory_swappiness is not None and memory_swappiness != host_config.get('MemorySwappiness'):
-            update_kwargs['mem_swappiness'] = memory_swappiness
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="memory_swappiness",
-                previous_value=host_config.get('MemorySwappiness'),
-                new_value=memory_swappiness
-            ).dict())
-        
-        # Handle Block I/O
-        if blkio_weight is not None and blkio_weight != host_config.get('BlkioWeight'):
-            update_kwargs['blkio_weight'] = blkio_weight
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="blkio_weight",
-                previous_value=host_config.get('BlkioWeight'),
-                new_value=blkio_weight
-            ).dict())
-        
-        # Handle device weights
-        if device_weights:
-            weight_devices = [
-                {"Path": str(w['path']), "Weight": int(w['weight'])}
-                for w in device_weights
-            ]
-            if weight_devices != host_config.get('BlkioWeightDevice'):
-                update_kwargs['blkio_weight_device'] = weight_devices
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="blkio_weight_device",
-                    previous_value=host_config.get('BlkioWeightDevice'),
-                    new_value=weight_devices
-                ).dict())
-        
-        # Handle device read/write bps/iops
-        def _parse_device_rates(rate_str: str) -> int:
-            """Convert rate string (e.g., '1mb') to bytes per second."""
-            rate_str = rate_str.lower().strip()
-            if rate_str.endswith('k'):
-                return int(rate_str[:-1]) * 1024
-            elif rate_str.endswith('m'):
-                return int(rate_str[:-1]) * 1024 * 1024
-            elif rate_str.endswith('g'):
-                return int(rate_str[:-1]) * 1024 * 1024 * 1024
-            elif rate_str.endswith('kb'):
-                return int(rate_str[:-2]) * 1000
-            elif rate_str.endswith('mb'):
-                return int(rate_str[:-2]) * 1000 * 1000
-            elif rate_str.endswith('gb'):
-                return int(rate_str[:-2]) * 1000 * 1000 * 1000
-            elif rate_str.endswith('kib'):
-                return int(rate_str[:-3]) * 1024
-            elif rate_str.endswith('mib'):
-                return int(rate_str[:-3]) * 1024 * 1024
-            elif rate_str.endswith('gib'):
-                return int(rate_str[:-3]) * 1024 * 1024 * 1024
-            else:
-                return int(rate_str)
-        
-        if device_read_bps:
-            read_bps = [
-                {"Path": str(d['path']), "Rate": _parse_device_rates(str(d['rate']))}
-                for d in device_read_bps
-            ]
-            if read_bps != host_config.get('BlkioDeviceReadBps'):
-                update_kwargs['device_read_bps'] = read_bps
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="device_read_bps",
-                    previous_value=host_config.get('BlkioDeviceReadBps'),
-                    new_value=read_bps
-                ).dict())
-        
-        if device_write_bps:
-            write_bps = [
-                {"Path": str(d['path']), "Rate": _parse_device_rates(str(d['rate']))}
-                for d in device_write_bps
-            ]
-            if write_bps != host_config.get('BlkioDeviceWriteBps'):
-                update_kwargs['device_write_bps'] = write_bps
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="device_write_bps",
-                    previous_value=host_config.get('BlkioDeviceWriteBps'),
-                    new_value=write_bps
-                ).dict())
-        
-        if device_read_iops:
-            read_iops = [
-                {"Path": str(d['path']), "Rate": int(d['rate'])}
-                for d in device_read_iops
-            ]
-            if read_iops != host_config.get('BlkioDeviceReadIOps'):
-                update_kwargs['device_read_iops'] = read_iops
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="device_read_iops",
-                    previous_value=host_config.get('BlkioDeviceReadIOps'),
-                    new_value=read_iops
-                ).dict())
-        
-        if device_write_iops:
-            write_iops = [
-                {"Path": str(d['path']), "Rate": int(d['rate'])}
-                for d in device_write_iops
-            ]
-            if write_iops != host_config.get('BlkioDeviceWriteIOps'):
-                update_kwargs['device_write_iops'] = write_iops
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="device_write_iops",
-                    previous_value=host_config.get('BlkioDeviceWriteIOps'),
-                    new_value=write_iops
-                ).dict())
-        
-        # Handle PIDs limit
-        if pids_limit is not None and pids_limit != host_config.get('PidsLimit'):
-            update_kwargs['pids_limit'] = pids_limit
-            results.append(UpdateResourceResult(
-                container_id=container.id,
-                resource_type="pids_limit",
-                previous_value=host_config.get('PidsLimit'),
-                new_value=pids_limit
-            ).dict())
-        
-        # Handle restart policy
-        if restart_policy is not None:
-            policy = {
-                'Name': restart_policy.get('name', 'no'),
-                'MaximumRetryCount': restart_policy.get('maximum_retry_count', 0)
-            }
-            if policy != host_config.get('RestartPolicy'):
-                update_kwargs['restart_policy'] = policy
-                results.append(UpdateResourceResult(
-                    container_id=container.id,
-                    resource_type="restart_policy",
-                    previous_value=host_config.get('RestartPolicy'),
-                    new_value=policy
-                ).dict())
-        
-        # Apply updates if there are any
-        if update_kwargs:
-            container.update(**update_kwargs)
-            
-            # Verify the updates were applied
-            container.reload()
-            updated_config = container.attrs['HostConfig']
-            
-            # Verify each update was applied correctly
-            for result in results:
-                resource_type = result['resource_type']
-                expected_value = result['new_value']
-                
-                # Map our parameter names to the actual Docker API field names
-                field_map = {
-                    'cpu_shares': 'CpuShares',
-                    'cpu_quota': 'CpuQuota',
-                    'cpu_period': 'CpuPeriod',
-                    'cpuset_cpus': 'CpusetCpus',
-                    'memory_limit': 'Memory',
-                    'memory_reservation': 'MemoryReservation',
-                    'memory_swappiness': 'MemorySwappiness',
-                    'blkio_weight': 'BlkioWeight',
-                    'blkio_weight_device': 'BlkioWeightDevice',
-                    'device_read_bps': 'BlkioDeviceReadBps',
-                    'device_write_bps': 'BlkioDeviceWriteBps',
-                    'device_read_iops': 'BlkioDeviceReadIOps',
-                    'device_write_iops': 'BlkioDeviceWriteIOps',
-                    'pids_limit': 'PidsLimit',
-                    'restart_policy': 'RestartPolicy'
-                }
-                
-                field_name = field_map.get(resource_type, resource_type)
-                actual_value = updated_config.get(field_name)
-                
-                # For lists/dicts, we need to do a deep comparison
-                if isinstance(expected_value, (list, dict)) and isinstance(actual_value, (list, dict)):
-                    if expected_value != actual_value:
-                        result['warnings'].append(
-                            f"Update may not have been applied correctly. "
-                            f"Expected {expected_value}, got {actual_value}"
-                        )
-                elif expected_value != actual_value:
-                    result['warnings'].append(
-                        f"Update may not have been applied correctly. "
-                        f"Expected {expected_value}, got {actual_value}"
-                    )
-            
-            return {
-                "status": "success",
-                "container_id": container.id,
-                "updates": results,
-                "message": f"Updated {len(results)} resource(s)"
-            }
-        else:
-            return {
-                "status": "success",
-                "container_id": container.id,
-                "message": "No changes were needed",
-                "updates": []
-            }
-        
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
-        
-    except Exception as e:
-        error_msg = f"Unexpected error updating container resources: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
+    )
+    
+    container_id: str = Field(..., description="ID of the container")
+    resources: Dict[str, Any] = Field(..., description="Resource limits and configuration")
+    usage: Optional[Dict[str, Any]] = Field(
+        None,
+        description="Current resource usage statistics"
+    )
 
-def _parse_memory_string(memory_str: str) -> int:
-    """
-    Parse a memory string with unit suffix to bytes.
+def _parse_memory_string(mem_str: str) -> int:
+    """Parse a memory string (e.g., '512m', '2g') into bytes."""
+    if not mem_str:
+        raise ValueError("Memory string cannot be empty")
     
-    Args:
-        memory_str: Memory string with optional unit (e.g., '512m', '2g')
-        
-    Returns:
-        Memory value in bytes
-        
-    Raises:
-        ValueError: If the string format is invalid
-    """
-    memory_str = memory_str.strip().lower()
-    
-    if not memory_str:
-        raise ValueError("Empty memory string")
-    
-    # Handle numeric values without units (assume bytes)
-    if memory_str.isdigit():
-        return int(memory_str)
-    
-    # Handle values with units
     units = {
         'b': 1,
         'k': 1024,
         'm': 1024 * 1024,
-        'g': 1024 * 1024 * 1024,
-        't': 1024 * 1024 * 1024 * 1024,
-        'kb': 1000,
-        'mb': 1000 * 1000,
-        'gb': 1000 * 1000 * 1000,
-        'tb': 1000 * 1000 * 1000 * 1000,
-        'kib': 1024,
-        'mib': 1024 * 1024,
-        'gib': 1024 * 1024 * 1024,
-        'tib': 1024 * 1024 * 1024 * 1024
+        'g': 1024 * 1024 * 1024
     }
     
-    # Find the unit at the end of the string
-    unit = ''
-    for u in sorted(units.keys(), key=len, reverse=True):
-        if memory_str.endswith(u):
-            unit = u
+    # Extract number and unit
+    num_str = ''
+    unit = 'b'
+    
+    for i, c in enumerate(mem_str.lower()):
+        if c.isdigit() or c == '.':
+            num_str += c
+        else:
+            unit = c
+            if unit not in units:
+                raise ValueError(f"Invalid memory unit: {unit}. Must be one of: {', '.join(units.keys())}")
             break
     
-    if not unit:
-        # No valid unit found, assume bytes
-        try:
-            return int(memory_str)
-        except ValueError:
-            raise ValueError(f"Invalid memory format: {memory_str}")
+    if not num_str:
+        raise ValueError("No numeric value found in memory string")
     
-    # Extract the numeric part
-    num_str = memory_str[:-len(unit)]
     try:
         num = float(num_str)
-    except ValueError:
-        raise ValueError(f"Invalid numeric value in memory string: {num_str}")
+    except ValueError as e:
+        raise ValueError(f"Invalid numeric value in memory string: {num_str}") from e
     
-    # Calculate bytes
     return int(num * units[unit])
 
-@Tool(
-    name="reset_container_resources",
-    description="Reset all resource limits for a container to their default values",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            }
-        },
-        'required': ['container_id']
-    }
+@mcp.tool(
+    name="get_container_resources",
+    description="Get detailed resource allocation and usage information for a container"
 )
-async def reset_container_resources(container_id: str) -> Dict[str, Any]:
+async def get_container_resources(params: GetContainerResourcesParams) -> ToolResponse[ContainerResourcesResponse]:
+    """
+    Get detailed resource allocation and usage information for a container.
+    
+    This function provides a comprehensive view of a container's resource configuration
+    including CPU, memory, I/O, and process limits. It can optionally include current
+    resource usage statistics.
+    
+    Args:
+        params: GetContainerResourcesParams containing:
+            - container_id: ID or name of the container
+            - include_usage: Whether to include current resource usage statistics
+            
+    Returns:
+        ToolResponse[ContainerResourcesResponse] containing container resource information
+        
+    Raises:
+        DockerException: If there's an error communicating with the Docker daemon
+        APIError: If the Docker API returns an error
+        NotFound: If the container doesn't exist
+    """
+    logger.info(
+        "Getting container resources",
+        extra={"container_id": params.container_id, "include_usage": params.include_usage}
+    )
+    
+    try:
+        client = docker.from_env()
+        container = client.containers.get(params.container_id)
+        
+        # Get container attributes
+        attrs = container.attrs
+        
+        # Build resources dictionary
+        resources = {
+            "cpu": {
+                "shares": attrs.get("HostConfig", {}).get("CpuShares"),
+                "quota": attrs.get("HostConfig", {}).get("CpuQuota"),
+                "period": attrs.get("HostConfig", {}).get("CpuPeriod"),
+                "cpus": attrs.get("HostConfig", {}).get("CpusetCpus"),
+                "realtime_period": attrs.get("HostConfig", {}).get("CpuRealtimePeriod"),
+                "realtime_runtime": attrs.get("HostConfig", {}).get("CpuRealtimeRuntime"),
+                "cfs_period": attrs.get("HostConfig", {}).get("CpuPeriod"),
+                "cfs_quota": attrs.get("HostConfig", {}).get("CpuQuota")
+            },
+            "memory": {
+                "limit": attrs.get("HostConfig", {}).get("Memory"),
+                "reservation": attrs.get("HostConfig", {}).get("MemoryReservation"),
+                "swap": attrs.get("HostConfig", {}).get("MemorySwap"),
+                "swappiness": attrs.get("HostConfig", {}).get("MemorySwappiness"),
+                "oom_kill_disable": attrs.get("HostConfig", {}).get("OomKillDisable")
+            },
+            "blkio": {
+                "weight": attrs.get("HostConfig", {}).get("BlkioWeight"),
+                "device_weights": attrs.get("HostConfig", {}).get("BlkioWeightDevice"),
+                "device_read_bps": attrs.get("HostConfig", {}).get("BlkioDeviceReadBps"),
+                "device_write_bps": attrs.get("HostConfig", {}).get("BlkioDeviceWriteBps"),
+                "device_read_iops": attrs.get("HostConfig", {}).get("BlkioDeviceReadIOps"),
+                "device_write_iops": attrs.get("HostConfig", {}).get("BlkioDeviceWriteIOps")
+            },
+            "pids": {
+                "limit": attrs.get("HostConfig", {}).get("PidsLimit")
+            },
+            "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy")
+        }
+        
+        # Get usage stats if requested
+        usage = None
+        if params.include_usage:
+            try:
+                stats = container.stats(stream=False)
+                usage = {
+                    "cpu_usage": stats.get("cpu_stats"),
+                    "memory_usage": stats.get("memory_stats"),
+                    "block_io": stats.get("blkio_stats"),
+                    "network": stats.get("networks"),
+                    "pids_stats": stats.get("pids_stats"),
+                    "read": stats.get("read")
+                }
+            except Exception as e:
+                logger.warning(
+                    f"Failed to get container stats: {str(e)}",
+                    extra={"container_id": params.container_id},
+                    exc_info=True
+                )
+        
+        return ToolResponse[ContainerResourcesResponse](
+            success=True,
+            data=ContainerResourcesResponse(
+                container_id=container.id,
+                resources=resources,
+                usage=usage
+            )
+        )
+        
+    except NotFound as e:
+        logger.error(
+            f"Container not found: {params.container_id}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ContainerResourcesResponse](
+            success=False,
+            error=f"Container not found: {str(e)}",
+            error_code="not_found"
+        )
+    except APIError as e:
+        logger.error(
+            f"Docker API error: {str(e)}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ContainerResourcesResponse](
+            success=False,
+            error=f"Docker API error: {str(e)}",
+            error_code="docker_api_error"
+        )
+    except Exception as e:
+        logger.error(
+            f"Error getting container resources: {str(e)}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ContainerResourcesResponse](
+            success=False,
+            error=f"Error getting container resources: {str(e)}",
+            error_code="internal_error"
+        )
+
+class ResetContainerResourcesParams(BaseModel):
+    """Parameters for resetting container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "my-container"
+            }
+        }
+    )
+    
+    container_id: str = Field(..., description="ID or name of the container to reset")
+
+class ResetContainerResourcesResponse(BaseModel):
+    """Response model for resetting container resources."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container_id": "a1b2c3d4e5f6",
+                "reset_resources": ["cpu_shares", "memory_limit", "blkio_weight"]
+            }
+        }
+    )
+    
+    container_id: str = Field(..., description="ID of the container")
+    reset_resources: List[str] = Field(
+        ...,
+        description="List of resource types that were reset"
+    )
+
+@mcp.tool(
+    name="reset_container_resources",
+    description=(
+        "Reset all resource limits for a container to their default values. "
+        "This will remove any custom CPU, memory, I/O, or other resource constraints."
+    )
+)
+async def reset_container_resources(
+    params: ResetContainerResourcesParams
+) -> ToolResponse[ResetContainerResourcesResponse]:
     """
     Reset all resource limits for a container to their default values.
     
-    This function resets all resource limits (CPU, memory, I/O, etc.) for a container
-    to their default values, effectively removing any custom resource constraints.
+    This function removes all custom resource constraints (CPU, memory, I/O, etc.)
+    from a container, restoring them to their default values. This is useful for
+    removing resource limitations or troubleshooting resource-related issues.
     
     Args:
-        container_id: ID or name of the container
-        
+        params: ResetContainerResourcesParams containing:
+            - container_id: ID or name of the container to reset
+            
     Returns:
-        Dictionary with the reset results
+        ToolResponse[ResetContainerResourcesResponse] containing:
+            - container_id: ID of the container
+            - reset_resources: List of resource types that were reset
+            
+    Raises:
+        DockerException: If there's an error communicating with the Docker daemon
+        APIError: If the Docker API returns an error
         
     Example:
-        >>> await reset_container_resources("my-container")
-        {
-            "status": "success",
-            "container_id": "a1b2c3d4e5f6",
-            "message": "All resource limits reset to defaults"
-        }
+        >>> response = await reset_container_resources(
+        ...     ResetContainerResourcesParams(container_id="my-container")
+        ... )
+        >>> if response.success:
+        ...     print(f"Reset {len(response.data.reset_resources)} resources for {response.data.container_id}")
     """
+    logger.info(
+        "Resetting container resources to default values",
+        extra={"container_id": params.container_id}
+    )
+    
     try:
-        # Initialize Docker client
         client = docker.from_env()
+        container = client.containers.get(params.container_id)
         
-        try:
-            container = client.containers.get(container_id)
-        except NotFound:
-            return {
-                "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
-            }
+        # Get current container config
+        current_config = container.attrs["HostConfig"]
         
-        # Get current container info
-        container.reload()
-        
-        # Prepare reset parameters - setting to None/empty will reset to defaults
-        reset_params = {
-            'cpu_shares': 0,  # 0 means use the default
-            'cpu_quota': -1,  # -1 means no quota
-            'cpu_period': 100000,  # Default period
-            'cpuset_cpus': '',  # Empty means all CPUs
-            'mem_limit': 0,  # 0 means no limit
-            'mem_reservation': 0,  # 0 means no reservation
-            'mem_swappiness': -1,  # -1 means use the default
-            'blkio_weight': 0,  # 0 means use the default
-            'blkio_weight_device': [],  # Empty means no device-specific weights
-            'device_read_bps': [],  # Empty means no read limits
-            'device_write_bps': [],  # Empty means no write limits
-            'device_read_iops': [],  # Empty means no read IOPS limits
-            'device_write_iops': [],  # Empty means no write IOPS limits
-            'pids_limit': 0,  # 0 means no limit
-            'restart_policy': {'Name': 'no'}  # Default restart policy
+        # Build update config with default/empty values
+        update_config = {
+            # Reset CPU settings
+            "CpuShares": 0,  # 0 means use the default
+            "CpuQuota": 0,   # 0 means use the default
+            "CpuPeriod": 0,  # 0 means use the default
+            "CpusetCpus": "",  # Empty means use all CPUs
+            
+            # Reset memory settings
+            "Memory": 0,           # 0 means no limit
+            "MemoryReservation": 0, # 0 means no limit
+            "MemorySwap": 0,        # 0 means no limit
+            "MemorySwappiness": None,  # None means use the default
+            
+            # Reset I/O settings
+            "BlkioWeight": 0,  # 0 means use the default
+            "BlkioWeightDevice": None,
+            "BlkioDeviceReadBps": None,
+            "BlkioDeviceWriteBps": None,
+            "BlkioDeviceReadIOps": None,
+            "BlkioDeviceWriteIOps": None,
+            
+            # Reset process limits
+            "PidsLimit": 0,  # 0 means no limit
+            
+            # Reset restart policy
+            "RestartPolicy": {"Name": "no"},
+            
+            # Other resource-related settings
+            "CgroupParent": "",
+            "DeviceRequests": None,
+            "OomKillDisable": False,
+            "OomScoreAdj": 0,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0,
+            "Ulimits": None,
+            "CpuRealtimePeriod": 0,
+            "CpuRealtimeRuntime": 0,
+            "CpuCfsPeriod": 0,
+            "CpuCfsQuota": 0,
+            "CpuQuota": 0,
+            "CpuPeriod": 0,
+            "CpuShares": 0,
+            "CpusetCpus": "",
+            "CpusetMems": "",
+            "DeviceCgroupRules": None,
+            "DeviceRequests": None,
+            "KernelMemory": 0,
+            "KernelMemoryTCP": 0,
+            "MemoryReservation": 0,
+            "MemorySwap": 0,
+            "MemorySwappiness": None,
+            "NanoCpus": 0,
+            "PidsLimit": 0,
+            "Ulimits": None,
+            "CpuCount": 0,
+            "CpuPercent": 0,
+            "IOMaximumIOps": 0,
+            "IOMaximumBandwidth": 0
         }
         
-        # Apply the reset
-        container.update(**reset_params)
+        # Track which resources were reset
+        reset_resources = []
         
-        return {
-            "status": "success",
-            "container_id": container.id,
-            "message": "All resource limits reset to defaults"
-        }
+        # Check which resources were actually set and need to be reset
+        if current_config.get("CpuShares") != 0:
+            reset_resources.append("cpu_shares")
+        if current_config.get("CpuQuota") != 0:
+            reset_resources.append("cpu_quota")
+        if current_config.get("CpuPeriod") != 0:
+            reset_resources.append("cpu_period")
+        if current_config.get("CpusetCpus") not in ("", None):
+            reset_resources.append("cpuset_cpus")
+        if current_config.get("Memory") != 0:
+            reset_resources.append("memory_limit")
+        if current_config.get("MemoryReservation") != 0:
+            reset_resources.append("memory_reservation")
+        if current_config.get("MemorySwap") != 0:
+            reset_resources.append("memory_swap")
+        if current_config.get("MemorySwappiness") is not None:
+            reset_resources.append("memory_swappiness")
+        if current_config.get("BlkioWeight") != 0:
+            reset_resources.append("blkio_weight")
+        if current_config.get("BlkioWeightDevice"):
+            reset_resources.append("blkio_device_weights")
+        if current_config.get("BlkioDeviceReadBps"):
+            reset_resources.append("blkio_read_bps")
+        if current_config.get("BlkioDeviceWriteBps"):
+            reset_resources.append("blkio_write_bps")
+        if current_config.get("BlkioDeviceReadIOps"):
+            reset_resources.append("blkio_read_iops")
+        if current_config.get("BlkioDeviceWriteIOps"):
+            reset_resources.append("blkio_write_iops")
+        if current_config.get("PidsLimit") != 0:
+            reset_resources.append("pids_limit")
+        if current_config.get("RestartPolicy", {}).get("Name") != "no":
+            reset_resources.append("restart_policy")
         
+        # Only update if there are resources to reset
+        if reset_resources:
+            # Update the container with the reset configuration
+            container.update(**update_config)
+            
+            logger.info(
+                f"Reset {len(reset_resources)} resources for container {params.container_id}",
+                extra={
+                    "container_id": params.container_id,
+                    "reset_resources": reset_resources
+                }
+            )
+        else:
+            logger.info(
+                f"No resource limits to reset for container {params.container_id}",
+                extra={"container_id": params.container_id}
+            )
+        
+        return ToolResponse[ResetContainerResourcesResponse](
+            success=True,
+            data=ResetContainerResourcesResponse(
+                container_id=container.id,
+                reset_resources=reset_resources
+            )
+        )
+        
+    except NotFound as e:
+        logger.error(
+            f"Container not found: {params.container_id}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ResetContainerResourcesResponse](
+            success=False,
+            error=f"Container not found: {str(e)}",
+            error_code="not_found"
+        )
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
-        
+        logger.error(
+            f"Docker API error: {str(e)}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ResetContainerResourcesResponse](
+            success=False,
+            error=f"Docker API error: {str(e)}",
+            error_code="docker_api_error"
+        )
     except Exception as e:
-        error_msg = f"Unexpected error resetting container resources: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
+        logger.error(
+            f"Error resetting container resources: {str(e)}",
+            extra={"container_id": params.container_id},
+            exc_info=True
+        )
+        return ToolResponse[ResetContainerResourcesResponse](
+            success=False,
+            error=f"Error resetting container resources: {str(e)}",
+            error_code="internal_error"
+        )
+
+# Register tools with FastMCP
+def get_tools():
+    """Return a list of tools for FastMCP to register."""
+    return [
+        get_container_resources,
+        reset_container_resources
+    ]

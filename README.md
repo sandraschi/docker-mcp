@@ -6,9 +6,13 @@
 [![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![CI/CD](https://github.com/sandraschi/dockermcp/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sandraschi/dockermcp/actions)
+[![Docker Image](https://img.shields.io/docker/pulls/sandraschi/dockermcp)](https://hub.docker.com/r/sandraschi/dockermcp)
+[![codecov](https://codecov.io/gh/sandraschi/dockermcp/branch/main/graph/badge.svg?token=YOUR-TOKEN)](https://codecov.io/gh/sandraschi/dockermcp)
 [![Austrian Efficiency](https://img.shields.io/badge/Austrian-Efficiency-red)](https://en.wikipedia.org/wiki/Austrian_school)
 
-*Vienna-style Docker management with FastMCP 2.11.3 - because your containers deserve Sachertorte-level precision.*
+*Vienna-style Docker management with FastMCP 2.11.3 - \
+because your containers deserve Sachertorte-level precision.*
 
 ## 🚀 Features
 
@@ -32,10 +36,15 @@ docker-compose -f docker-compose-monitoring.yml up -d
 ```
 
 Access the monitoring interfaces:
-- Grafana: http://localhost:3001 (admin/admin)
-- Prometheus: http://localhost:9091
-- Loki: http://localhost:3101
-- cAdvisor: http://localhost:8082
+
+- **Grafana**: [http://localhost:3001](http://localhost:3001) \
+  (admin/admin)
+- **Prometheus**: \
+  [http://localhost:9091](http://localhost:9091)
+- **Loki**: \
+  [http://localhost:3101](http://localhost:3101)
+- **cAdvisor**: \
+  [http://localhost:8082](http://localhost:8082)
 
 ### 🧪 Testing
 
@@ -72,7 +81,8 @@ DockerMCP uses structured JSON logging for better observability:
 
 ### State Management (Powered by FastMCP 2.11.3)
 
-DockerMCP leverages FastMCP 2.11.3's built-in state management system for all its stateful operations. This provides several key benefits:
+DockerMCP leverages FastMCP 2.11.3's built-in state management system \
+for all its stateful operations. This provides several key benefits:
 
 - **No External Dependencies**: No Redis or other external services required
 - **Consistent State**: All state is managed within the FastMCP runtime
@@ -97,15 +107,19 @@ DockerMCP leverages FastMCP 2.11.3's built-in state management system for all it
 
 ### Austrian Efficiency Add-ons
 
-- **Docker Watchdog**: Automatic monitoring and recovery of Docker daemon
-- **Stack Health Checks**: One-command status of all your stacks
-- **Problem Detection**: Find and diagnose issues before they become problems
-- **Intelligent Recovery**: Automated fixes for common Docker issues
-- **Maintenance Recommendations**: Proactive suggestions for keeping your Docker environment clean
+- **Docker Watchdog**: Automatic monitoring and recovery \
+  of Docker daemon
+- **Stack Health Checks**: One-command status \
+  of all your stacks
+- **Problem Detection**: Find and diagnose issues \
+  before they become problems
+- **Intelligent Recovery**: Automated fixes for \
+  common Docker issues
+- **Maintenance Tips**: Proactive suggestions for keeping your \
+  Docker environment clean
 - **Cross-Platform Support**: Works on both Windows and Linux systems
 
 ## 🚨 Docker Watchdog
-
 
 ### Features
 
@@ -113,7 +127,7 @@ DockerMCP leverages FastMCP 2.11.3's built-in state management system for all it
 - **Cross-Platform**: Works on both Windows and Linux systems
 - **Configurable**: Adjust check intervals and retry attempts
 - **Detailed Logging**: Comprehensive logs for troubleshooting
-- **Service Integration**: Runs as a system service (systemd on Linux, Windows Service on Windows)
+- **Service Integration**: Runs as a system service (systemd/Linux, Windows Service/Windows)
 
 ### Installation
 
@@ -135,8 +149,35 @@ sudo systemctl enable --now docker-watchdog
 ```
 
 ### Logs
+
 - **Windows**: `docker_watchdog.log` in the installation directory
 - **Linux**: `journalctl -u docker-watchdog -f`
+
+## 🔄 CI/CD Pipeline
+
+DockerMCP uses GitHub Actions for CI/CD with the following workflows:
+
+1. **Test**: Runs on every push and pull request
+   - Unit tests
+   - Integration tests
+   - Code coverage reporting
+
+2. **Build and Push**: Runs on push to main and tags
+   - Builds Docker image
+   - Pushes to Docker Hub
+   - Tags with version, branch, and commit SHA
+
+3. **Release**: Creates GitHub releases for tags
+   - Generates release notes from CHANGELOG.md
+   - Creates GitHub release with artifacts
+
+### Environment Variables
+
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DOCKERHUB_USERNAME` | Docker Hub username | Yes | - |
+| `DOCKERHUB_TOKEN` | Docker Hub access token | Yes | - |
+| `CODECOV_TOKEN` | Codecov upload token | No | - |
 
 ## 🏗 Project Structure
 
@@ -171,6 +212,26 @@ dockermcp/
 └── examples/                   # Usage examples
 ```
 
+## 🚀 Quick Start
+
+### Using Docker (Recommended)
+
+```bash
+docker run -d \
+  --name dockermcp \
+  -p 8000:8000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  sandraschi/dockermcp:latest
+```
+
+### Using Docker Compose
+
+```bash
+git clone https://github.com/sandraschi/dockermcp.git
+cd dockermcp
+docker-compose up -d
+```
+
 ## 📦 Installation
 
 ### Prerequisites
@@ -192,8 +253,23 @@ pip install -e .
 ### Starting the Server
 
 ```bash
+# Using Python
 python -m dockermcp
+
+# Using Docker
+docker run -d \
+  -p 8000:8000 \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  sandraschi/dockermcp
 ```
+
+### API Endpoints
+
+- `GET /health` - Health check endpoint to verify service status
+- `GET /docs` - Interactive API documentation \
+  (Swagger UI)
+- `GET /redoc` - Alternative API documentation with \
+  [ReDoc](https://github.com/Redocly/redoc)
 
 ### Example: List Containers
 
@@ -223,11 +299,13 @@ Full documentation is available at [GitHub Wiki](https://github.com/sandraschi/d
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please read our [Contributing Guidelines](CONTRIBUTING.md) for details.
+Contributions are welcome! Please read our \
+[Contributing Guidelines](CONTRIBUTING.md) for details.
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - \
+see the [LICENSE](LICENSE) file for details.
 
 ---
 

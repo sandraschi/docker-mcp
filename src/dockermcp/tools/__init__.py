@@ -8,7 +8,11 @@ import logging
 import pkgutil
 import sys
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Type, TypeVar, Callable, Set
+from typing import List, Dict, Any, Optional, Type, TypeVar, Callable, Set, Generic
+
+from fastmcp.tools.tool import Tool
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel
 
 # Add the src directory to the Python path
 src_dir = str(Path(__file__).parent.parent.parent)
@@ -22,6 +26,27 @@ configure_logging(level="INFO")
 # Silence noisy loggers
 for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'asyncio']:
     logging.getLogger(logger_name).setLevel(logging.WARNING)
+
+# Type variable for tool response models
+T = TypeVar('T')
+
+class ToolResponse(BaseModel, Generic[T]):
+    """Standard response model for all tools."""
+    success: bool
+    message: str
+    data: Optional[T] = None
+    error: Optional[str] = None
+
+    @classmethod
+    def from_success(cls, message: str, data: Optional[T] = None) -> 'ToolResponse[T]':
+        """Create a success response."""
+        return cls(success=True, message=message, data=data)
+
+    @classmethod
+    def from_error(cls, message: str, error: Optional[Exception] = None) -> 'ToolResponse[Any]':
+        """Create an error response."""
+        error_msg = str(error) if error else message
+        return cls(success=False, message=message, error=error_msg)
 
 def discover_tools() -> Set[str]:
     """
@@ -48,16 +73,21 @@ def discover_tools() -> Set[str]:
             # Get all tools from the module
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                if hasattr(attr, '_tool_meta'):
-                    discovered_tools.add(attr._tool_meta['name'])
-                    
+                # Check if it's a FastMCP tool
+                if hasattr(attr, '__fastmcp_tool__'):
+                    discovered_tools.add(attr_name)
+                    logger.info(f'Discovered tool: {attr_name} from {name}')
         except ImportError as e:
-            logger.warning(f'Failed to import tools module {name}: {e}')
-        except Exception as e:
-            logger.error(f'Error importing tools module {name}: {e}', exc_info=True)
+            logger.warning(f'Failed to import module {name}: {str(e)}')
+            continue
     
-    logger.info(f'Discovered {len(discovered_tools)} tools')
     return discovered_tools
+
+def get_tools() -> List[Dict[str, Any]]:
+    """Get metadata for all registered tools."""
+    # In FastMCP 2.12+, tools are automatically registered via the @Tool decorator
+    # This function is kept for backward compatibility
+    return []
 
 # Discover and register tools when the package is imported
 discovered_tools = discover_tools()

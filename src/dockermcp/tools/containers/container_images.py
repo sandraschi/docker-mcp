@@ -24,8 +24,11 @@ from docker.errors import (
     DockerException, APIError, ImageNotFound, BuildError, 
     ContainerError, NotFound
 )
-from fastmcp.tools.tool import Tool
+from fastmcp import FastMCP
 from pydantic import BaseModel, Field, validator, HttpUrl
+
+# Initialize FastMCP instance
+mcp = FastMCP("Container Image Tools")
 
 from dockermcp.logging_config import logger
 
@@ -65,10 +68,12 @@ class ImageBuildResult(BaseModel):
     )
     error: Optional[str] = Field(None, description="Error message if build failed")
 
-@Tool(
+@mcp.tool(
     name="list_images",
-    description="List Docker images",
-    parameters={
+    description="List Docker images with filtering options"
+)
+@mcp.parameters(
+    {
         'type': 'object',
         'properties': {
             'name': {
@@ -205,10 +210,12 @@ async def list_images(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
+@mcp.tool(
     name="pull_image",
-    description="Pull a Docker image from a registry",
-    parameters={
+    description="Pull a Docker image from a registry"
+)
+@mcp.parameters(
+    {
         'type': 'object',
         'properties': {
             'repository': {
@@ -476,10 +483,12 @@ async def pull_image(
             'tag': tag
         }
 
-@Tool(
+@mcp.tool(
     name="build_image",
-    description="Build a Docker image from a Dockerfile",
-    parameters={
+    description="Build a Docker image from a Dockerfile"
+)
+@mcp.parameters(
+    {
         'type': 'object',
         'properties': {
             'path': {
@@ -788,10 +797,12 @@ async def build_image(
             'tag': tag
         }
 
-@Tool(
+@mcp.tool(
     name="remove_image",
-    description="Remove a Docker image",
-    parameters={
+    description="Remove a Docker image"
+)
+@mcp.parameters(
+    {
         'type': 'object',
         'properties': {
             'image': {

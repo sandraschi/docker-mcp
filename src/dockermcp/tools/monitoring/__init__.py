@@ -8,7 +8,7 @@ import subprocess
 import logging
 from pathlib import Path
 
-from fastmcp.tools.tool import Tool
+from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
 
 class MonitoringManager:
@@ -70,7 +70,7 @@ class MonitoringManager:
 # Create a singleton instance
 monitoring_manager = MonitoringManager()
 
-@Tool(
+@mcp.tool(
     name="start_monitoring",
     description="Start the monitoring stack (Prometheus, Grafana, Loki, etc.)",
     parameters={
@@ -129,7 +129,7 @@ async def start_monitoring(build: bool = False) -> Dict[str, Any]:
             "error": f"Error starting monitoring services: {str(e)}"
         }
 
-@Tool(
+@mcp.tool(
     name="stop_monitoring",
     description="Stop the monitoring stack",
     parameters={
@@ -182,7 +182,7 @@ async def stop_monitoring(remove_volumes: bool = False) -> Dict[str, Any]:
             "error": f"Error stopping monitoring services: {str(e)}"
         }
 
-@Tool(
+@mcp.tool(
     name="monitoring_status",
     description="Get the status of the monitoring stack",
     parameters={
@@ -248,7 +248,7 @@ async def monitoring_status(detailed: bool = False) -> Dict[str, Any]:
             "error": f"Error getting monitoring status: {str(e)}"
         }
 
-@Tool(
+@mcp.tool(
     name="monitoring_logs",
     description="Get logs from monitoring services",
     parameters={

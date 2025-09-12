@@ -13,79 +13,110 @@ import stat
 import tarfile
 import tempfile
 from datetime import datetime
+from enum import Enum
 from io import BytesIO
-from typing import Any, Dict, List, Optional, Union, AsyncGenerator, BinaryIO
+from typing import Any, Dict, List, Optional, Union, BinaryIO, Annotated
 
 import docker
 from docker.errors import DockerException, APIError, NotFound, ContainerError
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, ConfigDict
+from fastmcp import FastMCP
+from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field, ConfigDict, FieldValidationInfo, field_validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger
 
+# Initialize MCP instance
+mcp = FastMCP("Docker Files MCP")
+
+class FileType(str, Enum):
+    """Type of a filesystem entry."""
+    FILE = "file"
+    DIRECTORY = "directory"
+    SYMLINK = "symlink"
+    BLOCK_DEVICE = "block_device"
+    CHARACTER_DEVICE = "character_device"
+    FIFO = "fifo"
+    SOCKET = "socket"
+    UNKNOWN = "unknown"
+
+
 class FileInfo(BaseModel):
     """Information about a file or directory in a container."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "app.py",
+                "path": "/app/app.py",
+                "type": "file",
+                "size": 1024,
+                "mode": 0o644,
+                "mtime": "2023-01-01T12:00:00Z",
+                "uid": 1000,
+                "gid": 1000,
+                "user": "appuser",
+                "group": "appgroup"
+            }
+        }
+    )
+    
     name: str = Field(..., description="Name of the file or directory")
     path: str = Field(..., description="Full path in the container")
-    type: str = Field(..., description="Type (file, directory, symlink, etc.)")
+    type: FileType = Field(..., description="Type of the filesystem entry")
     size: int = Field(..., description="Size in bytes")
     mode: int = Field(..., description="File mode/permissions")
     mtime: str = Field(..., description="Last modification time (ISO 8601)")
     uid: int = Field(..., description="Owner user ID")
     gid: int = Field(..., description="Owner group ID")
-    user: str = Field(..., description="Owner username (if available)")
-    group: str = Field(..., description="Owner group name (if available)")
+    user: Optional[str] = Field(None, description="Owner username (if available)")
+    group: Optional[str] = Field(None, description="Owner group name (if available)")
 
 class FileContent(BaseModel):
     """File content and metadata."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "path": "/app/config.json",
+                "content": "eyJkYiI6ICJteXNxbCJ9",
+                "encoding": "base64",
+                "size": 15,
+                "truncated": False
+            }
+        }
+    )
+    
     path: str = Field(..., description="File path in the container")
     content: str = Field(..., description="File content as base64-encoded string")
     encoding: str = Field(..., description="Content encoding (e.g., 'base64')")
     size: int = Field(..., description="Size of the content in bytes")
     truncated: bool = Field(..., description="Whether the content was truncated")
 
-@Tool(
+class ListDirectoryParams(BaseModel):
+    """Parameters for listing container directory contents."""
+    container_id: str = Field(..., description="ID or name of the container")
+    path: str = Field("/", description="Path to list (default: /)")
+    recursive: bool = Field(False, description="List contents recursively")
+    include_hidden: bool = Field(False, description="Include hidden files (starting with .)")
+    max_depth: int = Field(
+        10,
+        ge=1,
+        le=20,
+        description="Maximum depth for recursive listing (1-20)"
+    )
+    
+    @field_validator('path')
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        """Normalize the path to ensure it's absolute and uses forward slashes."""
+        path = os.path.normpath(v).replace('\\', '/')
+        return path if path.startswith('/') else f'/{path}'
+
+
+@mcp.tool(
     name="list_container_directory",
-    description="List contents of a directory in a container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'path': {
-                'type': 'string',
-                'default': '/',
-                'description': 'Path to list (default: /)'
-            },
-            'recursive': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'List contents recursively'
-            },
-            'include_hidden': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Include hidden files (starting with .)'
-            },
-            'max_depth': {
-                'type': 'integer',
-                'minimum': 1,
-                'default': 10,
-                'description': 'Maximum depth for recursive listing'
-            }
-        },
-        'required': ['container_id']
-    }
+    description="List contents of a directory in a container"
 )
-async def list_container_directory(
-    container_id: str,
-    path: str = '/',
-    recursive: bool = False,
-    include_hidden: bool = False,
-    max_depth: int = 10
-) -> Dict[str, Any]:
+async def list_container_directory(params: ListDirectoryParams) -> Dict[str, Any]:
     """
     List contents of a directory in a container.
     
@@ -149,24 +180,17 @@ async def list_container_directory(
         client = docker.from_env()
         
         try:
-            container = client.containers.get(container_id)
-        except NotFound:
-            return {
-                "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
-            }
+            container = client.containers.get(params.container_id)
+        except NotFound as e:
+            raise ValueError(f"Container not found: {params.container_id}") from e
         
-        # Normalize path
-        path = os.path.normpath(path).replace('\\', '/')
-        if not path.startswith('/'):
-            path = '/' + path
+        # Use the normalized path from the model
         
         # Execute 'ls' command to get directory listing
-        cmd = ['ls', '-la', '--time-style=+%s', path]
-        if recursive:
+        cmd = ['ls', '-la', '--time-style=+%s', params.path]
+        if params.recursive:
             cmd.insert(1, '-R')
-            cmd.insert(1, f'--max-depth={max_depth}')
+            cmd.insert(1, f'--max-depth={params.max_depth}')
         
         try:
             # Execute the command
@@ -179,25 +203,21 @@ async def list_container_directory(
             # Check for errors
             if exec_result.exit_code != 0:
                 error_output = exec_result.output[1] or b''
-                return {
-                    "status": "error",
-                    "container_id": container_id,
-                    "path": path,
-                    "error": f"Failed to list directory: {error_output.decode('utf-8', errors='replace').strip()}"
-                }
+                error_msg = error_output.decode('utf-8', errors='replace').strip()
+                raise RuntimeError(f"Failed to list directory: {error_msg}")
             
             # Parse the output
             output = exec_result.output[0].decode('utf-8', errors='replace')
-            entries = _parse_ls_output(output, path, recursive)
+            entries = _parse_ls_output(output, params.path, params.recursive)
             
             # Filter out hidden files if needed
-            if not include_hidden:
-                entries = [e for e in entries if not os.path.basename(e['name']).startswith('.')]
+            if not params.include_hidden:
+                entries = [e for e in entries if not os.path.basename(e.name).startswith('.')]
             
             return {
                 "status": "success",
-                "container_id": container_id,
-                "path": path,
+                "container_id": params.container_id,
+                "path": params.path,
                 "exists": True,
                 "is_directory": True,
                 "contents": entries
@@ -207,8 +227,8 @@ async def list_container_directory(
             if 'No such file or directory' in str(e):
                 return {
                     "status": "success",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "exists": False,
                     "is_directory": False,
                     "contents": []
@@ -230,7 +250,7 @@ async def list_container_directory(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-def _parse_ls_output(ls_output: str, base_path: str, recursive: bool) -> List[Dict[str, Any]]:
+def _parse_ls_output(ls_output: str, base_path: str, recursive: bool) -> List[FileInfo]:
     """
     Parse the output of 'ls -la' command into structured data.
     
@@ -320,49 +340,12 @@ def _parse_ls_output(ls_output: str, base_path: str, recursive: bool) -> List[Di
     
     return entries
 
-@Tool(
+@mcp.tool(
     name="read_container_file",
-    description="Read the contents of a file from a container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'path': {
-                'type': 'string',
-                'description': 'Path to the file in the container'
-            },
-            'offset': {
-                'type': 'integer',
-                'minimum': 0,
-                'default': 0,
-                'description': 'Byte offset to start reading from'
-            },
-            'length': {
-                'type': 'integer',
-                'minimum': 1,
-                'maximum': 10485760,  # 10MB max
-                'default': 65536,     # 64KB default
-                'description': 'Maximum number of bytes to read (max 10MB)'
-            },
-            'encoding': {
-                'type': 'string',
-                'enum': ['base64', 'utf-8', 'latin-1'],
-                'default': 'base64',
-                'description': 'Encoding for the file content'
-            }
-        },
-        'required': ['container_id', 'path']
-    }
+    description="Read the contents of a file from a container"
 )
 async def read_container_file(
-    container_id: str,
-    path: str,
-    offset: int = 0,
-    length: int = 65536,
-    encoding: str = 'base64'
+    params: ReadFileParams
 ) -> Dict[str, Any]:
     """
     Read the contents of a file from a container.
@@ -372,11 +355,12 @@ async def read_container_file(
     it's recommended to read in chunks using the offset and length parameters.
     
     Args:
-        container_id: ID or name of the container
-        path: Path to the file in the container
-        offset: Byte offset to start reading from
-        length: Maximum number of bytes to read (max 10MB)
-        encoding: Encoding for the file content (base64, utf-8, or latin-1)
+        params: ReadFileParams containing:
+            - container_id: ID or name of the container
+            - path: Path to the file in the container
+            - offset: Byte offset to start reading from (default: 0)
+            - length: Maximum number of bytes to read (default: 64KB, max: 10MB)
+            - encoding: Encoding for the file content (base64, utf-8, or latin-1)
         
     Returns:
         Dictionary with file content and metadata
@@ -404,16 +388,18 @@ async def read_container_file(
         client = docker.from_env()
         
         try:
-            container = client.containers.get(container_id)
+            container = client.containers.get(params.container_id)
         except NotFound:
             return {
                 "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
+                "container_id": params.container_id,
+                "path": params.path,
+                "error": f"Container not found: {params.container_id}",
+                "exists": False
             }
         
         # Normalize path
-        path = os.path.normpath(path).replace('\\', '/')
+        path = os.path.normpath(params.path).replace('\\', '/')
         
         try:
             # Get file info first to check if it exists and is a file
@@ -425,8 +411,8 @@ async def read_container_file(
             if stat_result.exit_code != 0:
                 return {
                     "status": "success",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "exists": False,
                     "is_file": False,
                     "error": "File not found or not accessible"
@@ -438,7 +424,6 @@ async def read_container_file(
                 return {
                     "status": "error",
                     "container_id": container_id,
-                    "path": path,
                     "error": "Failed to parse file information"
                 }
             
@@ -452,36 +437,38 @@ async def read_container_file(
             if not file_type.startswith('regular file'):
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "error": "Not a regular file"
                 }
             
             # Check if offset is beyond file size
-            if offset >= file_size:
+            if params.offset >= file_size:
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
-                    "error": f"Offset {offset} is beyond file size {file_size}"
+                    "container_id": params.container_id,
+                    "path": params.path,
+                    "error": f"Offset {params.offset} is beyond file size {file_size}"
                 }
             
             # Calculate actual length to read
-            actual_length = min(length, file_size - offset)
+            actual_length = min(params.length, file_size - params.offset)
             
             # Read the file content
-            cmd = ['dd', f'if={path}', f'bs=1', f'skip={offset}', f'count={actual_length}']
+            cmd = ['dd', f'if={params.path}', f'bs=1', f'skip={params.offset}', f'count={actual_length}']
             content_result = container.exec_run(
                 cmd,
                 demux=True
             )
             
             if content_result.exit_code != 0:
+                error_msg = f"Failed to read file {params.path}: {content_result.output[1] or 'Unknown error'}"
+                logger.error(error_msg)
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
-                    "error": f"Failed to read file: {content_result.output[1] or 'Unknown error'}"
+                    "container_id": params.container_id,
+                    "path": params.path,
+                    "error": error_msg
                 }
             
             # Get the content
@@ -489,26 +476,26 @@ async def read_container_file(
             
             # Encode the content based on the requested encoding
             encoded_content = ''
-            if encoding == 'base64':
+            if params.encoding == 'base64':
                 encoded_content = base64.b64encode(content).decode('ascii')
-            elif encoding == 'utf-8':
+            elif params.encoding == 'utf-8':
                 try:
                     encoded_content = content.decode('utf-8')
                 except UnicodeDecodeError:
                     return {
                         "status": "error",
-                        "container_id": container_id,
-                        "path": path,
+                        "container_id": params.container_id,
+                        "path": params.path,
                         "error": "Content is not valid UTF-8, try using base64 encoding"
                     }
-            elif encoding == 'latin-1':
+            elif params.encoding == 'latin-1':
                 encoded_content = content.decode('latin-1')
             else:
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
-                    "error": f"Unsupported encoding: {encoding}"
+                    "container_id": params.container_id,
+                    "path": params.path,
+                    "error": f"Unsupported encoding: {params.encoding}"
                 }
             
             # Get owner and group names if possible
@@ -524,14 +511,14 @@ async def read_container_file(
             
             return {
                 "status": "success",
-                "container_id": container_id,
-                "path": path,
+                "container_id": params.container_id,
+                "path": params.path,
                 "exists": True,
                 "is_file": True,
                 "size": file_size,
                 "content": encoded_content,
-                "encoding": encoding,
-                "truncated": (offset + actual_length) < file_size,
+                "encoding": params.encoding,
+                "truncated": (params.offset + actual_length) < file_size,
                 "metadata": {
                     "mode": mode,
                     "uid": uid,
@@ -546,8 +533,8 @@ async def read_container_file(
             if 'No such file or directory' in str(e):
                 return {
                     "status": "success",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "exists": False,
                     "is_file": False
                 }
@@ -566,61 +553,18 @@ async def read_container_file(
     except Exception as e:
         error_msg = f"Unexpected error reading container file: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
+        return {
+            "status": "error",
+            "container_id": params.container_id,
+            "path": params.path,
+            "error": error_msg
+        }
 
-@Tool(
+@mcp.tool(
     name="write_container_file",
-    description="Write content to a file in a container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'path': {
-                'type': 'string',
-                'description': 'Path to the file in the container'
-            },
-            'content': {
-                'type': 'string',
-                'description': 'Content to write (base64-encoded if binary)'
-            },
-            'encoding': {
-                'type': 'string',
-                'enum': ['base64', 'utf-8', 'latin-1'],
-                'default': 'base64',
-                'description': 'Encoding of the content (default: base64)'
-            },
-            'mode': {
-                'type': 'string',
-                'pattern': '^[0-7]{3,4}$',
-                'default': '644',
-                'description': 'File mode in octal (e.g., 644 for rw-r--r--)'
-            },
-            'owner': {
-                'type': 'string',
-                'default': 'root:root',
-                'description': 'Owner in format user:group (e.g., root:root)'
-            },
-            'mkdir': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Create parent directories if they do not exist'
-            }
-        },
-        'required': ['container_id', 'path', 'content']
-    }
+    description="Write content to a file in a container"
 )
-async def write_container_file(
-    container_id: str,
-    path: str,
-    content: str,
-    encoding: str = 'base64',
-    mode: str = '644',
-    owner: str = 'root:root',
-    mkdir: bool = False
-) -> Dict[str, Any]:
+async def write_container_file(params: WriteFileParams) -> Dict[str, Any]:
     """
     Write content to a file in a container.
     
@@ -629,13 +573,14 @@ async def write_container_file(
     encodings and file permissions.
     
     Args:
-        container_id: ID or name of the container
-        path: Path to the file in the container
-        content: Content to write (base64-encoded if binary)
-        encoding: Encoding of the content (base64, utf-8, or latin-1)
-        mode: File mode in octal (e.g., 644 for rw-r--r--)
-        owner: Owner in format user:group (e.g., root:root)
-        mkdir: Create parent directories if they do not exist
+        params: WriteFileParams containing:
+            - container_id: ID or name of the container
+            - path: Path to the file in the container
+            - content: Content to write (base64-encoded if binary)
+            - encoding: Encoding of the content (base64, utf-8, or latin-1)
+            - mode: File mode in octal (e.g., 644 for rw-r--r--)
+            - owner: Owner in format user:group (e.g., root:root)
+            - mkdir: Create parent directories if they do not exist
         
     Returns:
         Dictionary with operation status and metadata
@@ -662,51 +607,46 @@ async def write_container_file(
         client = docker.from_env()
         
         try:
-            container = client.containers.get(container_id)
+            container = client.containers.get(params.container_id)
         except NotFound:
             return {
                 "status": "error",
-                "container_id": container_id,
-                "error": f"Container not found: {container_id}"
+                "container_id": params.container_id,
+                "error": f"Container not found: {params.container_id}"
             }
         
         # Normalize path
-        path = os.path.normpath(path).replace('\\', '/')
+        path = os.path.normpath(params.path).replace('\\', '/')
         dirname = os.path.dirname(path)
         
         # Decode content based on encoding
         try:
-            if encoding == 'base64':
-                file_content = base64.b64decode(content)
-            elif encoding == 'utf-8':
-                file_content = content.encode('utf-8')
-            elif encoding == 'latin-1':
-                file_content = content.encode('latin-1')
+            if params.encoding.lower() == 'base64':
+                file_content = base64.b64decode(params.content)
+            elif params.encoding.lower() == 'utf-8':
+                file_content = params.content.encode('utf-8')
+            elif params.encoding.lower() == 'latin-1':
+                file_content = params.content.encode('latin-1')
             else:
-                return {
-                    "status": "error",
-                    "container_id": container_id,
-                    "path": path,
-                    "error": f"Unsupported encoding: {encoding}"
-                }
+                raise ValueError(f"Unsupported encoding: {params.encoding}")
         except Exception as e:
             return {
                 "status": "error",
-                "container_id": container_id,
-                "path": path,
+                "container_id": params.container_id,
+                "path": params.path,
                 "error": f"Failed to decode content: {str(e)}"
             }
         
         # Create parent directories if needed
-        if mkdir and dirname != '/':
+        if params.mkdir and dirname != '/':
             mkdir_cmd = ['mkdir', '-p', dirname]
             mkdir_result = container.exec_run(mkdir_cmd, demux=True)
             if mkdir_result.exit_code != 0:
                 error_output = mkdir_result.output[1] or b''
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "error": f"Failed to create directory: {error_output.decode('utf-8', errors='replace').strip()}"
                 }
         
@@ -724,34 +664,34 @@ async def write_container_file(
                 )
             
             # Set file permissions
-            chmod_cmd = ['chmod', mode, path]
+            chmod_cmd = ['chmod', params.mode, path]
             chmod_result = container.exec_run(chmod_cmd, demux=True)
             if chmod_result.exit_code != 0:
                 error_output = chmod_result.output[1] or b''
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "error": f"Failed to set file permissions: {error_output.decode('utf-8', errors='replace').strip()}"
                 }
             
             # Set file ownership
-            chown_cmd = ['chown', owner, path]
+            chown_cmd = ['chown', params.owner, path]
             chown_result = container.exec_run(chown_cmd, demux=True)
             if chown_result.exit_code != 0:
                 error_output = chown_result.output[1] or b''
                 return {
                     "status": "error",
-                    "container_id": container_id,
-                    "path": path,
+                    "container_id": params.container_id,
+                    "path": params.path,
                     "warning": f"Failed to set file ownership: {error_output.decode('utf-8', errors='replace').strip()}",
                     "wrote_bytes": len(file_content)
                 }
             
             return {
                 "status": "success",
-                "container_id": container_id,
-                "path": path,
+                "container_id": params.container_id,
+                "path": params.path,
                 "wrote_bytes": len(file_content),
                 "message": "File written successfully"
             }
@@ -776,31 +716,9 @@ async def write_container_file(
     except Exception as e:
         error_msg = f"Unexpected error writing container file: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
-
-def _create_tar_archive(file_obj: BinaryIO, filename: str) -> bytes:
-    """
-    Create a tar archive containing a single file.
-    
-    Args:
-        file_obj: File-like object to include in the archive
-        filename: Name of the file in the archive
-        
-    Returns:
-        Bytes containing the tar archive
-    """
-    file_data = file_obj.read()
-    
-    with BytesIO() as tar_buffer:
-        with tarfile.open(fileobj=tar_buffer, mode='w') as tar:
-            # Create a TarInfo object for the file
-            tarinfo = tarfile.TarInfo(name=filename)
-            tarinfo.size = len(file_data)
-            tarinfo.mtime = int(time.time())
-            tarinfo.mode = 0o644
-            
-            # Add the file to the archive
-            tar.addfile(tarinfo, fileobj=BytesIO(file_data))
-        
-        # Return the tar archive as bytes
-        return tar_buffer.getvalue()
+        return {
+            "status": "error",
+            "container_id": params.container_id,
+            "path": params.path,
+            "error": error_msg
+        }

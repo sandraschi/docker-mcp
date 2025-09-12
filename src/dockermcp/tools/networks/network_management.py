@@ -16,17 +16,59 @@ import logging
 from datetime import datetime
 from enum import Enum
 from ipaddress import IPv4Network, IPv6Network
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Optional, Union, Literal, TypeVar, Generic, Type, cast
 
 import docker
 from docker.errors import (
     DockerException, APIError, NotFound, 
     InvalidArgument, ContainerError
 )
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, HttpUrl, IPvAnyAddress, IPvAnyNetwork
+from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolException
+from pydantic import BaseModel, Field, validator, HttpUrl, IPvAnyAddress, IPvAnyNetwork, ConfigDict
 
+from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
+
+# Type variables for generic response models
+T = TypeVar('T')
+
+class BaseResponse(BaseModel, Generic[T]):
+    """Base response model for all API responses."""
+    status: Literal['success', 'error'] = Field(..., description="Status of the operation")
+    message: Optional[str] = Field(None, description="Human-readable message about the result")
+    data: Optional[T] = Field(None, description="Response data if successful")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+
+    @classmethod
+    def success(
+        cls: Type['BaseResponse[T]'], 
+        data: T = None, 
+        message: str = "Operation completed successfully"
+    ) -> 'BaseResponse[T]':
+        """Create a success response."""
+        return cls(status='success', message=message, data=data)
+
+    @classmethod
+    def error(
+        cls: Type['BaseResponse[T]'], 
+        error: str, 
+        message: str = None
+    ) -> 'BaseResponse[T]':
+        """Create an error response."""
+        return cls(
+            status='error',
+            message=message or "An error occurred",
+            error=error
+        )
+
+    class Config:
+        json_encoders = {
+            IPv4Network: str,
+            IPv6Network: str,
+            ipaddress.IPv4Address: str,
+            ipaddress.IPv6Address: str
+        }
 
 class NetworkDriver(str, Enum):
     """Supported Docker network drivers."""
@@ -56,13 +98,130 @@ class IPAMConfig(BaseModel):
         description="Auxiliary IPv4 or IPv6 addresses used by the network driver"
     )
 
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             IPv4Network: str,
             IPv6Network: str,
             ipaddress.IPv4Address: str,
             ipaddress.IPv6Address: str
+        },
+        json_schema_extra={
+            "example": {
+                "subnet": "172.28.0.0/16",
+                "gateway": "172.28.5.1"
+            }
         }
+    )
+
+class NetworkListRequest(BaseModel):
+    """Request model for listing Docker networks."""
+    names: List[str] = Field(
+        default_factory=list,
+        description="Filter by network names"
+    )
+    ids: List[str] = Field(
+        default_factory=list,
+        description="Filter by network IDs"
+    )
+    driver: Optional[str] = Field(
+        None,
+        description="Filter by driver name (e.g., 'bridge', 'overlay')"
+    )
+    network_type: Literal['custom', 'builtin', 'all'] = Field(
+        'all',
+        description="Type of networks to list"
+    )
+    labels: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Filter by labels (e.g., {'com.example.key': 'value'})"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "names": ["my-network"],
+                "driver": "bridge",
+                "network_type": "all",
+                "labels": {"environment": "development"}
+            }
+        }
+    )
+
+class NetworkSummary(BaseModel):
+    """Summary information about a Docker network."""
+    id: str = Field(..., description="Network ID")
+    name: str = Field(..., description="Network name")
+    driver: str = Field(..., description="Network driver")
+    scope: str = Field(..., description="Network scope (e.g., 'local', 'swarm')")
+    created: Optional[datetime] = Field(None, description="When the network was created")
+    internal: bool = Field(..., description="Whether the network is internal")
+    enable_ipv6: bool = Field(..., description="Whether IPv6 is enabled")
+    labels: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Network labels"
+    )
+    containers: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Containers connected to the network"
+    )
+    ipam: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="IPAM configuration"
+    )
+    options: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Driver-specific options"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "7d86d31b1478...",
+                "name": "my-network",
+                "driver": "bridge",
+                "scope": "local",
+                "internal": False,
+                "enable_ipv6": False,
+                "labels": {"environment": "development"},
+                "containers": {},
+                "ipam": {"Driver": "default", "Config": [{"Subnet": "172.28.0.0/16"}]},
+                "options": {}
+            }
+        }
+    )
+
+class NetworkListResponse(BaseResponse[List[NetworkSummary]]):
+    """Response model for listing Docker networks."""
+    count: int = Field(..., description="Number of networks returned")
+
+class NetworkIPAMConfig(BaseModel):
+    """IPAM configuration for creating a Docker network."""
+    driver: str = Field(
+        default="default",
+        description="IPAM driver to use"
+    )
+    config: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="List of IPAM config blocks"
+    )
+    options: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Driver-specific options"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "driver": "default",
+                "config": [
+                    {"Subnet": "172.28.0.0/16",
+                     "IPRange": "172.28.5.0/24",
+                     "Gateway": "172.28.5.1"}
+                ],
+                "options": {"foo": "bar"}
+            }
+        }
+    )
 
 class NetworkCreateRequest(BaseModel):
     """Request model for creating a new Docker network."""
@@ -99,39 +258,213 @@ class NetworkCreateRequest(BaseModel):
         default_factory=dict,
         description="Labels to set on the network"
     )
-    ipam: Optional[IPAMConfig] = Field(
-        None,
+    ipam: Optional[NetworkIPAMConfig] = Field(
+        default=None,
         description="Optional custom IPAM configuration"
     )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "my-network",
+                "driver": "bridge",
+                "enable_ipv6": False,
+                "internal": False,
+                "attachable": False,
+                "ingress": False,
+                "options": {"com.docker.network.bridge.name": "my-network"},
+                "labels": {"environment": "development"},
+                "ipam": {
+                    "driver": "default",
+                    "config": [
+                        {"Subnet": "172.28.0.0/16",
+                         "IPRange": "172.28.5.0/24",
+                         "Gateway": "172.28.5.1"}
+                    ]
+                }
+            }
+        }
+    )
+
+class NetworkCreateResponse(BaseResponse[Dict[str, Any]]):
+    """Response model for creating a Docker network."""
+    network_id: Optional[str] = Field(
+        None,
+        description="ID of the created network"
+    )
+    warning: Optional[str] = Field(
+        None,
+        description="Optional warning message"
+    )
+
+    @classmethod
+    def from_network(cls, network: Any) -> 'NetworkCreateResponse':
+        """Create a response from a Docker network object."""
+        return cls(
+            status="success",
+            message="Network created successfully",
+            data={
+                "id": network.id,
+                "name": network.name,
+                "driver": network.attrs.get("Driver", ""),
+                "scope": network.attrs.get("Scope", ""),
+                "ipam": network.attrs.get("IPAM", {})
+            },
+            network_id=network.id
+        )
+
+class NetworkRemoveRequest(BaseModel):
+    """Request model for removing a Docker network."""
+    network_id: str = Field(
+        ...,
+        description="ID or name of the network to remove"
+    )
+    force: bool = Field(
+        default=False,
+        description="Force the removal of the network even if in use"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "network_id": "my-network",
+                "force": False
+            }
+        }
+    )
+
+
+class NetworkRemoveResponse(BaseResponse[Dict[str, Any]]):
+    """Response model for removing a Docker network."""
+    network_id: str = Field(
+        ...,
+        description="ID of the removed network"
+    )
+    
+    @classmethod
+    def success_response(
+        cls,
+        network_id: str,
+        message: str = "Network removed successfully"
+    ) -> 'NetworkRemoveResponse':
+        """Create a success response for network removal."""
+        return cls(
+            status="success",
+            message=message,
+            data={"network_id": network_id},
+            network_id=network_id
+        )
+
 
 class NetworkConnectRequest(BaseModel):
     """Request model for connecting a container to a network."""
     container: str = Field(..., description="Container ID or name")
     network: str = Field(..., description="Network ID or name")
     ipv4_address: Optional[IPvAnyAddress] = Field(
-        None,
+        default=None,
         description="IPv4 address (e.g., 172.30.100.104)"
     )
     ipv6_address: Optional[IPvAnyAddress] = Field(
-        None,
-        description="IPv6 address (e.g., 2001:db8:33b:100::17)"
+        default=None,
+        description="IPv6 address (e.g., 2001:db8::33)"
     )
     aliases: List[str] = Field(
         default_factory=list,
         description="List of network-scoped aliases for the container"
     )
-    links: Optional[Dict[str, str]] = Field(
-        None,
-        description="Mapping of aliases to IP addresses for linked containers"
+    links: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Mapping of container name to alias for linking"
     )
-    link_local_ips: List[IPvAnyAddress] = Field(
+    link_local_ips: List[str] = Field(
         default_factory=list,
         description="List of link-local IP addresses"
     )
-    driver_opt: Optional[Dict[str, str]] = Field(
-        None,
+    driver_opt: Dict[str, str] = Field(
+        default_factory=dict,
         description="Driver options for the endpoint"
     )
+    mac_address: Optional[str] = Field(
+        default=None,
+        description="MAC address for the container on this network"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container": "my-container",
+                "network": "my-network",
+                "ipv4_address": "172.30.100.104",
+                "aliases": ["web", "app"],
+                "driver_opt": {"com.docker.network.driver.mtu": "1500"}
+            }
+        }
+    )
+
+
+class NetworkConnectResponse(BaseResponse[Dict[str, Any]]):
+    """Response model for connecting a container to a network."""
+    container_id: str = Field(..., description="ID of the container")
+    network_id: str = Field(..., description="ID of the network")
+    
+    @classmethod
+    def success_response(
+        cls,
+        container_id: str,
+        network_id: str,
+        message: str = "Container connected to network successfully"
+    ) -> 'NetworkConnectResponse':
+        """Create a success response for network connection."""
+        return cls(
+            status="success",
+            message=message,
+            data={"container_id": container_id, "network_id": network_id},
+            container_id=container_id,
+            network_id=network_id
+        )
+
+
+class NetworkDisconnectRequest(BaseModel):
+    """Request model for disconnecting a container from a network."""
+    container: str = Field(..., description="Container ID or name")
+    network: str = Field(..., description="Network ID or name")
+    force: bool = Field(
+        default=False,
+        description="Force the container to disconnect from the network"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "container": "my-container",
+                "network": "my-network",
+                "force": False
+            }
+        }
+    )
+
+
+class NetworkDisconnectResponse(BaseResponse[Dict[str, Any]]):
+    """Response model for disconnecting a container from a network."""
+    container_id: str = Field(..., description="ID of the container")
+    network_id: str = Field(..., description="ID of the network")
+    
+    @classmethod
+    def success_response(
+        cls,
+        container_id: str,
+        network_id: str,
+        message: str = "Container disconnected from network successfully"
+    ) -> 'NetworkDisconnectResponse':
+        """Create a success response for network disconnection."""
+        return cls(
+            status="success",
+            message=message,
+            data={"container_id": container_id, "network_id": network_id},
+            container_id=container_id,
+            network_id=network_id
+        )
+
 
 class NetworkInspectResult(BaseModel):
     """Detailed information about a Docker network."""
@@ -146,158 +479,233 @@ class NetworkInspectResult(BaseModel):
     ingress: bool = Field(..., description="Whether this is the ingress network")
     ipam: Dict[str, Any] = Field(..., description="IPAM configuration")
     options: Dict[str, str] = Field(..., description="Driver-specific options")
-    labels: Dict[str, str] = Field(..., description="Labels set on the network")
+    labels: Dict[str, str] = Field(..., description="User-defined key/value metadata")
     containers: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Containers connected to the network"
+        description="Information about containers in the network"
+    )
+    
+    @classmethod
+    def from_network(cls, network: Any) -> 'NetworkInspectResult':
+        """Create a NetworkInspectResult from a Docker network object."""
+        attrs = network.attrs
+        return cls(
+            name=attrs.get('Name', ''),
+            id=attrs.get('Id', ''),
+            created=attrs.get('Created', ''),
+            scope=attrs.get('Scope', ''),
+            driver=attrs.get('Driver', ''),
+            enable_ipam=attrs.get('EnableIPv6', False),
+            internal=attrs.get('Internal', False),
+            attachable=attrs.get('Attachable', False),
+            ingress=attrs.get('Ingress', False),
+            ipam=attrs.get('IPAM', {}),
+            options=attrs.get('Options', {}),
+            labels=attrs.get('Labels', {}),
+            containers=attrs.get('Containers', {})
+        )
+
+
+class NetworkInspectRequest(BaseModel):
+    """Request model for inspecting a Docker network."""
+    network_id: str = Field(..., description="Network ID or name")
+    verbose: bool = Field(
+        default=False,
+        description="Detailed inspect output for the network"
+    )
+    scope: str = Field(
+        default="local",
+        description="Scope of the network (local or swarm)"
     )
 
-@Tool(
-    name="list_networks",
-    description="List Docker networks",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'names': {
-                'type': 'array',
-                'items': {'type': 'string'},
-                'default': [],
-                'description': 'Filter by network names'
-            },
-            'ids': {
-                'type': 'array',
-                'items': {'type': 'string'},
-                'default': [],
-                'description': 'Filter by network IDs'
-            },
-            'driver': {
-                'type': 'string',
-                'default': None,
-                'description': 'Filter by driver name (e.g., "bridge", "overlay")'
-            },
-            'type': {
-                'type': 'string',
-                'enum': ['custom', 'builtin', 'all'],
-                'default': 'all',
-                'description': 'Type of networks to list'
-            },
-            'labels': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filter by labels (e.g., {"com.example.key": "value"})'
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "network_id": "my-network",
+                "verbose": False,
+                "scope": "local"
             }
         }
-    }
-)
-async def list_networks(
-    names: List[str] = [],
-    ids: List[str] = [],
-    driver: Optional[str] = None,
-    type: str = 'all',
-    labels: Dict[str, str] = {}
-) -> Dict[str, Any]:
-    """
-    List Docker networks with filtering options.
+    )
+
+
+class NetworkInspectResponse(BaseResponse[NetworkInspectResult]):
+    """Response model for inspecting a Docker network."""
     
-    This function lists all Docker networks, with optional filtering by name,
-    ID, driver, or labels.
+    @classmethod
+    def from_network(cls, network: Any) -> 'NetworkInspectResponse':
+        """Create a response from a Docker network object."""
+        return cls(
+            status="success",
+            message="Network details retrieved successfully",
+            data=NetworkInspectResult.from_network(network)
+        )
+
+
+class NetworkListRequest(BaseModel):
+    """Request model for listing Docker networks."""
+    names: List[str] = Field(
+        default_factory=list,
+        description="List of network names to filter by"
+    )
+    ids: List[str] = Field(
+        default_factory=list,
+        description="List of network IDs to filter by"
+    )
+    driver: str = Field(
+        default=None,
+        description="Driver to filter by (e.g., 'bridge', 'host')"
+    )
+    network_type: str = Field(
+        default="all",
+        description="Type of networks to list (all, builtin, custom)"
+    )
+    labels: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Labels to filter by"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "names": ["bridge", "host"],
+                "driver": "bridge",
+                "network_type": "builtin",
+                "labels": {"environment": "development"}
+            }
+        }
+    )
+
+
+class NetworkSummary(BaseModel):
+    """Summary information about a Docker network."""
+    id: str = Field(..., description="ID of the network")
+    name: str = Field(..., description="Name of the network")
+    driver: str = Field(..., description="Driver used by the network")
+    scope: str = Field(..., description="Scope of the network (e.g., 'local', 'swarm')")
+    created: Optional[datetime] = Field(
+        None,
+        description="When the network was created"
+    )
+    internal: bool = Field(..., description="Whether the network is internal")
+    enable_ipv6: bool = Field(..., description="Whether IPv6 is enabled")
+    ipam: Dict[str, Any] = Field(..., description="IPAM configuration")
+    options: Dict[str, str] = Field(..., description="Driver-specific options")
+    labels: Dict[str, str] = Field(..., description="User-defined key/value metadata")
+    containers: Dict[str, Dict[str, Any]] = Field(
+        default_factory=dict,
+        description="Information about containers in the network"
+    )
+
+
+class NetworkListResponse(BaseResponse[List[NetworkSummary]]):
+    """Response model for listing Docker networks."""
+    count: int = Field(..., description="Number of networks returned")
+
+    @classmethod
+    def success(cls, data: List[NetworkSummary], message: str = "Networks listed successfully") -> 'NetworkListResponse':
+        """Create a success response for network listing."""
+        return cls(
+            status="success",
+            message=message,
+            data=data,
+            count=len(data)
+        )
+
+
+@mcp.tool(
+    name="list_networks",
+    description="List Docker networks with optional filtering"
+)
+async def list_networks(params: NetworkListRequest) -> NetworkListResponse:
+    """
+    List Docker networks with optional filtering.
+    
+    This function lists all Docker networks, with options to filter by various
+    criteria such as names, IDs, driver, and labels. It returns a structured
+    response containing network summaries and metadata.
     
     Args:
-        names: Filter by network names
-        ids: Filter by network IDs
-        driver: Filter by driver name (e.g., "bridge", "overlay")
-        type: Type of networks to list ('custom', 'builtin', or 'all')
-        labels: Filter by labels
-        
+        params: NetworkListRequest containing filtering parameters
+            - names: List of network names to filter by
+            - ids: List of network IDs to filter by
+            - driver: Filter by network driver (e.g., 'bridge', 'host')
+            - network_type: Type of networks to list ('all', 'builtin', 'custom')
+            - labels: Dictionary of label key-value pairs to filter by
+            
     Returns:
-        Dictionary with list of networks and metadata
+        NetworkListResponse containing:
+            - status: Operation status ('success' or 'error')
+            - message: Human-readable result message
+            - data: List of NetworkSummary objects
+            - count: Total number of networks returned
+    
+    Raises:
+        docker.errors.APIError: If the Docker API returns an error
+        Exception: For unexpected errors during network listing
+    
+    Examples:
+        >>> # List all networks
+        >>> await list_networks(NetworkListRequest())
         
-    Example:
-        >>> await list_networks(
-        ...     driver="bridge",
+        >>> # List only bridge networks
+        >>> await list_networks(NetworkListRequest(driver="bridge"))
+        
+        >>> # List networks with specific labels
+        >>> await list_networks(NetworkListRequest(
         ...     labels={"environment": "production"}
-        ... )
-        {
-            "status": "success",
-            "networks": [
-                {
-                    "id": "7d86d31b1478...",
-                    "name": "bridge",
-                    "driver": "bridge",
-                    "scope": "local",
-                    "ipam": {"Driver": "default", "Config": [{"Subnet": "172.17.0.0/16"}]},
-                    "containers": {},
-                    "options": {
-                        "com.docker.network.bridge.default_bridge": "true",
-                        ...
-                    },
-                    "labels": {"environment": "production"}
-                },
-                ...
-            ],
-            "count": 1
-        }
+        ... ))
     """
     try:
-        # Initialize Docker client
         client = docker.from_env()
+        networks = client.networks.list()
         
-        # Build filters
-        filters = {}
+        # Apply filters
+        if params.names:
+            networks = [n for n in networks if n.name in params.names]
+            
+        if params.ids:
+            networks = [n for n in networks if n.id in params.ids]
+            
+        if params.driver:
+            networks = [n for n in networks if n.attrs.get('Driver') == params.driver]
+            
+        if params.network_type != 'all':
+            is_builtin = params.network_type == 'builtin'
+            networks = [
+                n for n in networks 
+                if (n.attrs.get('Name') in ['bridge', 'host', 'none']) == is_builtin
+            ]
+            
+        if params.labels:
+            networks = [
+                n for n in networks
+                if all(n.attrs.get('Labels', {}).get(k) == v 
+                      for k, v in params.labels.items())
+            ]
         
-        if names:
-            filters['name'] = names
-        if ids:
-            filters['id'] = ids
-        if driver:
-            filters['driver'] = [driver]
-        if labels:
-            filters['label'] = [f"{k}={v}" for k, v in labels.items()]
+        # Format the response
+        network_summaries = []
+        for net in networks:
+            attrs = net.attrs
+            network_summaries.append(NetworkSummary(
+                id=net.id,
+                name=net.name,
+                driver=attrs.get('Driver', ''),
+                scope=attrs.get('Scope', ''),
+                created=datetime.fromisoformat(attrs['Created'][:-4]) if 'Created' in attrs else None,
+                internal=attrs.get('Internal', False),
+                enable_ipv6=attrs.get('EnableIPv6', False),
+                labels=attrs.get('Labels', {}),
+                containers=attrs.get('Containers', {}),
+                ipam=attrs.get('IPAM', {}),
+                options=attrs.get('Options', {})
+            ))
         
-        # Get networks
-        networks = client.networks.list(filters=filters)
-        
-        # Filter by type if needed
-        if type != 'all':
-            is_builtin = type == 'builtin'
-            networks = [net for net in networks if net.attrs.get('Ingress') == is_builtin]
-        
-        # Prepare response
-        network_list = []
-        
-        for network in networks:
-            try:
-                # Get detailed information
-                network.reload()
-                
-                network_info = {
-                    'id': network.id,
-                    'name': network.name,
-                    'driver': network.attrs.get('Driver', ''),
-                    'scope': network.attrs.get('Scope', ''),
-                    'ipam': network.attrs.get('IPAM', {}),
-                    'containers': network.attrs.get('Containers', {}),
-                    'options': network.attrs.get('Options', {}),
-                    'labels': network.attrs.get('Labels', {})
-                }
-                
-                network_list.append(network_info)
-                
-            except Exception as e:
-                logger.warning(f"Error processing network {network.id}: {str(e)}")
-                continue
-        
-        return {
-            'status': 'success',
-            'networks': network_list,
-            'count': len(network_list)
-        }
-        
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
+        return NetworkListResponse.success(
+            data=network_summaries,
+            message=f"Found {len(network_summaries)} networks"
+        )
         
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
@@ -309,710 +717,406 @@ async def list_networks(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
+@mcp.tool(
     name="create_network",
-    description="Create a new Docker network",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': 'Name of the network'
-            },
-            'driver': {
-                'type': 'string',
-                'enum': [e.value for e in NetworkDriver],
-                'default': 'bridge',
-                'description': 'Driver to manage the Network'
-            },
-            'check_duplicate': {
-                'type': 'boolean',
-                'default': True,
-                'description': 'Check for networks with duplicate names'
-            },
-            'internal': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Restrict external access to the network'
-            },
-            'attachable': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Enable manual container attachment'
-            },
-            'ingress': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Create an ingress network which provides the routing-mesh'
-            },
-            'enable_ipv6': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Enable IPv6 on the network'
-            },
-            'options': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Driver-specific options'
-            },
-            'labels': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Labels to set on the network'
-            },
-            'ipam': {
-                'type': 'object',
-                'properties': {
-                    'subnet': {'type': 'string', 'format': 'ipv4-cidr', 'description': 'Subnet in CIDR format'},
-                    'ip_range': {'type': 'string', 'format': 'ipv4-cidr', 'description': 'IP range for container IPs'},
-                    'gateway': {'type': 'string', 'format': 'ipv4', 'description': 'IPv4 gateway'},
-                    'aux_addresses': {
-                        'type': 'object',
-                        'additionalProperties': {'type': 'string', 'format': 'ipv4'},
-                        'description': 'Auxiliary IPv4 addresses'
-                    }
-                },
-                'description': 'IPAM configuration'
-            }
-        },
-        'required': ['name']
-    }
+    description="Create a new Docker network"
 )
-async def create_network(
-    name: str,
-    driver: str = 'bridge',
-    check_duplicate: bool = True,
-    internal: bool = False,
-    attachable: bool = False,
-    ingress: bool = False,
-    enable_ipv6: bool = False,
-    options: Dict[str, str] = {},
-    labels: Dict[str, str] = {},
-    ipam: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+async def create_network(params: NetworkCreateRequest) -> NetworkCreateResponse:
     """
     Create a new Docker network.
     
-    This function creates a new Docker network with the specified configuration.
+    This function creates a new Docker network with the specified configuration,
+    including IPAM settings, driver options, and labels.
     
     Args:
-        name: Name of the network
-        driver: Driver to manage the Network
-        check_duplicate: Check for networks with duplicate names
-        internal: Restrict external access to the network
-        attachable: Enable manual container attachment
-        ingress: Create an ingress network which provides the routing-mesh
-        enable_ipv6: Enable IPv6 on the network
-        options: Driver-specific options
-        labels: Labels to set on the network
-        ipam: IPAM configuration
-        
+        params: NetworkCreateRequest containing:
+            - name: Name of the network to create
+            - driver: Network driver to use (default: 'bridge')
+            - check_duplicate: Check for networks with same name (default: True)
+            - internal: Restrict external access (default: False)
+            - attachable: Enable manual container attachment (default: False)
+            - ingress: Create an ingress network (default: False)
+            - enable_ipv6: Enable IPv6 on the network (default: False)
+            - labels: Dictionary of labels to apply to the network
+            - options: Driver-specific options as key-value pairs
+            - ipam: IPAM configuration (optional)
+    
     Returns:
-        Dictionary with the created network information
-        
-    Example:
-        >>> await create_network(
+        NetworkCreateResponse containing:
+            - status: Operation status ('success' or 'error')
+            - message: Human-readable result message
+            - data: Network creation details
+            - network_id: ID of the created network
+            - warning: Optional warning message if any
+    
+    Raises:
+        docker.errors.APIError: If the Docker API returns an error
+        ValueError: If the network configuration is invalid
+        Exception: For unexpected errors during network creation
+    
+    Examples:
+        >>> # Create a simple bridge network
+        >>> await create_network(NetworkCreateRequest(
         ...     name="my-network",
-        ...     driver="bridge",
-        ...     ipam={
-        ...         'subnet': '172.28.0.0/16',
-        ...         'gateway': '172.28.5.1'
-        ...     },
-        ...     labels={"environment": "development"}
-        ... )
-        {
-            "status": "success",
-            "network": {
-                "id": "7d86d31b1478...",
-                "name": "my-network",
-                "driver": "bridge",
-                "scope": "local",
-                "ipam": {
-                    "Driver": "default",
-                    "Config": [{"Subnet": "172.28.0.0/16", "Gateway": "172.28.5.1"}]
-                },
-                "containers": {},
-                "options": {},
-                "labels": {"environment": "development"}
-            }
-        }
+        ...     driver="bridge"
+        ... ))
+        
+        >>> # Create a network with custom IPAM settings
+        >>> await create_network(NetworkCreateRequest(
+        ...     name="custom-network",
+        ...     ipam=NetworkIPAMConfig(
+        ...         driver="default",
+        ...         config=[{"subnet": "172.28.0.0/16"}]
+        ...     )
+        ... ))
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
         
-        # Prepare IPAM configuration
+        # Prepare IPAM config if provided
         ipam_config = None
-        if ipam:
+        if params.ipam:
             ipam_config = docker.types.IPAMConfig(
-                pool_configs=[
-                    docker.types.IPAMPool(
-                        subnet=ipam.get('subnet'),
-                        iprange=ipam.get('ip_range'),
-                        gateway=ipam.get('gateway'),
-                        aux_addresses=ipam.get('aux_addresses', {})
-                    )
-                ]
+                driver=params.ipam.driver,
+                pool_configs=params.ipam.config,
+                options=params.ipam.options
             )
         
         # Create the network
         network = client.networks.create(
-            name=name,
-            driver=driver,
-            check_duplicate=check_duplicate,
-            internal=internal,
-            attachable=attachable,
-            ingress=ingress,
-            enable_ipv6=enable_ipv6,
-            options=options,
-            labels=labels,
+            name=params.name,
+            driver=params.driver,
+            check_duplicate=params.check_duplicate,
+            internal=params.internal,
+            attachable=params.attachable,
+            ingress=params.ingress,
+            enable_ipv6=params.enable_ipv6,
+            options=params.options,
+            labels=params.labels,
             ipam=ipam_config
         )
         
-        # Get the created network details
+        # Get the network details
         network.reload()
         
-        return {
-            'status': 'success',
-            'network': {
-                'id': network.id,
-                'name': network.name,
-                'driver': network.attrs.get('Driver', ''),
-                'scope': network.attrs.get('Scope', ''),
-                'ipam': network.attrs.get('IPAM', {}),
-                'containers': network.attrs.get('Containers', {}),
-                'options': network.attrs.get('Options', {}),
-                'labels': network.attrs.get('Labels', {})
-            }
-        }
+        return NetworkCreateResponse.from_network(network)
         
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'name': name
-        }
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'name': name
-        }
+    except docker.errors.APIError as e:
+        error_msg = f'Docker API error: {str(e)}'
+        logger.error(error_msg, exc_info=True)
+        return NetworkCreateResponse.error(
+            error=error_msg,
+            message="Failed to create network due to Docker API error"
+        )
         
     except Exception as e:
         error_msg = f"Unexpected error creating network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'name': name
-        }
+        return NetworkCreateResponse.error(
+            error=error_msg,
+            message="Failed to create network"
+        )
 
-@Tool(
-    name="remove_network",
-    description="Remove a Docker network",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'network_id': {
-                'type': 'string',
-                'description': 'Network ID or name'
-            }
-        },
-        'required': ['network_id']
-    }
-)
-async def remove_network(network_id: str) -> Dict[str, Any]:
-    """
-    Remove a Docker network.
-    
-    This function removes a Docker network by its ID or name.
-    
-    Args:
-        network_id: Network ID or name
-        
-    Returns:
-        Dictionary with the removal result
-        
-    Example:
-        >>> await remove_network("my-network")
-        {
-            "status": "success",
-            "message": "Network removed successfully",
-            "network_id": "7d86d31b1478..."
-        }
-    """
-    try:
-        # Initialize Docker client
-        client = docker.from_env()
-        
-        # Get the network
-        try:
-            network = client.networks.get(network_id)
-        except NotFound:
-            return {
-                'status': 'error',
-                'error': f'Network not found: {network_id}'
-            }
-        
-        # Remove the network
-        network.remove()
-        
-        return {
-            'status': 'success',
-            'message': 'Network removed successfully',
-            'network_id': network_id
-        }
-        
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'network_id': network_id
-        }
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'network_id': network_id
-        }
-        
-    except Exception as e:
-        error_msg = f"Unexpected error removing network: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'network_id': network_id
-        }
 
-@Tool(
+@mcp.tool(
     name="connect_container_to_network",
-    description="Connect a container to a network",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'Container ID or name'
-            },
-            'network_id': {
-                'type': 'string',
-                'description': 'Network ID or name'
-            },
-            'ipv4_address': {
-                'type': 'string',
-                'format': 'ipv4',
-                'default': None,
-                'description': 'IPv4 address (e.g., 172.30.100.104)'
-            },
-            'ipv6_address': {
-                'type': 'string',
-                'format': 'ipv6',
-                'default': None,
-                'description': 'IPv6 address (e.g., 2001:db8:33b:100::17)'
-            },
-            'aliases': {
-                'type': 'array',
-                'items': {'type': 'string'},
-                'default': [],
-                'description': 'List of network-scoped aliases for the container'
-            },
-            'links': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Mapping of aliases to IP addresses for linked containers'
-            },
-            'link_local_ips': {
-                'type': 'array',
-                'items': {'type': 'string', 'format': 'ip'},
-                'default': [],
-                'description': 'List of link-local IP addresses'
-            },
-            'driver_opt': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Driver options for the endpoint'
-            }
-        },
-        'required': ['container_id', 'network_id']
-    }
+    description="Connect a container to a network"
 )
 async def connect_container_to_network(
-    container_id: str,
-    network_id: str,
-    ipv4_address: Optional[str] = None,
-    ipv6_address: Optional[str] = None,
-    aliases: List[str] = [],
-    links: Dict[str, str] = {},
-    link_local_ips: List[str] = [],
-    driver_opt: Dict[str, str] = {}
-) -> Dict[str, Any]:
+    params: NetworkConnectRequest
+) -> NetworkConnectResponse:
     """
     Connect a container to a network.
     
-    This function connects a container to a Docker network with the specified
-    network configuration.
+    This function connects a container to a Docker network with optional
+    network-specific parameters like IP address and aliases.
     
     Args:
-        container_id: Container ID or name
-        network_id: Network ID or name
-        ipv4_address: IPv4 address (e.g., 172.30.100.104)
-        ipv6_address: IPv6 address (e.g., 2001:db8:33b:100::17)
-        aliases: List of network-scoped aliases for the container
-        links: Mapping of aliases to IP addresses for linked containers
-        link_local_ips: List of link-local IP addresses
-        driver_opt: Driver options for the endpoint
-        
+        params: NetworkConnectRequest containing:
+            - container: Container ID or name to connect
+            - network: Network ID or name to connect to
+            - ipv4_address: IPv4 address to assign to the container
+            - ipv6_address: IPv6 address to assign to the container
+            - aliases: List of network-scoped aliases for the container
+            - links: Mapping of container names to aliases for this connection
+            - link_local_ips: List of link-local IP addresses
+            - driver_opts: Driver options as key-value pairs
+    
     Returns:
-        Dictionary with the connection result
-        
+        NetworkConnectResponse containing:
+            - status: Operation status ('success' or 'error')
+            - message: Human-readable result message
+            - data: Connection details
+            - container_id: ID of the connected container
+            - network_id: ID of the network connected to
+    
+    Raises:
+        docker.errors.APIError: If the Docker API returns an error
+        docker.errors.NotFound: If container or network doesn't exist
+        docker.errors.ContainerError: If the container cannot be connected
+        Exception: For unexpected errors during connection
+    
+    Examples:
+        >>> # Basic container connection
     Example:
-        >>> await connect_container_to_network(
-        ...     container_id="my-container",
-        ...     network_id="my-network",
+        >>> await connect_container_to_network(NetworkConnectRequest(
+        ...     container="my-container",
+        ...     network="my-network",
         ...     ipv4_address="172.30.100.104",
-        ...     aliases=["web", "app"]
-        ... )
-        {
-            "status": "success",
-            "message": "Container connected to network successfully",
-            "container_id": "my-container",
-            "network_id": "my-network"
-        }
+        ...     aliases=["web", "app"],
+        ...     driver_opt={"com.docker.network.driver.mtu": "1500"}
+        ... ))
+        NetworkConnectResponse(
+            status="success",
+            message="Container connected to network successfully",
+            data={
+                "container_id": "a1b2c3d4e5f6",
+                "network_id": "n1m2n3m4n5m6"
+            },
+            container_id="a1b2c3d4e5f6",
+            network_id="n1m2n3m4n5m6"
+        )
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
         
-        # Get the network
-        try:
-            network = client.networks.get(network_id)
-        except NotFound:
-            return {
-                'status': 'error',
-                'error': f'Network not found: {network_id}'
-            }
+        # Get the container and network objects
+        container = client.containers.get(params.container)
+        network = client.networks.get(params.network)
+        
+        # Prepare endpoint configuration
+        endpoint_config = {}
+        
+        # Add IPAM configuration if IP addresses are provided
+        if params.ipv4_address or params.ipv6_address:
+            endpoint_config['ipam_config'] = client.api.create_ipam_config(
+                ipv4_address=str(params.ipv4_address) if params.ipv4_address else None,
+                ipv6_address=str(params.ipv6_address) if params.ipv6_address else None
+            )
+        
+        # Add other connection parameters
+        if params.aliases:
+            endpoint_config['aliases'] = params.aliases
+        if params.links:
+            endpoint_config['links'] = params.links
+        if params.link_local_ips:
+            endpoint_config['link_local_ips'] = params.link_local_ips
+        if params.driver_opt:
+            endpoint_config['driver_opt'] = params.driver_opt
+        if params.mac_address:
+            endpoint_config['mac_address'] = params.mac_address
         
         # Connect the container to the network
-        network.connect(
-            container=container_id,
-            ipv4_address=ipv4_address,
-            ipv6_address=ipv6_address,
-            aliases=aliases,
-            links=links,
-            link_local_ips=link_local_ips,
-            driver_opt=driver_opt
+        network.connect(container, **endpoint_config)
+        
+        # Log the successful connection
+        logger.info(
+            f"Connected container {container.id} to network {network.id} "
+            f"with config: {endpoint_config}"
         )
         
-        return {
-            'status': 'success',
-            'message': 'Container connected to network successfully',
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        return NetworkConnectResponse.success_response(
+            container_id=container.id,
+            network_id=network.id,
+            message=f"Container '{container.name}' connected to network '{network.name}'"
+        )
         
-    except APIError as e:
+    except docker.errors.NotFound as e:
+        error_msg = f"Container or network not found: {str(e)}"
+        logger.warning(error_msg)
+        return NetworkConnectResponse.error(
+            error=error_msg,
+            message=f"Failed to find container or network: {str(e)}",
+            container_id=params.container,
+            network_id=params.network
+        )
+        
+    except docker.errors.APIError as e:
         error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'container_id': container_id,
-            'network_id': network_id
-        }
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        logger.error(error_msg, exc_info=True)
+        return NetworkConnectResponse.error(
+            error=error_msg,
+            message=f"Failed to connect container to network: {str(e)}",
+            container_id=params.container,
+            network_id=params.network
+        )
         
     except Exception as e:
         error_msg = f"Unexpected error connecting container to network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        return NetworkConnectResponse.error(
+            error=error_msg,
+            message="Failed to connect container to network due to an unexpected error",
+            container_id=params.container,
+            network_id=params.network
+        )
 
-@Tool(
+@mcp.tool(
     name="disconnect_container_from_network",
-    description="Disconnect a container from a network",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'Container ID or name'
-            },
-            'network_id': {
-                'type': 'string',
-                'description': 'Network ID or name'
-            },
-            'force': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Force the container to disconnect from the network'
-            }
-        },
-        'required': ['container_id', 'network_id']
-    }
+    description="Disconnect a container from a network"
 )
 async def disconnect_container_from_network(
-    container_id: str,
-    network_id: str,
-    force: bool = False
-) -> Dict[str, Any]:
+    params: NetworkDisconnectRequest
+) -> NetworkDisconnectResponse:
     """
     Disconnect a container from a network.
     
     This function disconnects a container from a Docker network.
     
     Args:
-        container_id: Container ID or name
-        network_id: Network ID or name
-        force: Force the container to disconnect from the network
+        params: NetworkDisconnectRequest containing disconnection parameters
         
     Returns:
-        Dictionary with the disconnection result
+        NetworkDisconnectResponse with the disconnection result
         
     Example:
-        >>> await disconnect_container_from_network(
-        ...     container_id="my-container",
-        ...     network_id="my-network"
-        ... )
-        {
-            "status": "success",
-            "message": "Container disconnected from network successfully",
-            "container_id": "my-container",
-            "network_id": "my-network"
-        }
+        >>> await disconnect_container_from_network(NetworkDisconnectRequest(
+        ...     container="my-container",
+        ...     network="my-network",
+        ...     force=False
+        ... ))
+        NetworkDisconnectResponse(
+            status="success",
+            message="Container disconnected from network successfully",
+            data={
+                "container_id": "a1b2c3d4e5f6",
+                "network_id": "n1m2n3m4n5m6"
+            },
+            container_id="a1b2c3d4e5f6",
+            network_id="n1m2n3m4n5m6"
+        )
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
         
-        # Get the network
-        try:
-            network = client.networks.get(network_id)
-        except NotFound:
-            return {
-                'status': 'error',
-                'error': f'Network not found: {network_id}'
-            }
+        # Get the container and network objects
+        container = client.containers.get(params.container)
+        network = client.networks.get(params.network)
         
         # Disconnect the container from the network
-        network.disconnect(container_id, force=force)
+        network.disconnect(container, force=params.force)
         
-        return {
-            'status': 'success',
-            'message': 'Container disconnected from network successfully',
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        # Log the successful disconnection
+        logger.info(
+            f"Disconnected container {container.id} from network {network.id}"
+        )
         
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        return NetworkDisconnectResponse.success_response(
+            container_id=container.id,
+            network_id=network.id,
+            message=f"Container '{container.name}' disconnected from network '{network.name}'"
+        )
         
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'container_id': container_id,
-            'network_id': network_id
-        }
+    except docker.errors.NotFound as e:
+        error_msg = f"Container or network not found: {str(e)}"
+        logger.warning(error_msg)
+        return NetworkDisconnectResponse.error(
+            error=error_msg,
+            message=f"Failed to find container or network: {str(e)}",
+            container_id=params.container,
+            network_id=params.network
+        )
+        
+    except docker.errors.APIError as e:
+        error_msg = f'Docker API error: {str(e)}'
+        logger.error(error_msg, exc_info=True)
+        return NetworkDisconnectResponse.error(
+            error=error_msg,
+            message=f"Failed to disconnect container from network: {str(e)}",
+            container_id=params.container,
+            network_id=params.network
+        )
         
     except Exception as e:
         error_msg = f"Unexpected error disconnecting container from network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'container_id': container_id,
-            'network_id': network_id
-        }
+        return NetworkDisconnectResponse.error(
+            error=error_msg,
+            message="Failed to disconnect container from network due to an unexpected error",
+            container_id=params.container,
+            network_id=params.network
+        )
 
-@Tool(
+@mcp.tool(
     name="inspect_network",
-    description="Inspect a Docker network",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'network_id': {
-                'type': 'string',
-                'description': 'Network ID or name'
-            },
-            'verbose': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Show detailed information about the network''s endpoints'
-            },
-            'scope': {
-                'type': 'string',
-                'default': 'local',
-                'enum': ['local', 'swarm'],
-                'description': 'Filter the network by scope'
-            }
-        },
-        'required': ['network_id']
-    }
+    description="Inspect a Docker network"
 )
 async def inspect_network(
-    network_id: str,
-    verbose: bool = False,
-    scope: str = 'local'
-) -> Dict[str, Any]:
+    params: NetworkInspectRequest
+) -> NetworkInspectResponse:
     """
     Inspect a Docker network.
     
-    This function retrieves detailed information about a Docker network.
+    This function retrieves detailed information about a specific Docker network.
     
     Args:
-        network_id: Network ID or name
-        verbose: Show detailed information about the network's endpoints
-        scope: Filter the network by scope ('local' or 'swarm')
+        params: NetworkInspectRequest containing inspection parameters
         
     Returns:
-        Dictionary with the network details
+        NetworkInspectResponse containing detailed information about the network
         
     Example:
-        >>> await inspect_network("my-network", verbose=True)
-        {
-            "status": "success",
-            "network": {
-                "name": "my-network",
-                "id": "7d86d31b1478...",
-                "created": "2023-01-01T12:00:00Z",
-                "scope": "local",
-                "driver": "bridge",
-                "enable_ipv6": false,
-                "internal": false,
-                "attachable": false,
-                "ingress": false,
-                "ipam": {
-                    "driver": "default",
-                    "config": [
-                        {
-                            "subnet": "172.28.0.0/16",
-                            "gateway": "172.28.5.1"
-                        }
-                    ]
-                },
-                "options": {},
-                "labels": {"environment": "development"},
-                "containers": {
-                    "container1": {
-                        "name": "web",
-                        "endpoint_id": "...",
-                        "mac_address": "02:42:ac:1c:00:02",
-                        "ipv4_address": "172.28.0.2/16",
-                        "ipv6_address": ""
-                    }
-                }
+        >>> await inspect_network(NetworkInspectRequest(
+        ...     network_id="my-network",
+        ...     verbose=True,
+        ...     scope="local"
+        ... ))
+        NetworkInspectResponse(
+            status="success",
+            message="Network details retrieved successfully",
+            data={
+                'id': 'a1b2c3d4e5f6',
+                'name': 'my-network',
+                'driver': 'bridge',
+                'scope': 'local',
+                'ipam': {...},
+                'containers': {...},
+                'options': {...},
+                'labels': {...}
             }
-        }
+        )
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
         
         # Get the network
-        try:
-            network = client.networks.get(network_id)
-        except NotFound:
-            return {
-                'status': 'error',
-                'error': f'Network not found: {network_id}'
-            }
+        network = client.networks.get(params.network_id)
         
-        # Filter by scope if needed
-        if scope and network.attrs.get('Scope') != scope:
-            return {
-                'status': 'error',
-                'error': f'Network {network_id} is not in the {scope} scope'
-            }
+        # Log the successful inspection
+        logger.info(
+            f"Inspected network {network.id} (name: {network.name})"
+        )
         
-        # Get detailed information
-        network.reload()
+        # Return the network information using the response model
+        return NetworkInspectResponse.from_network(network)
         
-        # Prepare the response
-        result = {
-            'name': network.name,
-            'id': network.id,
-            'created': datetime.fromtimestamp(network.attrs['Created']).isoformat(),
-            'scope': network.attrs.get('Scope', ''),
-            'driver': network.attrs.get('Driver', ''),
-            'enable_ipv6': network.attrs.get('EnableIPv6', False),
-            'internal': network.attrs.get('Internal', False),
-            'attachable': network.attrs.get('Attachable', False),
-            'ingress': network.attrs.get('Ingress', False),
-            'ipam': network.attrs.get('IPAM', {}),
-            'options': network.attrs.get('Options', {}),
-            'labels': network.attrs.get('Labels', {})
-        }
+    except docker.errors.NotFound as e:
+        error_msg = f"Network not found: {str(e)}"
+        logger.warning(error_msg)
+        return NetworkInspectResponse.error(
+            error=error_msg,
+            message=f"Failed to find network: {str(e)}",
+            network_id=params.network_id
+        )
         
-        # Add containers if verbose is True
-        if verbose:
-            result['containers'] = network.attrs.get('Containers', {})
-        
-        return {
-            'status': 'success',
-            'network': result
-        }
-        
-    except APIError as e:
+    except docker.errors.APIError as e:
         error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'network_id': network_id
-        }
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'network_id': network_id
-        }
+        logger.error(error_msg, exc_info=True)
+        return NetworkInspectResponse.error(
+            error=error_msg,
+            message=f"Failed to inspect network: {str(e)}",
+            network_id=params.network_id
+        )
         
     except Exception as e:
         error_msg = f"Unexpected error inspecting network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'network_id': network_id
-        }
+        return NetworkInspectResponse.error(
+            error=error_msg,
+            message="Failed to inspect network due to an unexpected error",
+            network_id=params.network_id
+        )

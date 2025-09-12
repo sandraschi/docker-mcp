@@ -3,19 +3,84 @@ GPU Management Tools for DockerMCP
 
 This module provides tools for managing NVIDIA GPU resources in Docker containers.
 """
-from __future__ import annotations
 
+import asyncio
 import json
-import logging
 import subprocess
+import time
+from datetime import datetime, timedelta
 from enum import Enum
-from typing import Dict, List, Optional, Any, Union, Literal
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 import docker
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field
 
-from fastmcp.tools.tool import Tool
-from dockermcp.logging_config import logger
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+
+# Initialize FastMCP instance
+mcp = FastMCP("GPU Management Tools")
+
+from ...logging_config import logger
+
+# Pydantic models for request/response
+class ListGPUsRequest(BaseModel):
+    """Request model for listing GPUs."""
+    refresh: bool = Field(
+        default=False,
+        description="Whether to refresh the GPU information cache"
+    )
+    detailed: bool = Field(
+        default=False,
+        description="Whether to include detailed GPU information"
+    )
+
+class GPUInfoResponse(BaseModel):
+    """Response model for GPU information."""
+    id: str = Field(..., description="GPU device ID")
+    name: str = Field(..., description="GPU model name")
+    memory_total: int = Field(..., description="Total GPU memory in bytes")
+    memory_used: int = Field(..., description="Used GPU memory in bytes")
+    memory_free: int = Field(..., description="Free GPU memory in bytes")
+    utilization_gpu: int = Field(..., description="GPU utilization percentage")
+    utilization_memory: int = Field(..., description="Memory utilization percentage")
+    temperature: int = Field(..., description="GPU temperature in Celsius")
+    power_draw: int = Field(..., description="Power draw in watts")
+    power_limit: int = Field(..., description="Power limit in watts")
+    architecture: str = Field(..., description="GPU architecture")
+    driver_version: str = Field(..., description="NVIDIA driver version")
+    cuda_version: str = Field(..., description="CUDA version")
+    pci_bus_id: str = Field(..., description="PCI bus ID")
+    uuid: str = Field(..., description="GPU UUID")
+
+class ListGPUsResponse(BaseModel):
+    """Response model for list_gpus tool."""
+    gpus: List[GPUInfoResponse] = Field(..., description="List of GPU devices")
+    timestamp: str = Field(..., description="Timestamp of the response")
+    total_gpus: int = Field(..., description="Total number of GPUs")
+
+class GetGPUInfoRequest(BaseModel):
+    """Request model for getting GPU info."""
+    gpu_id: str = Field(..., description="ID of the GPU to get information about")
+    refresh: bool = Field(
+        default=False,
+        description="Whether to refresh the GPU information cache"
+    )
+
+class MonitorGPUUsageRequest(BaseModel):
+    """Request model for monitoring GPU usage."""
+    interval: float = Field(
+        default=5.0,
+        ge=0.1,
+        le=300,
+        description="Polling interval in seconds"
+    )
+    duration: float = Field(
+        default=60.0,
+        ge=1.0,
+        le=3600,
+        description="Total duration to monitor in seconds"
+    )
 
 class GPUArchitecture(str, Enum):
     """NVIDIA GPU architecture types."""
@@ -235,216 +300,204 @@ class GPUManager:
 # Global GPU manager instance
 gpu_manager = GPUManager()
 
-@Tool(
+@mcp.tool(
     name="list_gpus",
-    description="List available NVIDIA GPUs and their status",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'refresh': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to refresh the GPU information cache'
-            },
-            'detailed': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to include detailed GPU information'
-            }
-        }
-    }
+    description="List available NVIDIA GPUs and their status"
 )
-async def list_gpus(refresh: bool = False, detailed: bool = False) -> Dict[str, Any]:
+async def list_gpus(request: ListGPUsRequest) -> ListGPUsResponse:
     """
     List all available NVIDIA GPUs and their current status.
     
+    This function retrieves information about all NVIDIA GPUs in the system,
+    including their memory usage, utilization, temperature, and other metrics.
+    
     Args:
-        refresh: Whether to refresh the GPU information cache
-        detailed: Whether to include detailed GPU information
+        request: ListGPUsRequest containing:
+            - refresh: Whether to refresh the GPU information cache
+            - detailed: Whether to include detailed GPU information
         
     Returns:
-        Dictionary containing GPU information
+        ListGPUsResponse with list of GPUs and their status
+        
+    Raises:
+        ToolError: If there's an error retrieving GPU information
         
     Example:
-        >>> await list_gpus()
-        {
-            'status': 'success',
-            'gpus': [
-                {
-                    'id': '0',
-                    'name': 'NVIDIA GeForce RTX 3090',
-                    'memory_total': 25769803776,
-                    'memory_used': 1073741824,
-                    'memory_free': 24696061952,
-                    'utilization_gpu': 5,
-                    'utilization_memory': 10,
-                    'temperature': 45,
-                    'power_draw': 65,
-                    'power_limit': 350,
-                    'architecture': 'Ampere',
-                    'driver_version': '470.57.02',
-                    'memory_percent_used': 4.17
-                }
+        >>> await list_gpus(ListGPUsRequest(refresh=True, detailed=True))
+        ListGPUsResponse(
+            gpus=[
+                GPUInfoResponse(
+                    id='0',
+                    name='NVIDIA GeForce RTX 3090',
+                    memory_total=25769803776,
+                    memory_used=1073741824,
+                    memory_free=24696061952,
+                    utilization_gpu=5,
+                    utilization_memory=10,
+                    temperature=45,
+                    power_draw=65,
+                    power_limit=350,
+                    architecture='Ampere',
+                    driver_version='470.57.02',
+                    cuda_version='11.4',
+                    pci_bus_id='0000:4B:00.0',
+                    uuid='GPU-12345678-1234-1234-1234-1234567890ab'
+                )
             ],
-            'total_gpus': 1,
-            'total_memory': 25769803776,
-            'used_memory': 1073741824,
-            'free_memory': 24696061952,
-            'avg_utilization': 5.0
-        }
+            timestamp='2023-01-01T12:00:00.000000',
+            total_gpus=1
+        )
     """
     try:
-        gpus = gpu_manager.get_gpu_devices(refresh=refresh)
-        gpu_stats = gpu_manager.get_gpu_stats()
+        # Get GPU devices
+        gpu_devices = gpu_manager.get_gpu_devices(refresh=request.refresh)
         
-        if not detailed:
-            gpu_list = [
-                {
-                    'id': gpu.id,
-                    'name': gpu.name,
-                    'memory_total': gpu.memory_total,
-                    'memory_used': gpu.memory_used,
-                    'memory_free': gpu.memory_free,
-                    'memory_percent_used': round(gpu.memory_percent_used, 2),
-                    'utilization_gpu': gpu.utilization_gpu,
-                    'temperature': gpu.temperature,
-                    'power_draw': gpu.power_draw,
-                    'power_limit': gpu.power_limit,
-                    'architecture': gpu.architecture.value
-                }
-                for gpu in gpus
-            ]
-        else:
-            gpu_list = [gpu.dict() for gpu in gpus]
+        # Convert GPU devices to response models
+        gpu_responses = []
+        for device in gpu_devices:
+            gpu_response = GPUInfoResponse(
+                id=device.id,
+                name=device.name,
+                memory_total=device.memory_total,
+                memory_used=device.memory_used,
+                memory_free=device.memory_free,
+                utilization_gpu=device.utilization_gpu,
+                utilization_memory=device.utilization_memory,
+                temperature=device.temperature,
+                power_draw=device.power_draw,
+                power_limit=device.power_limit,
+                architecture=device.architecture.value,
+                driver_version=device.driver_version,
+                cuda_version=device.cuda_version,
+                pci_bus_id=device.pci_bus_id,
+                uuid=device.uuid
+            )
+            gpu_responses.append(gpu_response)
         
-        return {
-            'status': 'success',
-            'gpus': gpu_list,
-            'total_gpus': len(gpus),
-            'total_memory': gpu_stats.total_memory,
-            'used_memory': gpu_stats.used_memory,
-            'free_memory': gpu_stats.free_memory,
-            'avg_utilization': round(gpu_stats.avg_utilization, 2)
-        }
-    
+        # Create and return the response
+        return ListGPUsResponse(
+            gpus=gpu_responses,
+            timestamp=datetime.utcnow().isoformat(),
+            total_gpus=len(gpu_responses)
+        )
+        
     except Exception as e:
         error_msg = f"Failed to list GPUs: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        raise ToolError(error_msg) from e
 
-@Tool(
+@mcp.tool(
     name="get_gpu_info",
-    description="Get detailed information about a specific GPU",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'gpu_id': {
-                'type': 'string',
-                'description': 'ID of the GPU to get information about'
-            },
-            'refresh': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to refresh the GPU information cache'
-            }
-        },
-        'required': ['gpu_id']
-    }
+    description="Get detailed information about a specific GPU"
 )
-async def get_gpu_info(gpu_id: str, refresh: bool = False) -> Dict[str, Any]:
+async def get_gpu_info(request: GetGPUInfoRequest) -> GPUInfoResponse:
     """
     Get detailed information about a specific GPU.
     
     Args:
-        gpu_id: ID of the GPU to get information about
-        refresh: Whether to refresh the GPU information cache
+        request: GetGPUInfoRequest containing GPU ID and refresh flag
         
     Returns:
-        Dictionary containing detailed GPU information
+        GPUInfoResponse with detailed GPU information
         
     Example:
-        >>> await get_gpu_info("0")
+        >>> await get_gpu_info(GetGPUInfoRequest(gpu_id="0", refresh=True))
         {
-            'status': 'success',
-            'gpu': {
-                'id': '0',
-                'name': 'NVIDIA GeForce RTX 3090',
-                'memory_total': 25769803776,
-                'memory_used': 1073741824,
-                'memory_free': 24696061952,
-                'utilization_gpu': 5,
-                'utilization_memory': 10,
-                'temperature': 45,
-                'power_draw': 65,
-                'power_limit': 350,
-                'architecture': 'Ampere',
-                'driver_version': '470.57.02',
-                'pci_bus_id': '0000:4B:00.0',
-                'uuid': 'GPU-12345678-1234-1234-1234-1234567890ab',
-                'memory_percent_used': 4.17
-            }
+            'id': '0',
+            'name': 'NVIDIA GeForce RTX 3090',
+            'memory_total': 25769803776,
+            'memory_used': 1073741824,
+            'memory_free': 24696061952,
+            'utilization_gpu': 5,
+            'utilization_memory': 10,
+            'temperature': 45,
+            'power_draw': 65,
+            'power_limit': 350,
+            'architecture': 'Ampere',
+            'driver_version': '470.57.02',
+            'cuda_version': '11.4',
+            'pci_bus_id': '0000:4B:00.0',
+            'uuid': 'GPU-12345678-1234-1234-1234-1234567890ab'
         }
     """
     try:
-        gpu = gpu_manager.get_gpu_by_id(gpu_id)
+        # Refresh GPU info if requested
+        gpu = gpu_manager.get_gpu_by_id(request.gpu_id)
         if not gpu:
-            return {
-                'status': 'error',
-                'error': f'GPU with ID {gpu_id} not found'
-            }
+            error_msg = f'GPU with ID {request.gpu_id} not found'
+            logger.error(error_msg)
+            raise ToolError(error_msg)
+            
+        return GPUInfoResponse(
+            id=gpu.id,
+            name=gpu.name,
+            memory_total=gpu.memory_total,
+            memory_used=gpu.memory_used,
+            memory_free=gpu.memory_free,
+            utilization_gpu=gpu.utilization_gpu,
+            utilization_memory=gpu.utilization_memory,
+            temperature=gpu.temperature,
+            power_draw=gpu.power_draw,
+            power_limit=gpu.power_limit,
+            architecture=gpu.architecture.value,
+            driver_version=gpu.driver_version,
+            cuda_version=gpu.cuda_version,
+            pci_bus_id=gpu.pci_bus_id,
+            uuid=gpu.uuid
+        )
         
-        return {
-            'status': 'success',
-            'gpu': gpu.dict()
-        }
-    
     except Exception as e:
-        error_msg = f"Failed to get GPU info: {str(e)}"
+        error_msg = f'Failed to get GPU info: {str(e)}'
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        raise ToolError(error_msg) from e
 
-@Tool(
+class GPUSample(BaseModel):
+    """A single sample of GPU usage data."""
+    id: str = Field(..., description="GPU device ID")
+    utilization_gpu: int = Field(..., description="GPU utilization percentage")
+    memory_used: int = Field(..., description="Used GPU memory in bytes")
+    memory_percent_used: float = Field(..., description="Percentage of GPU memory used")
+    temperature: int = Field(..., description="GPU temperature in Celsius")
+
+class MonitoringSample(BaseModel):
+    """A single sample of GPU monitoring data."""
+    timestamp: str = Field(..., description="ISO timestamp of the sample")
+    gpus: List[GPUSample] = Field(..., description="List of GPU samples")
+    avg_utilization: float = Field(..., description="Average GPU utilization across all GPUs")
+    total_memory_used: int = Field(..., description="Total memory used across all GPUs in bytes")
+
+class MonitorGPUUsageResponse(BaseModel):
+    """Response model for monitor_gpu_usage tool."""
+    samples: List[MonitoringSample] = Field(..., description="List of monitoring samples")
+    sample_count: int = Field(..., description="Total number of samples collected")
+
+@mcp.tool(
     name="monitor_gpu_usage",
-    description="Monitor GPU usage in real-time",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'interval': {
-                'type': 'number',
-                'default': 5.0,
-                'minimum': 1.0,
-                'description': 'Polling interval in seconds'
-            },
-            'duration': {
-                'type': 'number',
-                'default': 60.0,
-                'minimum': 1.0,
-                'description': 'Duration to monitor in seconds'
-            }
-        }
-    }
+    description="Monitor GPU usage in real-time"
 )
-async def monitor_gpu_usage(interval: float = 5.0, duration: float = 60.0) -> Dict[str, Any]:
+async def monitor_gpu_usage(request: MonitorGPUUsageRequest) -> MonitorGPUUsageResponse:
     """
     Monitor GPU usage in real-time for a specified duration.
     
+    This function collects GPU utilization, memory usage, and temperature metrics
+    at regular intervals for the specified duration.
+    
     Args:
-        interval: Polling interval in seconds
-        duration: Total duration to monitor in seconds
-        
+        request: MonitorGPUUsageRequest containing:
+            - interval: Polling interval in seconds (0.1-300)
+            - duration: Total monitoring duration in seconds (1-3600)
+            
     Returns:
-        Dictionary containing monitoring results
+        MonitorGPUUsageResponse containing:
+            - samples: List of monitoring samples with GPU metrics
+            - sample_count: Total number of samples collected
+            
+    Raises:
+        ToolError: If monitoring fails or invalid parameters are provided
         
     Example:
-        >>> await monitor_gpu_usage(interval=2, duration=10)
+        >>> await monitor_gpu_usage(MonitorGPUUsageRequest(interval=2, duration=10))
         {
-            'status': 'success',
             'samples': [
                 {
                     'timestamp': '2023-01-01T12:00:00.000000',
@@ -459,56 +512,83 @@ async def monitor_gpu_usage(interval: float = 5.0, duration: float = 60.0) -> Di
                     ],
                     'avg_utilization': 45.0,
                     'total_memory_used': 8589934592
-                },
-                ...
-            ]
+                }
+            ],
+            'sample_count': 1
         }
     """
     try:
-        import asyncio
-        from datetime import datetime, timedelta
-        
+        # Validate input parameters
+        if request.interval <= 0 or request.interval > 300:
+            raise ValueError("Interval must be between 0.1 and 300 seconds")
+            
+        if request.duration < 1 or request.duration > 3600:
+            raise ValueError("Duration must be between 1 and 3600 seconds")
+            
         samples = []
-        end_time = datetime.utcnow() + timedelta(seconds=duration)
+        start_time = datetime.utcnow()
+        end_time = start_time + timedelta(seconds=request.duration)
         
-        while datetime.utcnow() < end_time:
-            gpu_stats = gpu_manager.get_gpu_stats()
-            
-            sample = {
-                'timestamp': datetime.utcnow().isoformat(),
-                'gpus': [
-                    {
-                        'id': gpu.id,
-                        'utilization_gpu': gpu.utilization_gpu,
-                        'memory_used': gpu.memory_used,
-                        'memory_percent_used': round(gpu.memory_percent_used, 2),
-                        'temperature': gpu.temperature
-                    }
-                    for gpu in gpu_stats.devices
-                ],
-                'avg_utilization': round(gpu_stats.avg_utilization, 2),
-                'total_memory_used': gpu_stats.used_memory
-            }
-            
-            samples.append(sample)
-            
-            # Sleep until next interval or until end time
-            sleep_time = min(interval, (end_time - datetime.utcnow()).total_seconds())
-            if sleep_time > 0:
-                await asyncio.sleep(sleep_time)
-            else:
-                break
+        logger.info(f"Starting GPU monitoring for {request.duration} seconds with {request.interval}s interval")
         
-        return {
-            'status': 'success',
-            'samples': samples,
-            'sample_count': len(samples)
-        }
+        # Initial sample
+        gpu_stats = gpu_manager.get_gpu_stats()
+        sample = MonitoringSample(
+            timestamp=start_time.isoformat(),
+            gpus=[
+                GPUSample(
+                    id=gpu.id,
+                    utilization_gpu=gpu.utilization_gpu,
+                    memory_used=gpu.memory_used,
+                    memory_percent_used=round(gpu.memory_percent_used, 2),
+                    temperature=gpu.temperature
+                )
+                for gpu in gpu_stats.devices
+            ],
+            avg_utilization=round(gpu_stats.avg_utilization, 2),
+            total_memory_used=gpu_stats.used_memory
+        )
+        samples.append(sample)
+        
+        # Continue monitoring until duration elapses
+        while (datetime.utcnow() + timedelta(seconds=request.interval)) < end_time:
+            try:
+                await asyncio.sleep(request.interval)
+                
+                # Get fresh GPU stats
+                gpu_stats = gpu_manager.get_gpu_stats()
+                
+                sample = MonitoringSample(
+                    timestamp=datetime.utcnow().isoformat(),
+                    gpus=[
+                        GPUSample(
+                            id=gpu.id,
+                            utilization_gpu=gpu.utilization_gpu,
+                            memory_used=gpu.memory_used,
+                            memory_percent_used=round(gpu.memory_percent_used, 2),
+                            temperature=gpu.temperature
+                        )
+                        for gpu in gpu_stats.devices
+                    ],
+                    avg_utilization=round(gpu_stats.avg_utilization, 2),
+                    total_memory_used=gpu_stats.used_memory
+                )
+                
+                samples.append(sample)
+                
+            except Exception as e:
+                logger.error(f"Error during GPU monitoring: {str(e)}", exc_info=True)
+                # Continue monitoring even if one sample fails
+                continue
+        
+        logger.info(f"Completed GPU monitoring. Collected {len(samples)} samples")
+        
+        return MonitorGPUUsageResponse(
+            samples=samples,
+            sample_count=len(samples)
+        )
     
     except Exception as e:
         error_msg = f"Failed to monitor GPU usage: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        raise ToolError(error_msg) from e

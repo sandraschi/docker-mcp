@@ -1,0 +1,28 @@
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : Friday, September 12, 2025 11:08:44 PM
+   Source : d:\Dev\repos\dockermcp\src\dockermcp\tools\
+     Dest : d:\Dev\repos\dockermcp\src\dockermcp\tools_backup_20250912_230844\
+
+    Files : *.*
+	    
+  Options : *.* /S /E /DCOPY:DA /COPY:DAT /ZB /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+ERROR : You do not have the Backup and Restore Files user rights.
+*****  You need these to perform Backup copies (/B or /ZB).
+
+       Simple Usage :: ROBOCOPY source destination /MIR
+
+             source :: Source Directory (drive:\path or \\server\share\path).
+        destination :: Destination Dir  (drive:\path or \\server\share\path).
+               /MIR :: Mirror a complete directory tree.
+
+    For more usage information run ROBOCOPY /?
+
+                                                          
+****  /MIR can DELETE files as well as copy them !

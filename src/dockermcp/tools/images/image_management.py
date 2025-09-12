@@ -23,15 +23,15 @@ from datetime import datetime
 from enum import Enum
 from io import BytesIO, StringIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, BinaryIO, Tuple, Generator
+from typing import Any, Optional, Union, BinaryIO, Tuple, Generator, Annotated
 
 import docker
 from docker.errors import (
     DockerException, APIError, ImageNotFound, BuildError, 
     ContainerError, NotFound, InvalidRepository, InvalidVersion
 )
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, HttpUrl, AnyUrl
+from dockermcp.mcp_instance import mcp
+from pydantic import Field, validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger
 
@@ -109,41 +109,15 @@ class ImagePruneResult(BaseModel):
         description="Disk space reclaimed in bytes"
     )
 
-@Tool(
+@mcp.tool(
     name="list_images",
-    description="List Docker images with filtering options",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'default': None,
-                'description': 'Filter by image name or name:tag'
-            },
-            'all': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Show all images (default hides intermediate images)'
-            },
-            'filters': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filter output based on conditions provided (e.g., `{"dangling":["true"]}`)'
-            },
-            'digests': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Show image digests'
-            }
-        }
-    }
+    description="List Docker images with filtering options"
 )
 async def list_images(
-    name: Optional[str] = None,
-    all: bool = False,
-    filters: Dict[str, str] = {},
-    digests: bool = False
+    name: Annotated[Optional[str], Field(description="Filter by image name or name:tag")] = None,
+    all: Annotated[bool, Field(default=False, description="Show all images (default hides intermediate images)")] = False,
+    filters: Annotated[Dict[str, str], Field(default_factory=dict, description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)")] = {},
+    digests: Annotated[bool, Field(default=False, description="Show image digests")] = False
 ) -> Dict[str, Any]:
     """
     List Docker images with filtering options.
@@ -249,20 +223,7 @@ async def list_images(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
-    name="get_image_history",
-    description="Get the history of a Docker image",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'image_id': {
-                'type': 'string',
-                'description': 'Image ID or name (optionally with tag)'
-            }
-        },
-        'required': ['image_id']
-    }
-)
+@mcp.tool()
 async def get_image_history(image_id: str) -> Dict[str, Any]:
     """
     Get the history of a Docker image.
@@ -351,39 +312,15 @@ async def get_image_history(image_id: str) -> Dict[str, Any]:
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
+@mcp.tool(
     name="tag_image",
-    description="Tag a Docker image",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'image_id': {
-                'type': 'string',
-                'description': 'Source image ID or name (optionally with tag)'
-            },
-            'repository': {
-                'type': 'string',
-                'description': 'Repository to tag the image with'
-            },
-            'tag': {
-                'type': 'string',
-                'default': 'latest',
-                'description': 'Tag to apply to the image (default: latest)'
-            },
-            'force': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Force tagging even if the tag already exists'
-            }
-        },
-        'required': ['image_id', 'repository']
-    }
+    description="Tag a Docker image"
 )
 async def tag_image(
-    image_id: str,
-    repository: str,
-    tag: str = 'latest',
-    force: bool = False
+    image_id: Annotated[str, Field(description="Source image ID or name (optionally with tag)")],
+    repository: Annotated[str, Field(description="Repository to tag the image with")],
+    tag: Annotated[str, Field(default="latest", description="Tag to apply to the image")] = "latest",
+    force: Annotated[bool, Field(default=False, description="Force tagging even if the tag already exists")] = False
 ) -> Dict[str, Any]:
     """
     Tag a Docker image.
@@ -475,42 +412,17 @@ async def tag_image(
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
-            'error': error_msg,
-            'image_id': image_id,
-            'target': f"{repository}:{tag}"
+            'error': error_msg
         }
 
-@Tool(
+@mcp.tool(
     name="search_images",
-    description="Search Docker Hub for images",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'term': {
-                'type': 'string',
-                'description': 'Search term'
-            },
-            'limit': {
-                'type': 'integer',
-                'minimum': 1,
-                'maximum': 100,
-                'default': 25,
-                'description': 'Maximum number of results to return (1-100)'
-            },
-            'filters': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Additional filters (e.g., `{"is-official": "true"}`)'
-            }
-        },
-        'required': ['term']
-    }
+    description="Search Docker Hub for images"
 )
 async def search_images(
-    term: str,
-    limit: int = 25,
-    filters: Dict[str, str] = {}
+    term: Annotated[str, Field(description="Search term")],
+    limit: Annotated[int, Field(description="Maximum number of results to return (1-100)", default=25, minimum=1, maximum=100)],
+    filters: Annotated[Dict[str, str], Field(description="Additional filters (e.g., {'is-official': 'true'}", default={})]
 ) -> Dict[str, Any]:
     """
     Search Docker Hub for images.
@@ -599,29 +511,13 @@ async def search_images(
             'term': term
         }
 
-@Tool(
+@mcp.tool(
     name="prune_images",
-    description="Remove unused Docker images",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'filters': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filters to process on the prune (e.g., `{"dangling": ["true"]}`)'
-            },
-            'dry_run': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'If true, only show what would be deleted'
-            }
-        }
-    }
+    description="Remove unused Docker images"
 )
 async def prune_images(
-    filters: Dict[str, str] = {},
-    dry_run: bool = False
+    filters: Annotated[Dict[str, str], Field(description="Filters to process on the prune (e.g., {'dangling': ['true']}", default={})],
+    dry_run: Annotated[bool, Field(description="If true, only show what would be deleted", default=False)]
 ) -> Dict[str, Any]:
     """
     Remove unused Docker images.

@@ -17,15 +17,15 @@ import tempfile
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Optional, Union, Literal, Annotated
 
 import docker
 from docker.errors import (
     DockerException, APIError, NotFound, 
     ImageNotFound, ContainerError, InvalidArgument
 )
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, HttpUrl, AnyUrl
+from dockermcp.mcp_instance import mcp, datetime
+from pydantic import BaseModel, Field, Field, validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger
 
@@ -66,55 +66,14 @@ class VolumeInspectResult(BaseModel):
     options: Dict[str, str] = Field(default_factory=dict, description="Driver-specific options")
     usage_data: Optional[Dict[str, Any]] = Field(None, description="Usage statistics about the volume")
 
-@Tool(
-    name="list_volumes",
-    description="List Docker volumes with filtering options",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'names': {
-                'type': 'array',
-                'items': {'type': 'string'},
-                'default': [],
-                'description': 'Filter by volume names'
-            },
-            'drivers': {
-                'type': 'array',
-                'items': {'type': 'string'},
-                'default': [],
-                'description': 'Filter by volume drivers'
-            },
-            'labels': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filter by labels (e.g., {"environment": "production"})'
-            },
-            'dangling': {
-                'type': 'boolean',
-                'default': None,
-                'description': 'Filter for dangling volumes (true/false)'
-            },
-            'driver': {
-                'type': 'string',
-                'default': None,
-                'description': 'Filter by driver name (alias for drivers)'
-            },
-            'name': {
-                'type': 'string',
-                'default': None,
-                'description': 'Filter by volume name (alias for names)'
-            }
-        }
-    }
-)
+@mcp.tool()
 async def list_volumes(
-    names: List[str] = [],
-    drivers: List[str] = [],
-    labels: Dict[str, str] = {},
-    dangling: Optional[bool] = None,
-    driver: Optional[str] = None,
-    name: Optional[str] = None
+    names: Annotated[List[str], Field(default_factory=list, description="Filter by volume names")] = [],
+    drivers: Annotated[List[str], Field(default_factory=list, description="Filter by volume drivers")] = [],
+    labels: Annotated[Dict[str, str], Field(default_factory=dict, description="Filter by labels (e.g., {'environment': 'production'})")] = {},
+    dangling: Annotated[Optional[bool], Field(None, description="Filter for dangling volumes (true/false)")] = None,
+    driver: Annotated[Optional[str], Field(None, description="Filter by driver name (alias for drivers)")] = None,
+    name: Annotated[Optional[str], Field(None, description="Filter by volume name (alias for names)")] = None
 ) -> Dict[str, Any]:
     """
     List Docker volumes with filtering options.
@@ -230,42 +189,24 @@ async def list_volumes(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
-    name="create_volume",
-    description="Create a new Docker volume",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'default': None,
-                'description': 'Name of the volume. If not specified, Docker generates a name.'
-            },
-            'driver': {
-                'type': 'string',
-                'default': 'local',
-                'description': 'Name of the volume driver to use. Defaults to "local".'
-            },
-            'driver_opts': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Key-value mapping of driver options and values.'
-            },
-            'labels': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Labels to set on the volume, as a key-value mapping.'
-            }
-        }
-    }
-)
+@mcp.tool()
 async def create_volume(
-    name: Optional[str] = None,
-    driver: str = 'local',
-    driver_opts: Dict[str, str] = {},
-    labels: Dict[str, str] = {}
+    name: Annotated[Optional[str], Field(
+        None,
+        description="Name of the volume. If not specified, Docker generates a name."
+    )] = None,
+    driver: Annotated[str, Field(
+        "local",
+        description="Name of the volume driver to use. Defaults to 'local'."
+    )] = "local",
+    driver_opts: Annotated[Dict[str, str], Field(
+        default_factory=dict,
+        description="Key-value mapping of driver options and values."
+    )] = {},
+    labels: Annotated[Dict[str, str], Field(
+        default_factory=dict,
+        description="Labels to set on the volume, as a key-value mapping."
+    )] = {}
 ) -> Dict[str, Any]:
     """
     Create a new Docker volume.
@@ -355,28 +296,18 @@ async def create_volume(
             'name': name
         }
 
-@Tool(
+@mcp.tool(
     name="inspect_volume",
     description="Inspect a Docker volume",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': 'Name of the volume'
-            },
-            'size': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Calculate the size of the volume'
-            }
-        },
-        'required': ['name']
-    }
 )
 async def inspect_volume(
-    name: str,
-    size: bool = False
+    name: Annotated[str, Field(
+        description="Name of the volume"
+    )],
+    size: Annotated[bool, Field(
+        False,
+        description="Calculate the size of the volume"
+    )] = False
 ) -> Dict[str, Any]:
     """
     Inspect a Docker volume.
@@ -490,28 +421,16 @@ async def inspect_volume(
             'name': name
         }
 
-@Tool(
-    name="remove_volume",
-    description="Remove a Docker volume",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'description': 'Name of the volume'
-            },
-            'force': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Force the removal of the volume even if it is in use'
-            }
-        },
-        'required': ['name']
-    }
-)
+@mcp.tool()
 async def remove_volume(
-    name: str,
-    force: bool = False
+    name: Annotated[str, Field(
+        ...,
+        description="Name of the volume to remove"
+    )],
+    force: Annotated[bool, Field(
+        False,
+        description="Force the removal of the volume even if it is in use"
+    )] = False
 ) -> Dict[str, Any]:
     """
     Remove a Docker volume.
@@ -583,29 +502,16 @@ async def remove_volume(
             'name': name
         }
 
-@Tool(
-    name="prune_volumes",
-    description="Remove unused Docker volumes",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'filters': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filters to process on the prune (e.g., `{"label": ["maintainer=admin"]}`)'
-            },
-            'dry_run': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'If true, only show what would be deleted'
-            }
-        }
-    }
-)
+@mcp.tool()
 async def prune_volumes(
-    filters: Dict[str, str] = {},
-    dry_run: bool = False
+    filters: Annotated[Dict[str, str], Field(
+        default_factory=dict,
+        description="Filters to process on the prune (e.g., {'label': ['maintainer=admin']})"
+    )] = {},
+    dry_run: Annotated[bool, Field(
+        False,
+        description="If true, only show what would be deleted"
+    )] = False
 ) -> Dict[str, Any]:
     """
     Remove unused Docker volumes.

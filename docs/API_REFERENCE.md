@@ -1,6 +1,7 @@
 # DockerMCP API Reference
 
 ## Table of Contents
+
 1. [Introduction](#introduction)
 2. [Authentication](#authentication)
 3. [Endpoints](#endpoints)
@@ -43,6 +44,7 @@ GET /api/containers
 - `filters` (JSON): Filter containers
 
 **Example Response:**
+
 ```json
 {
   "status": "success",
@@ -66,6 +68,7 @@ POST /api/containers
 ```
 
 **Request Body:**
+
 ```json
 {
   "image": "nginx:latest",
@@ -77,6 +80,7 @@ POST /api/containers
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",
@@ -94,10 +98,12 @@ GET /api/images
 ```
 
 **Query Parameters:**
+
 - `all` (boolean): Show all images (default: `false`)
 - `filters` (JSON): Filter images
 
 **Example Response:**
+
 ```json
 {
   "status": "success",
@@ -121,6 +127,7 @@ GET /api/networks
 ```
 
 **Example Response:**
+
 ```json
 {
   "status": "success",
@@ -145,6 +152,7 @@ GET /api/volumes
 ```
 
 **Example Response:**
+
 ```json
 {
   "status": "success",
@@ -168,6 +176,7 @@ GET /api/system/info
 ```
 
 **Example Response:**
+
 ```json
 {
   "status": "success",
@@ -210,6 +219,7 @@ POST /api/workflows
 ```
 
 **Response:**
+
 ```json
 {
   "status": "success",

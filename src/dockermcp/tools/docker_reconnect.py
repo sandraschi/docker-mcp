@@ -4,77 +4,96 @@ Docker Reconnect Tool - Handles reconnection to Docker daemon.
 This module provides functionality to attempt reconnection to the Docker daemon
 if the connection is lost.
 """
-from typing import Dict, Any
+import asyncio
+import logging
+from typing import Dict, Any, Optional
+from pydantic import BaseModel, Field
 
-from fastmcp.tools.tool import Tool
+from dockermcp.mcp_instance import mcp
 from dockermcp import retry_docker_connection, docker_available
+from dockermcp.tools import ToolResponse
 
-@Tool(
+class ReconnectDockerParams(BaseModel):
+    """Parameters for the reconnect_docker tool."""
+    max_retries: int = Field(
+        default=3,
+        ge=1,
+        le=10,
+        description="Maximum number of retry attempts"
+    )
+    retry_delay: float = Field(
+        default=1.0,
+        gt=0,
+        le=60.0,
+        description="Delay between retry attempts in seconds"
+    )
+
+class ReconnectDockerResponse(BaseModel):
+    """Response model for the reconnect_docker tool."""
+    success: bool = Field(..., description="Whether reconnection was successful")
+    message: str = Field(..., description="Status message")
+    docker_available: bool = Field(..., description="Whether Docker is now available")
+
+@mcp.tool(
     name="reconnect_docker",
-    description="Attempt to reconnect to the Docker daemon",
-    parameters={
-        "type": "object",
-        "properties": {
-            "max_retries": {
-                "type": "integer", 
-                "default": 3,
-                "description": "Maximum number of retry attempts"
-            },
-            "retry_delay": {
-                "type": "number", 
-                "default": 1.0,
-                "description": "Delay between retry attempts in seconds"
-            }
-        },
-        "required": []
-    },
-    output_schema={
-        "type": "object",
-        "properties": {
-            "success": {"type": "boolean", "description": "Whether reconnection was successful"},
-            "message": {"type": "string", "description": "Status message"},
-            "docker_available": {"type": "boolean", "description": "Whether Docker is now available"}
-        },
-        "required": ["success", "message", "docker_available"]
-    }
+    description="Attempt to reconnect to the Docker daemon"
 )
-async def reconnect_docker(max_retries: int = 3, retry_delay: float = 1.0) -> Dict[str, Any]:
+async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[ReconnectDockerResponse]:
     """
     Attempt to reconnect to the Docker daemon.
     
     Args:
-        max_retries: Maximum number of retry attempts
-        retry_delay: Delay between retry attempts in seconds
-        
+        params: ReconnectDockerParams containing:
+            - max_retries: Maximum number of retry attempts (default: 3)
+            - retry_delay: Delay between retry attempts in seconds (default: 1.0)
+            
     Returns:
-        Dict containing reconnection status
+        ToolResponse containing the reconnection status
     """
-    if docker_available:
-        return {
-            "success": True,
-            "message": "Docker is already available",
-            "docker_available": True
-        }
-    
-    success = False
-    for attempt in range(1, max_retries + 1):
-        success = retry_docker_connection()
-        if success:
-            return {
-                "success": True,
-                "message": f"Successfully reconnected to Docker daemon on attempt {attempt}",
-                "docker_available": True
-            }
+    try:
+        if docker_available:
+            return ToolResponse.from_success(
+                message="Docker is already available",
+                data=ReconnectDockerResponse(
+                    success=True,
+                    message="Docker is already available",
+                    docker_available=True
+                )
+            )
         
-        if attempt < max_retries:
-            import time
-            time.sleep(retry_delay)
-    
-    return {
-        "success": False,
-        "message": f"Failed to reconnect to Docker daemon after {max_retries} attempts",
-        "docker_available": False
-    }
+        success = False
+        for attempt in range(1, params.max_retries + 1):
+            try:
+                if retry_docker_connection():
+                    success = True
+                    break
+                logger.warning(f"Reconnection attempt {attempt}/{params.max_retries} failed")
+                if attempt < params.max_retries:
+                    await asyncio.sleep(params.retry_delay)
+            except Exception as e:
+                logger.error(f"Error during reconnection attempt {attempt}: {str(e)}")
+                if attempt < params.max_retries:
+                    await asyncio.sleep(params.retry_delay)
+        
+        if success:
+            return ToolResponse.from_success(
+                message="Successfully reconnected to Docker daemon",
+                data=ReconnectDockerResponse(
+                    success=True,
+                    message="Successfully reconnected to Docker daemon",
+                    docker_available=True
+                )
+            )
+        else:
+            return ToolResponse.from_error(
+                message=f"Failed to reconnect to Docker daemon after {params.max_retries} attempts",
+                error=Exception("Docker reconnection failed")
+            )
+            
+    except Exception as e:
+        error_msg = f"Error in reconnect_docker: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return ToolResponse.from_error(error_msg, e)
 
 def register_tool():
     """Register the Docker reconnect tool with the MCP server.

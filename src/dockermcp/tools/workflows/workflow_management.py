@@ -22,112 +22,22 @@ from docker.errors import (
     DockerException, APIError, NotFound, 
     ImageNotFound, ContainerError, InvalidArgument
 )
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, HttpUrl, AnyUrl, ByteSize
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field
 
+# Initialize FastMCP instance
+mcp = FastMCP("Workflow Management Tools")
 from dockermcp.logging_config import logger
 
-class WorkflowStatus(str, Enum):
-    """Status of a workflow."""
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
-
-class ServiceHealth(str, Enum):
-    """Health status of a service."""
-    HEALTHY = "healthy"
-    UNHEALTHY = "unhealthy"
-    STARTING = "starting"
-    UNKNOWN = "unknown"
-
-class ServiceDefinition(BaseModel):
-    """Definition of a service in a workflow."""
-    name: str = Field(..., description="Name of the service")
-    image: str = Field(..., description="Docker image to use")
-    command: Optional[Union[str, List[str]]] = Field(
-        None,
-        description="Command to run in the container"
-    )
-    environment: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Environment variables"
-    )
-    ports: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Port mappings (host:container)"
-    )
-    volumes: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Volume mappings (host:container)"
-    )
-    depends_on: List[str] = Field(
-        default_factory=list,
-        description="List of service names this service depends on"
-    )
-    healthcheck: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Health check configuration"
-    )
-    restart_policy: str = Field(
-        "no",
-        description="Restart policy (no, on-failure, always, unless-stopped)"
-    )
-    deploy: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Deployment configuration"
-    )
-
-class WorkflowDefinition(BaseModel):
-    """Definition of a workflow."""
-    name: str = Field(..., description="Name of the workflow")
-    version: str = Field("1.0", description="Workflow version")
-    services: Dict[str, ServiceDefinition] = Field(
-        ...,
-        description="Services in the workflow"
-    )
-    networks: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Networks to create"
-    )
-    volumes: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="Volumes to create"
-    )
-    environment: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Global environment variables"
-    )
-
-class WorkflowState(BaseModel):
-    """Runtime state of a workflow."""
-    workflow_id: str = Field(..., description="Unique ID of the workflow")
-    name: str = Field(..., description="Name of the workflow")
-    status: WorkflowStatus = Field(
-        WorkflowStatus.PENDING,
-        description="Current status of the workflow"
-    )
-    start_time: Optional[datetime] = Field(
-        None,
-        description="When the workflow started"
-    )
-    end_time: Optional[datetime] = Field(
-        None,
-        description="When the workflow ended"
-    )
-    services: Dict[str, Dict[str, Any]] = Field(
-        default_factory=dict,
-        description="State of each service"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the workflow failed"
-    )
-    created_at: datetime = Field(
-        default_factory=datetime.utcnow,
-        description="When the workflow was created"
-    )
+# Import models from models.py to avoid circular imports
+from .models import (
+    WorkflowStatus, ServiceHealth, ServiceDefinition, WorkflowDefinition,
+    WorkflowState, CreateWorkflowRequest, CreateWorkflowResponse,
+    StartWorkflowRequest, StartWorkflowResponse, StopWorkflowRequest,
+    StopWorkflowResponse, WorkflowStatusResponse, ListWorkflowsRequest,
+    ListWorkflowsResponse, WorkflowSummary
+)
 
 class WorkflowManager:
     """Manages Docker workflows."""
@@ -135,112 +45,132 @@ class WorkflowManager:
     def __init__(self):
         self.client = docker.from_env()
         self.workflows: Dict[str, WorkflowState] = {}
-    
-    async def create_workflow(
+        
+    def create_workflow(
         self,
-        workflow_def: Union[Dict[str, Any], WorkflowDefinition],
-        workflow_id: Optional[str] = None
+        request: CreateWorkflowRequest
     ) -> WorkflowState:
         """Create a new workflow.
         
         Args:
-            workflow_def: Workflow definition
-            workflow_id: Optional workflow ID (generated if not provided)
+            request: CreateWorkflowRequest containing workflow definition and optional ID
             
         Returns:
-            Workflow state
+            WorkflowState: The created workflow state
+            
+        Raises:
+            ToolError: If workflow creation fails
         """
-        if isinstance(workflow_def, dict):
-            workflow_def = WorkflowDefinition(**workflow_def)
-        
-        workflow_id = workflow_id or f"workflow_{int(time.time())}"
-        
-        workflow = WorkflowState(
-            workflow_id=workflow_id,
-            name=workflow_def.name,
-            status=WorkflowStatus.PENDING
-        )
-        
-        self.workflows[workflow_id] = workflow
-        return workflow
-    
+        try:
+            workflow_def = request.workflow_definition
+            workflow_id = request.workflow_id
+            
+            # Generate a workflow ID if not provided
+            if not workflow_id:
+                workflow_id = f"workflow_{int(time.time())}"
+                
+            # Create workflow state
+            workflow_state = WorkflowState(
+                workflow_id=workflow_id,
+                name=workflow_def.name,
+                status=WorkflowStatus.PENDING,
+                created_at=datetime.utcnow()
+            )
+            
+            # Store workflow state
+            self.workflows[workflow_id] = workflow_state
+            
+            logger.info(f"Created workflow {workflow_id} ({workflow_def.name})")
+            return workflow_state
+            
+        except Exception as e:
+            error_msg = f"Failed to create workflow: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ToolError(error_msg) from e
+
     async def start_workflow(
         self,
-        workflow_id: str,
-        timeout: int = 300
+        request: StartWorkflowRequest
     ) -> WorkflowState:
         """Start a workflow.
         
         Args:
-            workflow_id: ID of the workflow to start
-            timeout: Timeout in seconds
+            request: StartWorkflowRequest containing workflow ID and timeout
             
         Returns:
-            Updated workflow state
+            WorkflowState: The updated workflow state
+            
+        Raises:
+            ToolError: If workflow start fails
         """
-        if workflow_id not in self.workflows:
-            raise ValueError(f"Workflow {workflow_id} not found")
-        
-        workflow = self.workflows[workflow_id]
-        workflow.status = WorkflowStatus.RUNNING
-        workflow.start_time = datetime.utcnow()
-        workflow.error = None
+        workflow_id = request.workflow_id
+        timeout = request.timeout
         
         try:
-            # Here you would implement the actual workflow execution
-            # This is a simplified example
-            await asyncio.sleep(1)  # Simulate work
+            # Get workflow state
+            if workflow_id not in self.workflows:
+                raise ValueError(f"Workflow {workflow_id} not found")
+                
+            workflow_state = self.workflows[workflow_id]
             
-            workflow.status = WorkflowStatus.COMPLETED
-            workflow.end_time = datetime.utcnow()
+            # Update workflow state
+            workflow_state.status = WorkflowStatus.RUNNING
+            workflow_state.start_time = datetime.utcnow()
+            workflow_state.end_time = None
+            workflow_state.error = None
+            
+            logger.info(f"Started workflow {workflow_id} with timeout {timeout}s")
+            return workflow_state
             
         except Exception as e:
-            workflow.status = WorkflowStatus.FAILED
-            workflow.error = str(e)
-            workflow.end_time = datetime.utcnow()
-            logger.error(f"Workflow {workflow_id} failed: {str(e)}", exc_info=True)
-        
-        return workflow
-    
+            error_msg = f"Failed to start workflow {workflow_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            
+            # Update workflow state with error
+            if workflow_id in self.workflows:
+                self.workflows[workflow_id].status = WorkflowStatus.FAILED
+                self.workflows[workflow_id].error = str(e)
+                
+            raise ToolError(error_msg) from e
+            
     async def stop_workflow(
         self,
-        workflow_id: str,
-        force: bool = False
+        request: StopWorkflowRequest
     ) -> WorkflowState:
         """Stop a running workflow.
         
         Args:
-            workflow_id: ID of the workflow to stop
-            force: Whether to force stop the workflow
+            request: StopWorkflowRequest containing workflow ID and force flag
             
         Returns:
-            Updated workflow state
+            WorkflowState: The updated workflow state
+            
+        Raises:
+            ToolError: If workflow stop fails
         """
-        if workflow_id not in self.workflows:
-            raise ValueError(f"Workflow {workflow_id} not found")
-        
-        workflow = self.workflows[workflow_id]
-        
-        if workflow.status != WorkflowStatus.RUNNING:
-            return workflow
+        workflow_id = request.workflow_id
+        force = request.force
         
         try:
-            # Here you would implement the actual workflow stopping logic
-            # This is a simplified example
-            await asyncio.sleep(0.5)  # Simulate work
+            # Get workflow state
+            if workflow_id not in self.workflows:
+                raise ValueError(f"Workflow {workflow_id} not found")
+                
+            workflow_state = self.workflows[workflow_id]
             
-            workflow.status = WorkflowStatus.CANCELLED
-            workflow.end_time = datetime.utcnow()
+            # Update workflow state
+            workflow_state.status = WorkflowStatus.CANCELLED if force else WorkflowStatus.COMPLETED
+            workflow_state.end_time = datetime.utcnow()
+            
+            logger.info(f"Stopped workflow {workflow_id} (force={force})")
+            return workflow_state
             
         except Exception as e:
-            workflow.status = WorkflowStatus.FAILED
-            workflow.error = f"Failed to stop workflow: {str(e)}"
-            workflow.end_time = datetime.utcnow()
-            logger.error(f"Failed to stop workflow {workflow_id}: {str(e)}", exc_info=True)
-        
-        return workflow
-    
-    async def get_workflow_status(
+            error_msg = f"Failed to stop workflow {workflow_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ToolError(error_msg) from e
+            
+    def get_workflow_status(
         self,
         workflow_id: str
     ) -> WorkflowState:
@@ -250,258 +180,207 @@ class WorkflowManager:
             workflow_id: ID of the workflow
             
         Returns:
-            Workflow state
+            WorkflowState: The current workflow state
+            
+        Raises:
+            ToolError: If workflow status retrieval fails
         """
-        if workflow_id not in self.workflows:
-            raise ValueError(f"Workflow {workflow_id} not found")
-        
-        return self.workflows[workflow_id]
+        try:
+            if workflow_id not in self.workflows:
+                raise ValueError(f"Workflow {workflow_id} not found")
+                
+            return self.workflows[workflow_id]
+            
+        except Exception as e:
+            error_msg = f"Failed to get status for workflow {workflow_id}: {str(e)}"
+            logger.error(error_msg, exc_info=True)
+            raise ToolError(error_msg) from e
 
 # Global workflow manager instance
 workflow_manager = WorkflowManager()
 
-@Tool(
+@mcp.tool(
     name="create_workflow",
-    description="Create a new workflow",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'workflow_definition': {
-                'type': 'object',
-                'description': 'Workflow definition (see docs for schema)'
-            },
-            'workflow_id': {
-                'type': 'string',
-                'default': None,
-                'description': 'Optional workflow ID (generated if not provided)'
-            }
-        },
-        'required': ['workflow_definition']
-    }
+    description="Create a new workflow with the given definition"
 )
-async def create_workflow(
-    workflow_definition: Dict[str, Any],
-    workflow_id: Optional[str] = None
-) -> Dict[str, Any]:
+def create_workflow(request: CreateWorkflowRequest) -> CreateWorkflowResponse:
     """
-    Create a new workflow.
+    Create a new workflow with the given definition.
     
-    This function creates a new workflow with the given definition.
+    This function creates a new workflow that can manage multiple Docker containers
+    as a cohesive application. The workflow definition includes services, networks,
+    volumes, and environment variables.
     
     Args:
-        workflow_definition: Workflow definition
-        workflow_id: Optional workflow ID (generated if not provided)
+        request: CreateWorkflowRequest containing workflow definition and optional ID
         
     Returns:
-        Dictionary with workflow information
+        CreateWorkflowResponse with workflow ID and status
         
     Example:
-        >>> await create_workflow({
-        ...     "name": "web-app",
-        ...     "version": "1.0",
-        ...     "services": {
-        ...         "web": {
-        ...             "image": "nginx:latest",
-        ...             "ports": {"80": "8080"},
-        ...             "environment": {"DEBUG": "true"}
+        >>> create_workflow(CreateWorkflowRequest(
+        ...     workflow_definition=WorkflowDefinition(
+        ...         name="web-app",
+        ...         services={
+        ...             "web": ServiceDefinition(
+        ...                 name="web",
+        ...                 image="nginx:latest",
+        ...                 ports={"80": "8080"},
+        ...                 environment={"DEBUG": "true"}
+        ...             ),
+        ...             "db": ServiceDefinition(
+        ...                 name="db",
+        ...                 image="postgres:13",
+        ...                 environment={"POSTGRES_PASSWORD": "example"},
+        ...                 volumes={"db_data": "/var/lib/postgresql/data"}
+        ...             )
         ...         },
-        ...         "db": {
-        ...             "image": "postgres:13",
-        ...             "environment": {
-        ...                 "POSTGRES_PASSWORD": "example"
-        ...             },
-        ...             "volumes": {"db_data": "/var/lib/postgresql/data"}
-        ...         }
-        ...     },
-        ...     "volumes": {
-        ...         "db_data": {}
-        ...     }
-        ... })
+        ...         volumes={"db_data": {}}
+        ...     )
+        ... ))
         {
-            "status": "success",
             "workflow_id": "workflow_1234567890",
+            "name": "web-app",
+            "status": "pending",
+            "created_at": "2023-01-01T12:00:00Z",
             "message": "Workflow created successfully"
         }
     """
     try:
-        workflow = await workflow_manager.create_workflow(
-            workflow_definition,
-            workflow_id
-        )
+        # Create the workflow
+        workflow_state = workflow_manager.create_workflow(request)
         
-        return {
-            'status': 'success',
-            'workflow_id': workflow.workflow_id,
-            'message': 'Workflow created successfully'
-        }
+        # Return success response
+        return CreateWorkflowResponse(
+            workflow_id=workflow_state.workflow_id,
+            name=workflow_state.name,
+            status=workflow_state.status,
+            created_at=workflow_state.created_at,
+            message="Workflow created successfully"
+        )
         
     except Exception as e:
         error_msg = f"Failed to create workflow: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        raise ToolError(error_msg) from e
 
-@Tool(
+@mcp.tool(
     name="start_workflow",
-    description="Start a workflow",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'workflow_id': {
-                'type': 'string',
-                'description': 'ID of the workflow to start'
-            },
-            'timeout': {
-                'type': 'integer',
-                'default': 300,
-                'description': 'Timeout in seconds'
-            }
-        },
-        'required': ['workflow_id']
-    }
+    description="Start a workflow with the given ID"
 )
-async def start_workflow(
-    workflow_id: str,
-    timeout: int = 300
-) -> Dict[str, Any]:
+async def start_workflow(request: StartWorkflowRequest) -> StartWorkflowResponse:
     """
-    Start a workflow.
-    
-    This function starts a workflow with the given ID.
-    
+    Start a workflow with the given ID.
+        
+    This function initiates the execution of a workflow, starting all associated
+    services in the correct order based on their dependencies.
+        
     Args:
-        workflow_id: ID of the workflow to start
-        timeout: Timeout in seconds
-        
+        request: StartWorkflowRequest containing workflow ID and timeout
+            
     Returns:
-        Dictionary with workflow status
-        
+        StartWorkflowResponse with workflow status and start time
+            
     Example:
-        >>> await start_workflow("workflow_1234567890")
+        >>> await start_workflow(StartWorkflowRequest(
+        ...     workflow_id="workflow_1234567890",
+        ...     timeout=300
+        ... ))
         {
-            "status": "success",
             "workflow_id": "workflow_1234567890",
-            "workflow_status": "running",
+            "status": "running",
+            "start_time": "2023-01-01T12:00:00Z",
             "message": "Workflow started successfully"
         }
     """
     try:
-        workflow = await workflow_manager.start_workflow(workflow_id, timeout)
-        
-        return {
-            'status': 'success',
-            'workflow_id': workflow.workflow_id,
-            'workflow_status': workflow.status.value,
-            'message': 'Workflow started successfully'
-        }
-        
+        # Start the workflow
+        workflow_state = await workflow_manager.start_workflow(request)
+            
+        # Return success response
+        return StartWorkflowResponse(
+            workflow_id=workflow_state.workflow_id,
+            status=workflow_state.status,
+            start_time=workflow_state.start_time or datetime.utcnow(),
+            message="Workflow started successfully"
+        )
     except Exception as e:
         error_msg = f"Failed to start workflow: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'workflow_id': workflow_id
-        }
-
-@Tool(
+        raise ToolError(error_msg) from e
+            
+@mcp.tool(
     name="stop_workflow",
-    description="Stop a running workflow",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'workflow_id': {
-                'type': 'string',
-                'description': 'ID of the workflow to stop'
-            },
-            'force': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to force stop the workflow'
-            }
-        },
-        'required': ['workflow_id']
-    }
+    description="Stop a running workflow"
 )
 async def stop_workflow(
-    workflow_id: str,
-    force: bool = False
-) -> Dict[str, Any]:
+    request: StopWorkflowRequest
+) -> StopWorkflowResponse:
     """
     Stop a running workflow.
     
-    This function stops a running workflow with the given ID.
+    This function stops a workflow with the given ID, optionally forcing it to stop.
     
     Args:
-        workflow_id: ID of the workflow to stop
-        force: Whether to force stop the workflow
+        request: StopWorkflowRequest containing workflow ID and force flag
         
     Returns:
-        Dictionary with workflow status
+        StopWorkflowResponse with workflow status and stop time
         
     Example:
-        >>> await stop_workflow("workflow_1234567890")
+        >>> await stop_workflow(StopWorkflowRequest(
+        ...     workflow_id="workflow_1234567890",
+        ...     force=True
+        ... ))
         {
-            "status": "success",
             "workflow_id": "workflow_1234567890",
-            "workflow_status": "cancelled",
+            "status": "cancelled",
+            "end_time": "2023-01-01T12:05:00Z",
             "message": "Workflow stopped successfully"
         }
     """
     try:
-        workflow = await workflow_manager.stop_workflow(workflow_id, force)
+        # Stop the workflow
+        workflow_state = await workflow_manager.stop_workflow(request)
         
-        return {
-            'status': 'success',
-            'workflow_id': workflow.workflow_id,
-            'workflow_status': workflow.status.value,
-            'message': 'Workflow stopped successfully'
-        }
-        
+        # Return success response
+        return StopWorkflowResponse(
+            workflow_id=workflow_state.workflow_id,
+            status=workflow_state.status,
+            end_time=workflow_state.end_time or datetime.utcnow(),
+            message="Workflow stopped successfully"
+        )
+            
     except Exception as e:
         error_msg = f"Failed to stop workflow: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'workflow_id': workflow_id
-        }
+        raise ToolError(error_msg) from e
 
-@Tool(
+@mcp.tool(
     name="get_workflow_status",
-    description="Get the status of a workflow",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'workflow_id': {
-                'type': 'string',
-                'description': 'ID of the workflow'
-            }
-        },
-        'required': ['workflow_id']
-    }
+    description="Get the status of a workflow"
 )
-async def get_workflow_status(workflow_id: str) -> Dict[str, Any]:
+async def get_workflow_status(workflow_id: str) -> WorkflowStatusResponse:
     """
     Get the status of a workflow.
     
-    This function retrieves the current status of a workflow.
+    This function retrieves the current status of a workflow, including the status
+    of all its services and any error information.
     
     Args:
-        workflow_id: ID of the workflow
+        workflow_id: ID of the workflow to get status for
         
     Returns:
-        Dictionary with workflow status and details
+        WorkflowStatusResponse with detailed status information
         
     Example:
         >>> await get_workflow_status("workflow_1234567890")
         {
-            "status": "success",
             "workflow_id": "workflow_1234567890",
-            "workflow_status": "running",
+            "name": "web-app",
+            "status": "running",
             "start_time": "2023-01-01T12:00:00Z",
+            "end_time": null,
             "services": {
                 "web": {
                     "status": "running",
@@ -511,122 +390,102 @@ async def get_workflow_status(workflow_id: str) -> Dict[str, Any]:
                     "status": "running",
                     "health": "healthy"
                 }
-            }
+            },
+            "error": null
         }
     """
     try:
-        workflow = await workflow_manager.get_workflow_status(workflow_id)
+        # Get workflow status
+        workflow_state = workflow_manager.get_workflow_status(workflow_id)
         
-        return {
-            'status': 'success',
-            'workflow_id': workflow.workflow_id,
-            'workflow_status': workflow.status.value,
-            'start_time': workflow.start_time.isoformat() if workflow.start_time else None,
-            'end_time': workflow.end_time.isoformat() if workflow.end_time else None,
-            'services': workflow.services,
-            'error': workflow.error
-        }
+        # Convert to response model
+        return WorkflowStatusResponse(
+            workflow_id=workflow_state.workflow_id,
+            name=workflow_state.name,
+            status=workflow_state.status,
+            start_time=workflow_state.start_time,
+            end_time=workflow_state.end_time,
+            services=workflow_state.services,
+            error=workflow_state.error
+        )
         
     except Exception as e:
-        error_msg = f"Failed to get workflow status: {str(e)}"
+        error_msg = f"Failed to get status for workflow {workflow_id}: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'workflow_id': workflow_id
-        }
+        raise ToolError(error_msg) from e
 
-@Tool(
+@mcp.tool(
     name="list_workflows",
-    description="List all workflows",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'status': {
-                'type': 'string',
-                'enum': ['all', 'running', 'completed', 'failed', 'cancelled'],
-                'default': 'all',
-                'description': 'Filter workflows by status'
-            },
-            'limit': {
-                'type': 'integer',
-                'default': 50,
-                'description': 'Maximum number of workflows to return'
-            },
-            'offset': {
-                'type': 'integer',
-                'default': 0,
-                'description': 'Number of workflows to skip'
-            }
-        }
-    }
+    description="List all workflows with optional filtering and pagination"
 )
 async def list_workflows(
-    status: str = 'all',
-    limit: int = 50,
-    offset: int = 0
-) -> Dict[str, Any]:
+    request: ListWorkflowsRequest
+) -> ListWorkflowsResponse:
     """
-    List all workflows.
+    List all workflows with optional filtering and pagination.
     
-    This function lists all workflows, optionally filtered by status.
+    This function retrieves a paginated list of workflows, optionally filtered by status.
+    The response includes metadata about the total number of workflows and pagination details.
     
     Args:
-        status: Filter workflows by status
-        limit: Maximum number of workflows to return
-        offset: Number of workflows to skip
+        request: ListWorkflowsRequest containing filter and pagination parameters
         
     Returns:
-        Dictionary with list of workflows and metadata
+        ListWorkflowsResponse with list of workflows and metadata
         
     Example:
-        >>> await list_workflows(status="running")
+        >>> await list_workflows(ListWorkflowsRequest(
+        ...     status="running",
+        ...     limit=10,
+        ...     offset=0
+        ... ))
         {
-            "status": "success",
             "workflows": [
                 {
                     "workflow_id": "workflow_1234567890",
                     "name": "web-app",
                     "status": "running",
+                    "created_at": "2023-01-01T12:00:00Z",
                     "start_time": "2023-01-01T12:00:00Z",
-                    "services": ["web", "db"]
+                    "end_time": null,
+                    "service_count": 2
                 }
             ],
             "total": 1,
+            "limit": 10,
             "offset": 0,
-            "limit": 50
+            "message": "Found 1 workflow(s)"
         }
     """
     try:
         # Filter workflows by status
         filtered_workflows = []
         for workflow in workflow_manager.workflows.values():
-            if status == 'all' or workflow.status.value == status:
-                filtered_workflows.append({
-                    'workflow_id': workflow.workflow_id,
-                    'name': workflow.name,
-                    'status': workflow.status.value,
-                    'start_time': workflow.start_time.isoformat() if workflow.start_time else None,
-                    'end_time': workflow.end_time.isoformat() if workflow.end_time else None,
-                    'services': list(workflow.services.keys()) if workflow.services else []
-                })
+            if request.status == 'all' or workflow.status.value == request.status:
+                filtered_workflows.append(WorkflowSummary(
+                    workflow_id=workflow.workflow_id,
+                    name=workflow.name,
+                    status=workflow.status,
+                    created_at=workflow.created_at,
+                    start_time=workflow.start_time,
+                    end_time=workflow.end_time,
+                    service_count=len(workflow.services) if workflow.services else 0
+                ))
         
         # Apply pagination
         total = len(filtered_workflows)
-        paginated_workflows = filtered_workflows[offset:offset + limit]
+        paginated_workflows = filtered_workflows[request.offset:request.offset + request.limit]
         
-        return {
-            'status': 'success',
-            'workflows': paginated_workflows,
-            'total': total,
-            'offset': offset,
-            'limit': limit
-        }
+        # Return paginated results
+        return ListWorkflowsResponse(
+            workflows=paginated_workflows,
+            total=total,
+            limit=request.limit,
+            offset=request.offset,
+            message=f"Found {total} workflow(s)"
+        )
         
     except Exception as e:
         error_msg = f"Failed to list workflows: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        raise ToolError(error_msg) from e

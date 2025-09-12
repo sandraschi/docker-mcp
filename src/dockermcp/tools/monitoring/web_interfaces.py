@@ -4,37 +4,47 @@ Web Interface Tools for Monitoring Stack
 This module provides tools to access the web interfaces of the monitoring stack.
 """
 import webbrowser
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Literal
 
+from pydantic import BaseModel, Field, ConfigDict
 from fastmcp.tools import Tool
-from dockermcp.tools.monitoring import monitoring_manager
+from fastmcp.exceptions import ToolException
 
-@Tool(
-    name="open_grafana",
-    description="Open the Grafana web interface in the default browser",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'port': {
-                'type': 'integer',
-                'default': 3000,
-                'description': 'Port number for Grafana'
-            },
-            'path': {
-                'type': 'string',
-                'default': '',
-                'description': 'Additional path to open in Grafana (e.g., /dashboards)'
+from dockermcp.mcp_instance import mcp
+from dockermcp.logging_config import logger
+
+class OpenGrafanaParams(BaseModel):
+    """Parameters for opening Grafana web interface."""
+    port: int = Field(
+        3000,
+        ge=1,
+        le=65535,
+        description="Port number for Grafana"
+    )
+    path: str = Field(
+        "",
+        description="Additional path to open in Grafana (e.g., /dashboards)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "port": 3000,
+                "path": "/dashboards"
             }
         }
-    }
+    )
+
+@mcp.tool(
+    name="open_grafana",
+    description="Open the Grafana web interface in the default browser"
 )
-async def open_grafana(port: int = 3000, path: str = '') -> Dict[str, Any]:
+async def open_grafana(params: OpenGrafanaParams) -> Dict[str, Any]:
     """
     Open the Grafana web interface in the default browser.
     
     Args:
-        port: Port number for Grafana
-        path: Additional path to open in Grafana
+        params: OpenGrafanaParams containing connection details
         
     Returns:
         Dictionary with the result of the operation
@@ -48,189 +58,232 @@ async def open_grafana(port: int = 3000, path: str = '') -> Dict[str, Any]:
         }
     """
     try:
-        url = f"http://localhost:{port}{path}"
+        url = f"http://localhost:{params.port}{params.path}"
         webbrowser.open(url)
+        logger.info(f"Opened Grafana at {url}")
         return {
             "status": "success",
             "message": "Opened Grafana in browser",
             "url": url
         }
     except Exception as e:
+        error_msg = f"Failed to open Grafana: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to open Grafana: {str(e)}",
-            "url": url
+            "error": error_msg,
+            "url": f"http://localhost:{params.port}{params.path}"
         }
 
-@Tool(
-    name="open_prometheus",
-    description="Open the Prometheus web interface in the default browser",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'port': {
-                'type': 'integer',
-                'default': 9090,
-                'description': 'Port number for Prometheus'
-            },
-            'path': {
-                'type': 'string',
-                'default': '',
-                'description': 'Additional path to open in Prometheus'
+class OpenPrometheusParams(BaseModel):
+    """Parameters for opening Prometheus web interface."""
+    port: int = Field(
+        9090,
+        ge=1,
+        le=65535,
+        description="Port number for Prometheus"
+    )
+    path: str = Field(
+        "",
+        description="Additional path to open in Prometheus"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "port": 9090,
+                "path": "/graph"
             }
         }
-    }
+    )
+
+@mcp.tool(
+    name="open_prometheus",
+    description="Open the Prometheus web interface in the default browser"
 )
-async def open_prometheus(port: int = 9090, path: str = '') -> Dict[str, Any]:
+async def open_prometheus(params: OpenPrometheusParams) -> Dict[str, Any]:
     """
     Open the Prometheus web interface in the default browser.
     
     Args:
-        port: Port number for Prometheus
-        path: Additional path to open in Prometheus
+        params: OpenPrometheusParams containing connection details
         
     Returns:
         Dictionary with the result of the operation
     """
     try:
-        url = f"http://localhost:{port}{path}"
+        url = f"http://localhost:{params.port}{params.path}"
         webbrowser.open(url)
+        logger.info(f"Opened Prometheus at {url}")
         return {
             "status": "success",
             "message": "Opened Prometheus in browser",
             "url": url
         }
     except Exception as e:
+        error_msg = f"Failed to open Prometheus: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to open Prometheus: {str(e)}",
-            "url": url
+            "error": error_msg,
+            "url": f"http://localhost:{params.port}{params.path}"
         }
 
-@Tool(
-    name="open_loki",
-    description="Open the Loki web interface in the default browser",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'port': {
-                'type': 'integer',
-                'default': 3100,
-                'description': 'Port number for Loki'
-            },
-            'path': {
-                'type': 'string',
-                'default': '',
-                'description': 'Additional path to open in Loki'
+class OpenLokiParams(BaseModel):
+    """Parameters for opening Loki web interface."""
+    port: int = Field(
+        3100,
+        ge=1,
+        le=65535,
+        description="Port number for Loki"
+    )
+    path: str = Field(
+        "",
+        description="Additional path to open in Loki"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "port": 3100,
+                "path": "/explore"
             }
         }
-    }
+    )
+
+@mcp.tool(
+    name="open_loki",
+    description="Open the Loki web interface in the default browser"
 )
-async def open_loki(port: int = 3100, path: str = '') -> Dict[str, Any]:
+async def open_loki(params: OpenLokiParams) -> Dict[str, Any]:
     """
     Open the Loki web interface in the default browser.
     
     Args:
-        port: Port number for Loki
-        path: Additional path to open in Loki
+        params: OpenLokiParams containing connection details
         
     Returns:
         Dictionary with the result of the operation
     """
     try:
-        url = f"http://localhost:{port}{path}"
+        url = f"http://localhost:{params.port}{params.path}"
         webbrowser.open(url)
+        logger.info(f"Opened Loki at {url}")
         return {
             "status": "success",
             "message": "Opened Loki in browser",
             "url": url
         }
     except Exception as e:
+        error_msg = f"Failed to open Loki: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to open Loki: {str(e)}",
-            "url": url
+            "error": error_msg,
+            "url": f"http://localhost:{params.port}{params.path}"
         }
 
-@Tool(
-    name="open_monitoring_dashboard",
-    description="Open a specific monitoring dashboard in the default browser",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'dashboard': {
-                'type': 'string',
-                'enum': ['overview', 'docker', 'host', 'applications', 'custom'],
-                'default': 'overview',
-                'description': 'Type of dashboard to open'
-            },
-            'port': {
-                'type': 'integer',
-                'default': 3000,
-                'description': 'Port number for Grafana'
-            },
-            'custom_path': {
-                'type': 'string',
-                'description': 'Custom dashboard path (only used when dashboard is "custom")'
+class OpenMonitoringDashboardParams(BaseModel):
+    """Parameters for opening a monitoring dashboard."""
+    dashboard: Literal['overview', 'docker', 'host', 'applications', 'custom'] = Field(
+        'overview',
+        description='Type of dashboard to open'
+    )
+    port: int = Field(
+        3000,
+        ge=1,
+        le=65535,
+        description='Port number for Grafana'
+    )
+    custom_path: Optional[str] = Field(
+        None,
+        description='Custom dashboard path (only used when dashboard is "custom")'
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "dashboard": "docker",
+                "port": 3000,
+                "custom_path": None
             }
-        },
-        'required': ['dashboard']
-    }
+        }
+    )
+
+@mcp.tool(
+    name="open_monitoring_dashboard",
+    description="Open a specific monitoring dashboard in the default browser"
 )
-async def open_monitoring_dashboard(
-    dashboard: str = 'overview',
-    port: int = 3000,
-    custom_path: Optional[str] = None
-) -> Dict[str, Any]:
+async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Dict[str, Any]:
     """
     Open a monitoring dashboard in the default browser.
     
     Args:
-        dashboard: Type of dashboard to open (overview, docker, host, applications, custom)
-        port: Port number for Grafana
-        custom_path: Custom dashboard path (only used when dashboard is "custom")
+        params: OpenMonitoringDashboardParams containing dashboard configuration
         
     Returns:
         Dictionary with the result of the operation
         
     Example:
-        >>> await open_monitoring_dashboard(dashboard="docker")
+        >>> await open_monitoring_dashboard(params=OpenMonitoringDashboardParams(dashboard="docker"))
         {
             'status': 'success',
             'message': 'Opened Docker dashboard in browser',
-            'url': 'http://localhost:3000/d/edg_docker/docker-resource-monitoring'
+            'url': 'http://localhost:3000/d/docker'
         }
     """
     try:
-        # Dashboard UIDs for pre-configured dashboards
+        # Define dashboard paths (these should match your actual Grafana dashboard UIDs)
         dashboard_paths = {
-            'overview': '/d/edg_overview/overview',
-            'docker': '/d/edg_docker/docker-resource-monitoring',
-            'host': '/d/edg_host/host-metrics',
-            'applications': '/d/edg_applications/application-metrics',
-            'custom': custom_path or ''
+            'overview': '/d/overview',
+            'docker': '/d/docker',
+            'host': '/d/host',
+            'applications': '/d/applications',
+            'custom': params.custom_path or ''
         }
         
-        if dashboard not in dashboard_paths:
+        try:
+            if params.dashboard not in dashboard_paths and params.dashboard != 'custom':
+                error_msg = f"Unknown dashboard type: {params.dashboard}"
+                logger.error(error_msg)
+                return {
+                    "status": "error",
+                    "error": error_msg,
+                    "available_dashboards": list(dashboard_paths.keys())
+                }
+                
+            path = dashboard_paths[params.dashboard] if params.dashboard != 'custom' else params.custom_path
+            if not path:
+                error_msg = "custom_path is required when dashboard is 'custom'"
+                logger.error(error_msg)
+                return {
+                    "status": "error",
+                    "error": error_msg
+                }
+                
+            url = f"http://localhost:{params.port}{path}"
+            webbrowser.open(url)
+            logger.info(f"Opened {params.dashboard} dashboard at {url}")
+            return {
+                "status": "success",
+                "message": f"Opened {params.dashboard} dashboard in browser",
+                "url": url,
+                "dashboard": params.dashboard
+            }
+        except Exception as e:
+            error_msg = f"Failed to open {params.dashboard} dashboard: {str(e)}"
+            logger.error(error_msg, exc_info=True)
             return {
                 "status": "error",
-                "error": f"Unknown dashboard type: {dashboard}",
-                "available_dashboards": list(dashboard_paths.keys())
+                "error": error_msg,
+                "dashboard": params.dashboard,
+                "url": f"http://localhost:{params.port}"
             }
-        
-        path = dashboard_paths[dashboard]
-        url = f"http://localhost:{port}{path}"
-        webbrowser.open(url)
-        
-        return {
-            "status": "success",
-            "message": f"Opened {dashboard} dashboard in browser",
-            "url": url,
-            "dashboard": dashboard
-        }
     except Exception as e:
+        error_msg = f"Failed to open {params.dashboard} dashboard: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to open {dashboard} dashboard: {str(e)}",
-            "dashboard": dashboard
+            "error": error_msg,
+            "dashboard": params.dashboard
         }

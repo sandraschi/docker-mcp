@@ -1,81 +1,452 @@
 # DockerMCP Testing Guide
 
 ## Table of Contents
-- [Running Tests](#running-tests)
-- [Test Output](#test-output)
+
+- [Running Tests Locally](#running-tests-locally)
+- [GitHub Actions Testing](#github-actions-testing)
+- [Test Types](#test-types)
 - [Test Structure](#test-structure)
 - [Writing New Tests](#writing-new-tests)
+- [Mock Testing](#mock-testing)
+- [Docker in Tests](#docker-in-tests)
 - [Troubleshooting](#troubleshooting)
+- [Best Practices](#best-practices)
 
-## Running Tests
+## Running Tests Locally
 
 ### Prerequisites
-- Python 3.8+
+
+- Python 3.10+
 - Docker Desktop (for container-related tests)
-- Required Python packages (install with `pip install -r requirements-dev.txt`)
+- Required Python packages:
 
-### MCP Server Requirements
-
-For tests that interact with the MCP server:
-
-1. **Required Setup**
-   - A running MCP server is required for testing
-   - The test suite is designed to test against a real server by default
-   - Ensure the MCP server is running and accessible before running tests
-
-2. **Server Configuration**
-   - The test suite expects the MCP server to be running on `http://localhost:8000` by default
-   - To change the server URL, set the `MCP_SERVER_URL` environment variable:
-     ```powershell
-     $env:MCP_SERVER_URL="http://your-server:port"
-     ```
-
-3. **Running Tests**
-   - Start the MCP server before running tests:
-     ```powershell
-     # Start the MCP server (adjust command as needed)
-     python -m dockermcp.main
-     ```
-   - In a separate terminal, run the tests:
-     ```powershell
-     python -m pytest tests/ -v
-     ```
-
-4. **Mocked Testing (Development Only)**
-   - For development purposes only, you can use mocked responses
-   - Set `MOCK_MODE=1` to enable mocked testing
-   - Note: This should only be used for testing error handling and edge cases
-   - Never rely solely on mocked tests for production validation
+  ```bash
+  pip install -r requirements-test.txt
+  ```
 
 ### Running All Tests
 
+```bash
+# Run all tests with coverage
+pytest --cov=src --cov-report=term-missing
+
+# Run tests with detailed output
+pytest -v
+
+# Run tests with parallel execution
+pytest -n auto
+```
+
+### Running Specific Tests
+
+```bash
+# Run a specific test file
+pytest tests/test_specific.py
+
+# Run a specific test function
+pytest tests/test_module.py::test_function_name
+
+# Run tests by marker
+pytest -m "not slow"  # Skip slow tests
+pytest -m "docker"    # Run only docker tests
+```
+
+### Environment Variables
+
+Control test behavior with these environment variables:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `SKIP_DOCKER_TESTS` | `false` | Set to `true` to skip Docker tests |
+| `TEST_ENV` | `local` | Set to `github` in CI environment |
+| `LOG_LEVEL` | `INFO`  | Set logging level (DEBUG, INFO, WARNING, ERROR) |
+| `PYTHONPATH` | `.`     | Add `src` to path if running from root |
+
+## GitHub Actions Testing
+
+### Test Workflow
+
+Tests run on every push and pull request to `main` or `develop` branches:
+
+1. **Setup**:
+   - Ubuntu 22.04 runner
+   - Python 3.10
+   - Docker-in-Docker service
+
+2. **Test Execution**:
+
+   ```yaml
+   - name: Run tests
+     run: |
+       pip install -r requirements-test.txt
+       python -m pytest tests/ \
+         --cov=src \
+         --cov-report=xml:coverage.xml \
+         --junitxml=test-results.xml \
+         -v
+   ```
+
+3. **Artifacts**:
+   - Test coverage report (`coverage.xml`)
+   - Test results in JUnit format (`test-results.xml`)
+   - Code coverage report uploaded to Codecov
+
+
+### Viewing Test Results
+
+1. Go to GitHub Actions tab
+2. Select the workflow run
+3. Download artifacts or view logs
+
+## Test Types
+
+### 1. Unit Tests
+
+- Test individual functions and classes in isolation
+- Located in `tests/unit/`
+- Should be fast and not require external services
+
+### 2. Integration Tests
+
+- Test interactions between components
+- Located in `tests/integration/`
+- May require Docker or other services
+
+### 3. End-to-End Tests
+
+- Test complete workflows
+- Located in `tests/e2e/`
+- Require full application stack
+
+### 4. Docker Tests
+
+- Test Docker container functionality
+- Located in `tests/docker/`
+- Require Docker daemon
+
+
+## Mock Docker Client Testing
+
+### Using Mock Docker Client
+
+When running tests in environments without Docker or to improve test speed, use the mock Docker client:
+
+```python
+from tests.helpers.mock_docker import MockDockerClient
+
+# In your test
+with patch('docker.DockerClient', MockDockerClient):
+    # Your test code here
+    pass
+```
+
+### Mocking External Services
+
+For external API calls, use the `responses` library:
+
+```python
+import responses
+
+@responses.activate
+def test_external_api():
+    responses.add(
+        responses.GET,
+        'https://api.example.com/data',
+        json={'key': 'value'},
+        status=200
+    )
+    # Test code that makes the API call
+```
+
+
+## Docker in Tests
+
+### Testing with Real Docker
+
+For tests requiring real Docker, use the `docker` fixture:
+
+```python
+async def test_with_docker(docker_helper):
+    async with docker_helper.container('nginx:alpine', ports={'80/tcp': 8080}) as container:
+        # Test code here
+        pass  # Container is automatically cleaned up
+```
+
+### Best Practices
+
+1. Always clean up containers after tests
+2. Use unique container names to avoid conflicts
+3. Set appropriate timeouts for container operations
+4. Use the `docker_helper` fixture for container lifecycle management
+
+
+## Writing New Tests
+
+### Test Structure
+
+```python
+import pytest
+
+class TestFeatureName:
+    @pytest.mark.asyncio
+    async def test_feature_behavior(self, mocker):
+        # Setup
+        
+        # Exercise
+        
+        # Verify
+        assert result == expected
+        
+        # Cleanup (if needed)
+```
+
+### Test Naming Conventions
+
+- Test files: `test_*.py`
+- Test classes: `Test*` (PascalCase)
+- Test methods: `test_*_should_*_when_*`
+
+
+### Test Fixtures
+
+Common fixtures are defined in `conftest.py`:
+
+- `docker_helper`: Manage Docker containers
+- `mock_docker`: Mock Docker client
+- `event_loop`: Async test support
+- `test_config`: Test configuration
+
+## Best Practices
+
+1. **Isolation**: Each test should be independent
+2. **Deterministic**: Tests should be predictable and not flaky
+3. **Fast**: Keep tests fast by mocking slow operations
+4. **Clear**: Test names should describe the behavior being tested
+5. **Maintainable**: Keep test code clean and well-documented
+
+## Troubleshooting
+
+### Common Issues
+
+1. **Docker connection errors**:
+   - Ensure Docker daemon is running
+   - Check DOCKER_HOST environment variable
+
+2. **Test timeouts**:
+   - Increase timeouts in `pytest.ini`
+   - Use `@pytest.mark.timeout(30)` for specific tests
+
+3. **Resource leaks**:
+   - Always use context managers for resources
+   - Check for unclosed sessions or connections
+
+### Debugging Tests
+
+Run tests with debug output:
+
+```bash
+pytest -v --log-cli-level=DEBUG
+```
+
+
+### Viewing Coverage
+
+Generate HTML coverage report:
+
+```bash
+pytest --cov=src --cov-report=html
+open htmlcov/index.html  # View in browser
+```
+
+## CI/CD Integration
+
+### GitHub Actions Secrets
+
+Ensure these secrets are set in your GitHub repository:
+
+- `DOCKERHUB_USERNAME`: Docker Hub username
+- `DOCKERHUB_TOKEN`: Docker Hub access token
+- `CODECOV_TOKEN`: Codecov upload token
+
+### Local CI Testing
+
+Test the CI workflow locally using [act](https://github.com/nektos/act):
+
+```bash
+# List available workflows
+act -l
+
+# Run the CI workflow
+act
+```
+
+
+## Performance Optimization
+
+### Parallel Test Execution
+
+Run tests in parallel:
+
+```bash
+pytest -n auto  # Use all available cores
+```
+
+### Test Selection
+
+Run only modified tests:
+
+```bash
+# Run only failed tests from last run
+pytest --last-failed
+
+# Run failed tests first, then others
+pytest --failed-first
+```
+
+
+## Advanced Topics
+
+### Property-based Testing
+
+Use `hypothesis` for property-based testing:
+
+```python
+from hypothesis import given
+from hypothesis import strategies as st
+
+@given(st.integers(), st.integers())
+def test_addition_commutative(a, b):
+    assert add(a, b) == add(b, a)
+```
+
+
+### Golden File Testing
+
+For testing complex output:
+
+```python
+def test_output_snapshot(snapshot):
+    result = complex_operation()
+    assert result == snapshot  # First run creates snapshot
+```
+
+
+### Test Parameterization
+
+Test multiple inputs:
+
+```python
+@pytest.mark.parametrize('input,expected', [
+    ('input1', 'expected1'),
+    ('input2', 'expected2'),
+])
+def test_multiple_cases(input, expected):
+    assert process(input) == expected
+```
+
+
+## Contributing
+
+### Adding New Tests
+
+1. Add tests for new features or bug fixes
+2. Ensure tests pass locally
+3. Update documentation if needed
+4. Open a pull request
+
+
+### Code Review
+
+- All tests must pass
+- New code should have test coverage
+- Follow existing patterns and conventions
+
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+---
+
+## MCP Server Testing
+
+### Required Setup
+
+- A running MCP server is required for testing
+- The test suite is designed to test against a real server by default
+- Ensure the MCP server is running and accessible before running tests
+
+### Server Configuration
+
+- The test suite expects the MCP server to be running on `http://localhost:8000` by default
+- To change the server URL, set the `MCP_SERVER_URL` environment variable:
+
+  ```bash
+  export MCP_SERVER_URL=http://your-server:8000
+  ```
+
+### Testing Without a Real Server
+
+For development and CI, you can use the mock MCP server:
+
+```python
+from tests.mocks.mock_mcp_server import MockMCPServer
+
+@pytest.fixture
+def mock_mcp_server():
+    with MockMCPServer() as server:
+        yield server
+```
+
+### Windows Configuration
+
+On Windows, set the environment variable using PowerShell:
+
 ```powershell
-# From the project root directory
+$env:MCP_SERVER_URL="http://localhost:8000"
+```
+
+### Mocked Testing (Development Only)
+
+For development purposes, you can use mocked responses:
+
+- Set `MOCK_MODE=1` to enable mocked testing
+- This should only be used for testing error handling and edge cases
+- Never rely solely on mocked tests for production validation
+
+## Running Tests with Logging
+
+### Basic Test Execution
+
+```powershell
+# Run all tests
+pytest -v
+
+# Run a specific test file
+pytest tests/test_module.py -v
+
+# Run a specific test function
+pytest tests/test_module.py::test_function_name -v
+```
+
+### Advanced Logging
+
+To save test output with timestamps:
+
+```powershell
+# Create test output directory if it doesn't exist
+$testOutputDir = "test_output"
+if (-not (Test-Path -Path $testOutputDir)) {
+   New-Item -ItemType Directory -Path $testOutputDir | Out-Null
+}
+
+# Run tests with timestamped log file
 $timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$outputFile = "tests/test_output/test_battery_${timestamp}.log"
+$outputFile = "${testOutputDir}/test_results_${timestamp}.log"
 python -m pytest tests/ -v > $outputFile 2>&1
 Write-Output "Test output saved to: $outputFile"
 ```
 
-### Running a Single Test File
-
-```powershell
-# Example: Running just the hello_world test
-$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$outputFile = "tests/test_output/test_hello_world_${timestamp}.log"
-python -m pytest tests/test_hello_world.py -v > $outputFile 2>&1
-Write-Output "Test output saved to: $outputFile"
-```
-
-### Running a Specific Test Function
-
-```powershell
-# Example: Running a specific test function
-$timestamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$outputFile = "tests/test_output/specific_test_${timestamp}.log"
-python -m pytest tests/test_module.py::test_function_name -v > $outputFile 2>&1
-Write-Output "Test output saved to: $outputFile"
-```
 
 ## Mock Testing
 
@@ -101,6 +472,7 @@ Write-Output "Test output saved to: $outputFile"
 #### For MCP Repositories
 
 1. **Basic Structure**
+
    ```python
    # tests/mocks/mock_mcp_server.py
    from http.server import HTTPServer, BaseHTTPRequestHandler
@@ -118,20 +490,35 @@ Write-Output "Test output saved to: $outputFile"
            self.end_headers()
            self.wfile.write(json.dumps(data).encode())
    
+   
+   ```python
+   class MockMCPHandler(BaseHTTPRequestHandler):
+       def do_GET(self):
+           if self.path == '/health':
+               self._send_json(200, {"status": "ok"})
+
+       def _send_json(self, status, data):
+           self.send_response(status)
+           self.send_header('Content-type', 'application/json')
+           self.end_headers()
+           self.wfile.write(json.dumps(data).encode())
+
+
    class MockMCPServer:
        def __init__(self, port=8000):
            self.port = port
            self.server = HTTPServer(('localhost', port), MockMCPHandler)
            self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
-       
+
        def start(self):
            self.thread.start()
-       
+
        def stop(self):
            self.server.shutdown()
    ```
 
 2. **Best Practices**
+
    - Keep mock server implementation in `tests/mocks/`
    - Support both sync and async testing
    - Include realistic response payloads
@@ -141,6 +528,8 @@ Write-Output "Test output saved to: $outputFile"
 #### For AI/ML Projects (like MyAI)
 
 1. **Mocking AI Services**
+
+
    ```python
    # tests/mocks/mock_ai_service.py
    from unittest.mock import Mock
@@ -160,6 +549,7 @@ Write-Output "Test output saved to: $outputFile"
 ### Using the Mock Server in Tests
 
 1. **Basic Usage**
+
    ```python
    def test_with_mock_server():
        with MockMCPServer(port=8001) as server:
@@ -169,6 +559,7 @@ Write-Output "Test output saved to: $outputFile"
    ```
 
 2. **Pytest Fixture**
+
    ```python
    # conftest.py
    import pytest
@@ -180,7 +571,10 @@ Write-Output "Test output saved to: $outputFile"
        server.start()
        yield server
        server.stop()
-   
+   ```
+
+   ```python
+   # test_file.py
    def test_with_fixture(mock_server):
        response = requests.get("http://localhost:8001/health")
        assert response.json()["status"] == "ok"
@@ -203,9 +597,9 @@ Write-Output "Test output saved to: $outputFile"
    - Test with large datasets
    - Measure throughput
 
-## Test Output
+## Test Output and Logging
 
-## Pytest in MCP Projects
+## Pytest Integration Guide
 
 ### Key Pytest Features
 
@@ -215,6 +609,7 @@ Write-Output "Test output saved to: $outputFile"
    - Classes prefixed with `Test` (with no `__init__` method) group related tests
 
 2. **Assertions**
+
    ```python
    # Basic assertions
    assert something == expected_value
@@ -226,22 +621,26 @@ Write-Output "Test output saved to: $outputFile"
        function_that_raises()
    ```
 
+
 ### Fixtures
 
 1. **Basic Fixture**
+
    ```python
    # conftest.py or test file
    import pytest
    
    @pytest.fixture
-def sample_data():
-    return {"key": "value"}
-
-def test_example(sample_data):
-    assert sample_data["key"] == "value"
+   def sample_data():
+       return {"key": "value"}
+   
+   def test_example(sample_data):
+       assert sample_data["key"] == "value"
    ```
 
+
 2. **Fixture Scopes**
+
    - `function`: (default) Run once per test function
    - `class`: Run once per test class
    - `module`: Run once per module
@@ -257,6 +656,7 @@ def test_example(sample_data):
    ```
 
 3. **Autouse Fixtures**
+
    ```python
    @pytest.fixture(autouse=True)
    def setup_environment():
@@ -287,9 +687,9 @@ def test_example(sample_data):
    #     slow: marks tests as slow (deselect with '-m "not slow"')
    
    @pytest.mark.slow
-def test_slow_integration():
-    # This test will be skipped with -m "not slow"
-    pass
+   def test_slow_integration():
+       # This test will be skipped with -m "not slow"
+       pass
    ```
 
 ### Parameterized Tests
@@ -307,6 +707,7 @@ def test_eval(input, expected):
 ### Mocking
 
 1. **Using unittest.mock**
+
    ```python
    from unittest.mock import patch, MagicMock
    
@@ -317,6 +718,7 @@ def test_eval(input, expected):
    ```
 
 2. **Pytest-mock (recommended)**
+
    ```python
    def test_with_mocker(mocker):
        mock_func = mocker.patch('module.function')
@@ -327,7 +729,8 @@ def test_eval(input, expected):
 ### Test Organization
 
 1. **Directory Structure**
-   ```
+
+   ```text
    tests/
    ├── unit/
    │   ├── __init__.py
@@ -384,6 +787,7 @@ python -m pytest --last-failed
    - Use `pytest-xdist` for parallel test execution
 
 4. **Debugging**
+
    ```bash
    # Drop to PDB on failure
    python -m pytest --pdb
@@ -403,6 +807,7 @@ python -m pytest --last-failed
 ### Integration with MCP
 
 1. **Testing MCP Tools**
+
    ```python
    from fastmcp.tools import Tool
    from fastmcp.exceptions import ToolException
@@ -416,6 +821,7 @@ python -m pytest --last-failed
    ```
 
 2. **Testing with Mocks**
+
    ```python
    def test_tool_with_mock(mocker):
        # Mock external dependencies
@@ -484,6 +890,7 @@ jobs:
 ### Advanced Topics
 
 1. **Custom Markers**
+
    ```python
    # pytest.ini
    [pytest]
@@ -493,13 +900,21 @@ jobs:
    ```
 
 2. **Custom Fixtures**
+
+   #### Custom Fixture Example
+
+   The following is an example of a custom fixture that can be used to mock an AI service.
+
    ```python
    @pytest.fixture
-def mock_ai_service():
-    class MockAIService:
-        def generate(self, prompt):
-            return f"Mock response to: {prompt}"
-    return MockAIService()
+   def mock_ai_service():
+       """Return a mock AI service."""
+       class MockAIService:
+           """Mock AI service class."""
+           def generate(self, prompt):
+               """Return a mock response to the given prompt."""
+               return f"Mock response to: {prompt}"
+       return MockAIService()
    ```
 
 3. **Pytest Plugins**
@@ -509,21 +924,28 @@ def mock_ai_service():
    - `pytest-benchmark`: Performance testing
 
 4. **Custom Hooks**
+
+   Custom hooks allow you to customize the behavior of pytest. Here is an example of a custom hook that adds a custom marker:
+
    ```python
    # conftest.py
-def pytest_configure(config):
-    # Add custom markers
-    config.addinivalue_line(
-        "markers",
-        "integration: mark test as integration test"
-    )
+   def pytest_configure(config):
+       # Add custom markers
+       config.addinivalue_line(
+           "markers",
+           "integration: mark test as integration test"
+       )
    ```
 
+   This hook adds a custom marker called `integration` that can be used to mark tests as integration tests.
+
 ## Test Output
+
 
 Test output is saved to the `tests/test_output/` directory with timestamps in the filenames for easy tracking.
 
 ### Output File Naming Convention
+
 - `test_battery_<timestamp>.log` - Full test suite runs
 - `test_<module>_<timestamp>.log` - Individual test module runs
 - `specific_test_<timestamp>.log` - Specific test function runs
@@ -550,7 +972,7 @@ Test output is saved to the `tests/test_output/` directory with timestamps in th
 
 Tests are organized in the `tests/` directory following the project's package structure:
 
-```
+```text
 tests/
 ├── test_output/            # Test output files
 ├── test_hello_world.py     # Basic test example
@@ -558,7 +980,7 @@ tests/
 └── test_*.py              # Other test modules
 ```
 
-## Writing New Tests
+## Creating New Tests
 
 1. **Test Naming**:
    - Test files should start with `test_`
@@ -567,34 +989,45 @@ tests/
 
 2. **Basic Test Example**:
 
-```python
-"""Test module for example functionality."""
-import pytest
+   ```python
+   """Test module for example functionality."""
+   import pytest
 
-def test_example():
-    """Basic test example."""
-    result = 1 + 1
-    assert result == 2, "1 + 1 should equal 2"
-```
+   def test_example():
+       """Basic test example."""
+       result = 1 + 1
+       assert result == 2, (
+          "1 + 1 should equal 2"
+      )
+   ```
 
-3. **Using Fixtures**:
+3. **Using Fixtures**
 
-```python
-import pytest
-from dockermcp.some_module import SomeClass
+   ```python
+   import pytest
+   from dockermcp.some_module import SomeClass
 
-@pytest.fixture
-def test_client():
-    """Create a test client."""
-    client = SomeClass()
-    yield client
-    # Cleanup code here
+   @pytest.fixture
+   def test_client():
+       """
+       Create a test client with proper initialization.
+       
+       This fixture creates an instance of SomeClass and yields it for testing.
+       Cleanup is performed after the test completes.
+       
+       Yields:
+           SomeClass: An initialized test client instance
+       """
+       client = SomeClass()
+       yield client
+       # Cleanup code here
 
-def test_with_fixture(test_client):
-    """Test using a fixture."""
-    result = test_client.some_method()
-    assert result is not None
-```
+   def test_with_fixture(test_client):
+       """Test using a fixture."""
+       result = test_client.some_method()
+       assert result is not None
+   ```
+
 
 ## Troubleshooting
 
@@ -609,7 +1042,8 @@ def test_with_fixture(test_client):
    - Ensure test functions start with `test_`
 
 3. **Output Not Captured**
-   - Always use `> file.log 2>&1` to capture both stdout and stderr
+   - Always use `> file.log 2>&1` to capture both
+     stdout and stderr
    - Check file permissions in the output directory
 
 4. **Docker-Related Issues**

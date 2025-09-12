@@ -12,7 +12,7 @@ from typing import Any, Dict, Optional, List
 
 import docker
 from docker.errors import DockerException, APIError, NotFound
-from fastmcp.tools.tool import Tool
+from fastmcp.tools import tool
 from pydantic import BaseModel, Field, ConfigDict
 
 from dockermcp.logging_config import logger
@@ -65,7 +65,7 @@ def _get_network_io(stats: Dict[str, Any]) -> Dict[str, int]:
     except (AttributeError, TypeError):
         return {'rx_bytes': 0, 'tx_bytes': 0}
 
-@Tool(
+@tool(
     name="inspect_container",
     description="Inspect a Docker container and return detailed information",
     parameters={

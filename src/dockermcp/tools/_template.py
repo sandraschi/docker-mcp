@@ -6,45 +6,42 @@ This file serves as a template for creating new tools following FastMCP 2.12+ st
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Annotated
+from pydantic import Field, BaseModel
 
 # FastMCP imports
-from fastmcp.tools.tool import Tool
+from fastmcp import FastMCP
+
+# Initialize MCP instance
+mcp = FastMCP("Docker MCP")
 
 # Local imports
 from dockermcp.logging_config import logger
 
-@Tool(
+class ExampleToolParams(BaseModel):
+    """Parameters for the example tool."""
+    param1: str = Field(
+        ...,
+        description="First parameter"
+    )
+    param2: int = Field(
+        default=42,
+        description="Second parameter"
+    )
+
+@mcp.tool(
     name="example_tool",
-    description="Example tool following FastMCP 2.12+ standards",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'param1': {
-                'type': 'string',
-                'description': 'First parameter',
-                'default': 'default_value'
-            },
-            'param2': {
-                'type': 'integer',
-                'description': 'Second parameter',
-                'default': 42
-            }
-        },
-        'required': ['param1']
-    }
+    description="Example tool following FastMCP 2.12+ standards"
 )
-async def example_tool(
-    param1: str = 'default_value',
-    param2: int = 42
-) -> Dict[str, Any]:
+async def example_tool(params: ExampleToolParams) -> Dict[str, Any]:
     """
     Example tool that demonstrates the FastMCP 2.12+ pattern.
     
     Args:
-        param1: First parameter description
-        param2: Second parameter description (default: 42)
-        
+        params: ExampleToolParams containing:
+            - param1: First parameter
+            - param2: Second parameter (default: 42)
+            
     Returns:
         Dictionary containing the result of the operation
         
@@ -65,15 +62,16 @@ async def example_tool(
         }
     """
     try:
-        # Implementation goes here
+        # Your implementation here
         result = {
-            "status": "success",
-            "result": {
-                "processed_param1": f"{param1}_processed",
-                "processed_param2": param2 * 2
+            'status': 'success',
+            'message': 'Operation completed successfully',
+            'data': {
+                'param1': params.param1,
+                'param2': params.param2,
+                'processed': True
             }
         }
-        
         return result
         
     except Exception as e:

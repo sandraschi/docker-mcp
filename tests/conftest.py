@@ -2,13 +2,69 @@
 Pytest configuration and fixtures for Docker MCP tests.
 """
 import os
+import sys
+import asyncio
+import logging
 import pytest
-from unittest.mock import MagicMock, patch
+from pathlib import Path
+from typing import Dict, Any, AsyncGenerator, Optional
+from unittest.mock import MagicMock, patch, AsyncMock
+
 import docker
+import aiodocker
 import requests
+from dotenv import load_dotenv
+
+# Add src to Python path
+sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+# Load environment variables
+load_dotenv()
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # Default MCP server URL
 DEFAULT_MCP_SERVER = "http://localhost:8000"
+
+# Test configuration
+class TestConfig:
+    """Test configuration settings."""
+    # Docker test settings
+    TEST_CONTAINER_PREFIX = 'test_dockermcp_'
+    TEST_NETWORK_NAME = 'test_dockermcp_network'
+    TEST_IMAGE = 'alpine:latest'  # Lightweight image for testing
+    
+    # Test timeouts (in seconds)
+    CONTAINER_START_TIMEOUT = 30
+    TEST_TIMEOUT = 60
+
+# Environment variable helpers
+def get_test_config() -> TestConfig:
+    """Get test configuration with environment overrides."""
+    config = TestConfig()
+    
+    # Allow environment overrides
+    if 'DOCKER_TEST_IMAGE' in os.environ:
+        config.TEST_IMAGE = os.environ['DOCKER_TEST_IMAGE']
+    if 'TEST_TIMEOUT' in os.environ:
+        config.TEST_TIMEOUT = int(os.environ['TEST_TIMEOUT'])
+        
+    return config
+
+# Session fixtures
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for each test case."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+@pytest.fixture(scope="session")
+def test_config() -> TestConfig:
+    """Provide test configuration to tests."""
+    return get_test_config()
 
 @pytest.fixture(scope="session")
 def mcp_server_url():
@@ -23,14 +79,39 @@ def is_server_available(url):
     except requests.RequestException:
         return False
 
-# Only use mocks if MOCK_MODE is set
-if os.environ.get("MOCK_MODE", "0") == "1":
+# Docker client fixtures
+@pytest.fixture(scope="session")
+def use_mock_docker() -> bool:
+    """Determine whether to use mock Docker client."""
+    return os.environ.get("SKIP_DOCKER_TESTS", "false").lower() == "true"
+
+@pytest.fixture(scope="function")
+async def docker_helper(test_config, use_mock_docker):
+    """Fixture providing Docker test helper with automatic cleanup."""
+    if use_mock_docker:
+        from tests.helpers.mock_docker import MockDockerClient
+        async with MockDockerClient() as mock_client:
+            yield mock_client
+    else:
+        from tests.helpers.docker_helpers import DockerTestHelper
+        async with DockerTestHelper(test_config) as helper:
+            yield helper
+
+# Mock mode fixtures
+if os.environ.get("MOCK_MODE", "0") == "1" or os.environ.get("SKIP_DOCKER_TESTS", "false").lower() == "true":
     @pytest.fixture(autouse=True)
     def mock_docker():
         """Fixture to mock the Docker client when in mock mode."""
-        with patch('docker.from_env') as mock_from_env:
+        with patch('docker.from_env') as mock_from_env, \
+             patch('aiodocker.Docker') as mock_async_docker:
+            
+            # Set up sync client mock
             mock_client = MagicMock(spec=docker.DockerClient)
             mock_from_env.return_value = mock_client
+            
+            # Set up async client mock
+            mock_async_client = AsyncMock()
+            mock_async_docker.return_value = mock_async_client
             
             # Set up default mocks
             mock_container = MagicMock()

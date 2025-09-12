@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, List, Optional, Any, Union, Literal
+from typing import Dict, List, Optional, Any, Union, Literal, Annotated
 
 import docker
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, validator, ConfigDict
 
-from fastmcp.tools.tool import Tool
+from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
 from .gpu_management import GPUManager, GPUDevice
 
@@ -193,107 +193,10 @@ class GPUContainerManager:
 # Global GPU container manager instance
 gpu_container_manager = GPUContainerManager()
 
-@Tool(
+
+@mcp.tool(
     name="create_gpu_container",
-    description="Create a GPU-accelerated Docker container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'image': {
-                'type': 'string',
-                'description': 'Docker image to use'
-            },
-            'command': {
-                'type': 'string',
-                'description': 'Command to run in the container'
-            },
-            'gpu_ids': {
-                'oneOf': [
-                    {
-                        'type': 'array',
-                        'items': {
-                            'oneOf': [
-                                {'type': 'string'},
-                                {'type': 'integer'}
-                            ]
-                        },
-                        'description': 'List of GPU IDs to use (e.g., [0, 1])'
-                    },
-                    {
-                        'type': 'string',
-                        'enum': ['all'],
-                        'description': 'Use all available GPUs'
-                    }
-                ],
-                'default': 'all'
-            },
-            'count': {
-                'oneOf': [
-                    {
-                        'type': 'integer',
-                        'minimum': 1,
-                        'description': 'Number of GPUs to use'
-                    },
-                    {
-                        'type': 'string',
-                        'enum': ['all'],
-                        'description': 'Use all available GPUs'
-                    }
-                ],
-                'description': 'Number of GPUs to use or "all"',
-                'default': None
-            },
-            'runtime': {
-                'type': 'string',
-                'default': 'nvidia',
-                'description': 'Container runtime to use (e.g., nvidia)'
-            },
-            'environment': {
-                'type': 'object',
-                'additionalProperties': {
-                    'type': 'string'
-                },
-                'default': {},
-                'description': 'Environment variables to set in the container'
-            },
-            'name': {
-                'type': 'string',
-                'description': 'Name for the container'
-            },
-            'detach': {
-                'type': 'boolean',
-                'default': True,
-                'description': 'Run container in detached mode'
-            },
-            'auto_remove': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Automatically remove the container when it exits'
-            },
-            'shm_size': {
-                'type': 'string',
-                'default': '2g',
-                'description': 'Size of /dev/shm (e.g., 2g)'
-            },
-            'volumes': {
-                'type': 'object',
-                'additionalProperties': {
-                    'type': 'string'
-                },
-                'default': {},
-                'description': 'Volume mappings (host_path:container_path)'
-            },
-            'ports': {
-                'type': 'object',
-                'additionalProperties': {
-                    'type': 'string'
-                },
-                'default': {},
-                'description': 'Port mappings (host_port:container_port)'
-            }
-        },
-        'required': ['image']
-    }
+    description="Create a GPU-accelerated Docker container"
 )
 async def create_gpu_container(
     image: str,
@@ -348,12 +251,18 @@ async def create_gpu_container(
         docker_client = docker.from_env()
         gpu_manager = GPUContainerManager(docker_client)
         
+        # Handle default values
+        environment = environment or {}
+        volumes = volumes or {}
+        ports = ports or {}
+        
         # Create GPU container configuration
+        gpu_ids_list = gpu_ids if isinstance(gpu_ids, list) else [gpu_ids]
         config = gpu_manager.create_gpu_container_config(
-            gpu_ids=gpu_ids if isinstance(gpu_ids, list) else [gpu_ids],
+            gpu_ids=gpu_ids_list,
             count=count,
             runtime=runtime,
-            environment=environment or {}
+            environment=environment
         )
         
         # Prepare container configuration
@@ -374,13 +283,13 @@ async def create_gpu_container(
         if volumes:
             container_config['volumes'] = {
                 host_path: {'bind': container_path, 'mode': 'rw'}
-                for host_path, container_path in (volumes or {}).items()
+                for host_path, container_path in volumes.items()
             }
         
         if ports:
             container_config['ports'] = {
                 container_port: host_port
-                for host_port, container_port in (ports or {}).items()
+                for host_port, container_port in ports.items()
             }
         
         # Create and start the container
@@ -405,35 +314,33 @@ async def create_gpu_container(
                 'gpu_ids': gpu_ids if isinstance(gpu_ids, list) else [gpu_ids]
             }
     
-    except docker.errors.ImageNotFound:
+    except docker.errors.ImageNotFound as e:
+        error_msg = f'Docker image not found: {image}'
+        logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
-            'error': f'Docker image not found: {image}'
+            'error': error_msg,
+            'image': image
         }
     except docker.errors.APIError as e:
+        error_msg = f'Docker API error: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
-            'error': f'Docker API error: {str(e)}'
+            'error': error_msg
         }
     except Exception as e:
+        error_msg = f'Failed to create GPU container: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
-            'error': f'Failed to create GPU container: {str(e)}'
+            'error': error_msg
         }
 
-@Tool(
+
+@mcp.tool(
     name="get_container_gpu_info",
-    description="Get GPU information for a running container",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'Container ID or name'
-            }
-        },
-        'required': ['container_id']
-    }
+    description="Get GPU information for a running container"
 )
 async def get_container_gpu_info(container_id: str) -> Dict[str, Any]:
     """
@@ -466,12 +373,15 @@ async def get_container_gpu_info(container_id: str) -> Dict[str, Any]:
         }
     """
     try:
-        docker_client = docker.from_env()
-        gpu_manager = GPUContainerManager(docker_client)
-        return gpu_manager.get_container_gpu_info(container_id)
-    
+        gpu_container_manager = GPUContainerManager(docker.from_env())
+        result = gpu_container_manager.get_container_gpu_info(container_id)
+        if result.get('status') == 'error':
+            logger.error(result.get('error', 'Unknown error getting container GPU info'))
+        return result
     except Exception as e:
+        error_msg = f'Failed to get container GPU info: {str(e)}'
+        logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
-            'error': f'Failed to get container GPU info: {str(e)}'
+            'error': error_msg
         }

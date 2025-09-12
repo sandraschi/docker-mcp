@@ -11,14 +11,18 @@ import json
 import logging
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Literal
+from typing import Any, Dict, List, Optional, Union, Literal, Type, TypeVar, cast, Generic
 
 import docker
 from docker.errors import DockerException, APIError, NotFound, ImageNotFound
 from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, validator, HttpUrl
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
 
 from dockermcp.logging_config import logger
+
+# Initialize MCP instance
+mcp = FastMCP("Docker MCP")
 
 # Import all container management tools to register them
 from .list_containers import list_containers
@@ -100,42 +104,44 @@ class ContainerAction(str, Enum):
     BUILD_IMAGE = "build_image"
     REMOVE_IMAGE = "remove_image"
 
-class ContainerRequest(BaseModel):
-    """Base model for container management requests."""
-    action: ContainerAction = Field(..., description="Action to perform on the container")
-    container_id: Optional[str] = Field(None, description="Container ID or name")
-    params: Dict[str, Any] = Field(default_factory=dict, description="Action-specific parameters")
 
-@Tool(
-    name="manage_container",
-    description="Manage Docker containers and related resources",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'action': {
-                'type': 'string',
-                'enum': [action.value for action in ContainerAction],
-                'description': 'Action to perform on the container or resource'
-            },
-            'container_id': {
-                'type': 'string',
-                'default': None,
-                'description': 'Container ID or name (required for most actions)'
-            },
-            'params': {
-                'type': 'object',
-                'default': {},
-                'description': 'Action-specific parameters'
+class ContainerRequest(BaseModel):
+    """
+    Base model for container management requests.
+    
+    Attributes:
+        action: The action to perform on the container
+        container_id: Optional container ID or name
+        params: Dictionary of action-specific parameters
+    """
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "action": "start",
+                "container_id": "my-container",
+                "params": {"wait": True, "timeout": 30}
             }
-        },
-        'required': ['action']
-    }
+        }
+    )
+    
+    action: ContainerAction = Field(
+        ...,
+        description="Action to perform on the container"
+    )
+    container_id: Optional[str] = Field(
+        None,
+        description="Container ID or name (required for most actions)"
+    )
+    params: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Action-specific parameters"
+    )
+
+@mcp.tool(
+    name="manage_container",
+    description="Manage Docker containers and related resources"
 )
-async def manage_container(
-    action: str,
-    container_id: Optional[str] = None,
-    params: Dict[str, Any] = {}
-) -> Dict[str, Any]:
+async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
     """
     Unified interface for managing Docker containers and related resources.
     
@@ -143,152 +149,93 @@ async def manage_container(
     handler function based on the specified action.
     
     Args:
-        action: Action to perform (e.g., 'start', 'stop', 'inspect')
-        container_id: Container ID or name (required for most actions)
-        params: Action-specific parameters
-        
+        params: ContainerRequest containing:
+            - action: The action to perform (e.g., 'start', 'stop', 'inspect')
+            - container_id: Container ID or name (required for most actions)
+            - params: Action-specific parameters
+            
     Returns:
-        Dictionary with the operation results
+        ToolResponse[Dict[str, Any]]: Response containing the operation results
+        
+    Raises:
+        ToolError: If there's an error processing the request
         
     Example:
-        >>> await manage_container(
+        >>> response = await manage_container(ContainerRequest(
         ...     action="start",
         ...     container_id="my-container",
         ...     params={"wait": True, "timeout": 30}
-        ... )
-        {
-            "status": "success",
-            "container_id": "my-container",
-            "action": "start",
-            "result": {"message": "Container started successfully"}
-        }
+        ... ))
+        >>> if response.success:
+        ...     print(f"Container started: {response.data['container_id']}")
     """
     try:
-        # Convert action string to enum
-        action_enum = ContainerAction(action)
-        
-        # Route to the appropriate handler based on the action
-        if action_enum == ContainerAction.CREATE:
-            result = await create_container(**params)
-        elif action_enum == ContainerAction.START:
-            if not container_id:
-                raise ValueError("container_id is required for 'start' action")
-            result = await start_container(container_id, **params)
-        elif action_enum == ContainerAction.STOP:
-            if not container_id:
-                raise ValueError("container_id is required for 'stop' action")
-            result = await stop_container(container_id, **params)
-        elif action_enum == ContainerAction.RESTART:
-            if not container_id:
-                raise ValueError("container_id is required for 'restart' action")
-            result = await restart_container(container_id, **params)
-        elif action_enum == ContainerAction.PAUSE:
-            if not container_id:
-                raise ValueError("container_id is required for 'pause' action")
-            result = await pause_container(container_id, **params)
-        elif action_enum == ContainerAction.UNPAUSE:
-            if not container_id:
-                raise ValueError("container_id is required for 'unpause' action")
-            result = await unpause_container(container_id, **params)
-        elif action_enum == ContainerAction.REMOVE:
-            if not container_id:
-                raise ValueError("container_id is required for 'remove' action")
-            result = await remove_container(container_id, **params)
-        elif action_enum == ContainerAction.INSPECT:
-            if not container_id:
-                raise ValueError("container_id is required for 'inspect' action")
-            result = await inspect_container(container_id, **params)
-        elif action_enum == ContainerAction.LOGS:
-            if not container_id:
-                raise ValueError("container_id is required for 'logs' action")
-            result = await get_container_logs(container_id, **params)
-        elif action_enum == ContainerAction.EXEC:
-            if not container_id:
-                raise ValueError("container_id is required for 'exec' action")
-            result = await execute_in_container(container_id, **params)
-        elif action_enum == ContainerAction.STATS:
-            if not container_id:
-                raise ValueError("container_id is required for 'stats' action")
-            if params.get('stream', False):
-                result = await stream_container_stats(container_id, **params)
+        # Route to the appropriate handler based on action
+        if params.action == ContainerAction.CREATE:
+            result = await create_container(params.params)
+        elif params.action == ContainerAction.START:
+            result = await start_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.STOP:
+            result = await stop_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.RESTART:
+            result = await restart_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.PAUSE:
+            result = await pause_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.UNPAUSE:
+            result = await unpause_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.REMOVE:
+            result = await remove_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.INSPECT:
+            result = await inspect_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.LOGS:
+            result = await get_container_logs(params.container_id, **params.params)
+        elif params.action == ContainerAction.EXEC:
+            result = await execute_in_container(params.container_id, **params.params)
+        elif params.action == ContainerAction.STATS:
+            if params.params.get('stream', False):
+                return await stream_container_stats(params.container_id, **params.params)
             else:
-                result = await get_container_stats(container_id, **params)
-        elif action_enum == ContainerAction.LIST_FILES:
-            if not container_id:
-                raise ValueError("container_id is required for 'list_files' action")
-            result = await list_container_directory(container_id, **params)
-        elif action_enum == ContainerAction.READ_FILE:
-            if not container_id:
-                raise ValueError("container_id is required for 'read_file' action")
-            result = await read_container_file(container_id, **params)
-        elif action_enum == ContainerAction.WRITE_FILE:
-            if not container_id:
-                raise ValueError("container_id is required for 'write_file' action")
-            result = await write_container_file(container_id, **params)
-        elif action_enum == ContainerAction.LIST_NETWORKS:
-            result = await list_networks(**params)
-        elif action_enum == ContainerAction.CREATE_NETWORK:
-            result = await create_network(**params)
-        elif action_enum == ContainerAction.REMOVE_NETWORK:
-            network_id = params.get('network_id')
-            if not network_id:
-                raise ValueError("network_id is required in params for 'remove_network' action")
-            result = await remove_network(network_id, **params)
-        elif action_enum == ContainerAction.CONNECT_NETWORK:
-            if not container_id:
-                raise ValueError("container_id is required for 'connect_network' action")
-            network_id = params.get('network_id')
-            if not network_id:
-                raise ValueError("network_id is required in params for 'connect_network' action")
-            result = await connect_container_to_network(container_id, network_id, **params)
-        elif action_enum == ContainerAction.DISCONNECT_NETWORK:
-            if not container_id:
-                raise ValueError("container_id is required for 'disconnect_network' action")
-            network_id = params.get('network_id')
-            if not network_id:
-                raise ValueError("network_id is required in params for 'disconnect_network' action")
-            result = await disconnect_container_from_network(container_id, network_id, **params)
-        elif action_enum == ContainerAction.GET_RESOURCES:
-            if not container_id:
-                raise ValueError("container_id is required for 'get_resources' action")
-            result = await get_container_resources(container_id, **params)
-        elif action_enum == ContainerAction.UPDATE_RESOURCES:
-            if not container_id:
-                raise ValueError("container_id is required for 'update_resources' action")
-            result = await update_container_resources(container_id, **params)
-        elif action_enum == ContainerAction.RESET_RESOURCES:
-            if not container_id:
-                raise ValueError("container_id is required for 'reset_resources' action")
-            result = await reset_container_resources(container_id, **params)
-        elif action_enum == ContainerAction.LIST_VOLUMES:
-            result = await list_volumes(**params)
-        elif action_enum == ContainerAction.CREATE_VOLUME:
-            result = await create_volume(**params)
-        elif action_enum == ContainerAction.INSPECT_VOLUME:
-            volume_name = params.get('name')
-            if not volume_name:
-                raise ValueError("name is required in params for 'inspect_volume' action")
-            result = await inspect_volume(volume_name, **params)
-        elif action_enum == ContainerAction.REMOVE_VOLUME:
-            volume_name = params.get('name')
-            if not volume_name:
-                raise ValueError("name is required in params for 'remove_volume' action")
-            result = await remove_volume(volume_name, **params)
-        elif action_enum == ContainerAction.PRUNE_VOLUMES:
-            result = await prune_volumes(**params)
-        elif action_enum == ContainerAction.LIST_IMAGES:
-            result = await list_images(**params)
-        elif action_enum == ContainerAction.PULL_IMAGE:
-            repository = params.get('repository')
-            if not repository:
-                raise ValueError("repository is required in params for 'pull_image' action")
-            result = await pull_image(**params)
-        elif action_enum == ContainerAction.BUILD_IMAGE:
-            path = params.get('path')
-            if not path:
-                raise ValueError("path is required in params for 'build_image' action")
-            result = await build_image(**params)
-        elif action_enum == ContainerAction.REMOVE_IMAGE:
+                result = await get_container_stats(params.container_id, **params.params)
+        elif params.action == ContainerAction.LIST_FILES:
+            result = await list_container_directory(params.container_id, **params.params)
+        elif params.action == ContainerAction.READ_FILE:
+            result = await read_container_file(params.container_id, **params.params)
+        elif params.action == ContainerAction.WRITE_FILE:
+            result = await write_container_file(params.container_id, **params.params)
+        elif params.action == ContainerAction.LIST_NETWORKS:
+            result = await list_networks(**params.params)
+        elif params.action == ContainerAction.CREATE_NETWORK:
+            result = await create_network(**params.params)
+        elif params.action == ContainerAction.REMOVE_NETWORK:
+            result = await remove_network(**params.params)
+        elif params.action == ContainerAction.CONNECT_NETWORK:
+            result = await connect_container_to_network(params.container_id, **params.params)
+        elif params.action == ContainerAction.DISCONNECT_NETWORK:
+            result = await disconnect_container_from_network(params.container_id, **params.params)
+        elif params.action == ContainerAction.GET_RESOURCES:
+            result = await get_container_resources(params.container_id, **params.params)
+        elif params.action == ContainerAction.UPDATE_RESOURCES:
+            result = await update_container_resources(params.container_id, **params.params)
+        elif params.action == ContainerAction.RESET_RESOURCES:
+            result = await reset_container_resources(params.container_id, **params.params)
+        elif params.action == ContainerAction.LIST_VOLUMES:
+            result = await list_volumes(**params.params)
+        elif params.action == ContainerAction.CREATE_VOLUME:
+            result = await create_volume(**params.params)
+        elif params.action == ContainerAction.INSPECT_VOLUME:
+            result = await inspect_volume(params.params.get('volume_id'), **params.params)
+        elif params.action == ContainerAction.REMOVE_VOLUME:
+            result = await remove_volume(params.params.get('volume_id'), **params.params)
+        elif params.action == ContainerAction.PRUNE_VOLUMES:
+            result = await prune_volumes(**params.params)
+        elif params.action == ContainerAction.LIST_IMAGES:
+            result = await list_images(**params.params)
+        elif params.action == ContainerAction.PULL_IMAGE:
+            result = await pull_image(**params.params)
+        elif params.action == ContainerAction.BUILD_IMAGE:
+            result = await build_image(**params.params)
+        elif params.action == ContainerAction.REMOVE_IMAGE:
+            result = await remove_image(params.params.get('image_id'), **params.params)
             image = params.get('image')
             if not image:
                 raise ValueError("image is required in params for 'remove_image' action")

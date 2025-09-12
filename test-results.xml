@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="1" failures="0" skipped="0" tests="1" time="1.807" timestamp="2025-09-12T21:15:15.382528+02:00" hostname="Goliath"><testcase classname="" name="tests.test_container_stats" time="0.000"><error message="collection failure">tests\test_container_stats.py:15: in &lt;module&gt;
+    from dockermcp.tools.containers.container_stats import (
+src\dockermcp\__init__.py:219: in &lt;module&gt;
+    register_tools()
+src\dockermcp\__init__.py:201: in register_tools
+    from .tools import containers, images, networks, volumes, system
+src\dockermcp\tools\__init__.py:90: in &lt;module&gt;
+    from .images.image_management import list_images, tag_image, search_images
+src\dockermcp\tools\images\image_management.py:50: in &lt;module&gt;
+    class ImagePullProgress(BaseModel):
+                            ^^^^^^^^^
+E   NameError: name 'BaseModel' is not defined</error></testcase></testsuite></testsuites>

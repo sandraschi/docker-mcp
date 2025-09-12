@@ -23,7 +23,7 @@ from docker.errors import (
     DockerException, APIError, NotFound, 
     ImageNotFound, ContainerError, InvalidArgument
 )
-from fastmcp.tools.tool import Tool
+from dockermcp.mcp_instance import mcp
 from pydantic import BaseModel, Field, validator, HttpUrl, AnyUrl, ByteSize
 
 from dockermcp.logging_config import logger
@@ -88,7 +88,7 @@ class PruneResult(BaseModel):
     build_cache_space_reclaimed: int = Field(..., description="Disk space reclaimed from deleted build cache in bytes")
     total_space_reclaimed: int = Field(..., description="Total disk space reclaimed in bytes")
 
-@Tool(
+@mcp.tool(
     name="get_system_info",
     description="Get detailed information about the Docker system",
     parameters={
@@ -217,7 +217,7 @@ async def get_system_info(include_disk_usage: bool = False) -> Dict[str, Any]:
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
+@mcp.tool(
     name="get_disk_usage",
     description="Get detailed disk usage information about Docker resources",
     parameters={
@@ -447,7 +447,7 @@ async def get_disk_usage(
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@Tool(
+@mcp.tool(
     name="prune_system",
     description="Remove unused Docker data",
     parameters={

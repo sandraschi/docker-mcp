@@ -11,12 +11,12 @@ import asyncio
 import logging
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, AsyncGenerator, Literal
+from typing import Any, Optional, AsyncGenerator, Literal, Annotated
 
 import docker
 from docker.errors import DockerException, APIError, NotFound
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from dockermcp.mcp_instance import mcp
+from pydantic import Field, field_validator
 
 from dockermcp.logging_config import logger
 
@@ -26,68 +26,20 @@ class LogStreamType(str, Enum):
     STDERR = "stderr"
     ALL = "all"
 
-@Tool(
+@mcp.tool(
     name="get_container_logs",
-    description="Retrieve logs from a Docker container with filtering options",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'container_id': {
-                'type': 'string',
-                'description': 'ID or name of the container'
-            },
-            'follow': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Follow log output (like tail -f)'
-            },
-            'tail': {
-                'type': 'string',
-                'default': '100',
-                'description': 'Number of lines to show from the end of the logs (e.g., "100", "all")'
-            },
-            'since': {
-                'type': 'string',
-                'default': None,
-                'description': 'Show logs since this timestamp (ISO 8601) or relative (e.g., 5m, 2h)'
-            },
-            'until': {
-                'type': 'string',
-                'default': None,
-                'description': 'Show logs before this timestamp (ISO 8601) or relative time'
-            },
-            'timestamps': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Include timestamps in the log output'
-            },
-            'stream_type': {
-                'type': 'string',
-                'enum': [e.value for e in LogStreamType],
-                'default': 'all',
-                'description': 'Which log streams to include (stdout, stderr, or all)'
-            },
-            'timeout': {
-                'type': 'integer',
-                'minimum': 1,
-                'maximum': 3600,
-                'default': 60,
-                'description': 'Timeout in seconds for the log stream (1-3600)'
-            }
-        },
-        'required': ['container_id']
-    }
+    description="Retrieve logs from a Docker container with filtering options"
 )
 async def get_container_logs(
-    container_id: str,
-    follow: bool = False,
-    tail: str = '100',
-    since: Optional[str] = None,
-    until: Optional[str] = None,
-    timestamps: bool = False,
-    stream_type: str = 'all',
-    timeout: int = 60
-) -> Dict[str, Any]:
+    container_id: Annotated[str, Field(description="ID or name of the container")],
+    follow: Annotated[bool, Field(default=False, description="Follow log output (like tail -f)")],
+    tail: Annotated[str, Field(default="100", description="Number of lines to show from the end of the logs (e.g., '100', 'all')")],
+    since: Annotated[Optional[str], Field(default=None, description="Show logs since this timestamp (ISO 8601) or relative (e.g., 5m, 2h)")],
+    until: Annotated[Optional[str], Field(default=None, description="Show logs before this timestamp (ISO 8601) or relative time")],
+    timestamps: Annotated[bool, Field(default=False, description="Include timestamps in the log output")],
+    stream_type: Annotated[str, Field(default="all", description="Which log streams to include (stdout, stderr, or all)")],
+    timeout: Annotated[int, Field(default=60, description="Timeout in seconds for the log stream (1-3600)")]
+) -> dict[str, Any]:
     """
     Retrieve logs from a Docker container with various filtering options.
     
@@ -205,9 +157,9 @@ async def get_container_logs(
 
 async def _stream_logs(
     container: docker.models.containers.Container,
-    log_params: Dict[str, Any],
+    log_params: dict[str, Any],
     timeout: int
-) -> AsyncGenerator[Dict[str, Any], None]:
+) -> AsyncGenerator[str, None]:
     """
     Stream logs from a container with a timeout.
     

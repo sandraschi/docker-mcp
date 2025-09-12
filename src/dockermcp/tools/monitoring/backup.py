@@ -9,9 +9,13 @@ import tarfile
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Dict, Any, Optional, List, BinaryIO, Union
+from typing import Dict, Any, Optional, List, BinaryIO, Union, Literal
 
+from pydantic import BaseModel, Field, validator, ConfigDict
 from fastmcp.tools import Tool
+from fastmcp.exceptions import ToolException
+
+from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
 
 # Default backup directory
@@ -149,36 +153,64 @@ class MonitoringBackup:
                 "error": f"Failed to list backups: {str(e)}"
             }
 
+# Pydantic Models for Parameters
+class CreateBackupParams(BaseModel):
+    """Parameters for creating a monitoring backup."""
+    output_file: Optional[str] = Field(
+        None,
+        description="Path to save the backup file (optional)"
+    )
+    backup_dir: Optional[str] = Field(
+        None,
+        description="Directory to save the backup (if output_file not specified)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "output_file": "/path/to/backup.tar.gz",
+                "backup_dir": "/var/backups/dockermcp/monitoring"
+            }
+        }
+    )
+
+class RestoreBackupParams(BaseModel):
+    """Parameters for restoring a monitoring backup."""
+    backup_file: str = Field(..., description="Path to the backup file to restore")
+    target_dir: str = Field(
+        "/",
+        description="Target directory to restore to (default: /)"
+    )
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "backup_file": "/var/backups/dockermcp/monitoring/backup_20230912_123456.tar.gz",
+                "target_dir": "/"
+            }
+        }
+    )
+
+class ListBackupsParams(BaseModel):
+    """Parameters for listing monitoring backups."""
+    backup_dir: Optional[str] = Field(
+        None,
+        description="Directory containing the backups (optional)"
+    )
+
 # Create a default instance
 backup_manager = MonitoringBackup()
 
-@Tool(
+@mcp.tool(
     name="create_monitoring_backup",
-    description="Create a backup of the monitoring stack's data",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'output_file': {
-                'type': 'string',
-                'description': 'Path to save the backup file (optional)'
-            },
-            'backup_dir': {
-                'type': 'string',
-                'description': 'Directory to save the backup (if output_file not specified)'
-            }
-        }
-    }
+    description="Create a backup of the monitoring stack's data"
 )
-async def create_monitoring_backup(
-    output_file: str = None,
-    backup_dir: str = None
-) -> Dict[str, Any]:
+async def create_monitoring_backup(params: CreateBackupParams) -> Dict[str, Any]:
     """
     Create a backup of the monitoring stack's data.
     
     Args:
-        output_file: Path to save the backup file (optional)
-        backup_dir: Directory to save the backup (if output_file not specified)
+        params: CreateBackupParams containing backup configuration
         
     Returns:
         Dictionary with the result of the operation
@@ -193,43 +225,26 @@ async def create_monitoring_backup(
         }
     """
     try:
-        manager = MonitoringBackup(backup_dir) if backup_dir else backup_manager
-        return manager.create_backup(output_file)
+        manager = MonitoringBackup(params.backup_dir) if params.backup_dir else backup_manager
+        return manager.create_backup(params.output_file)
     except Exception as e:
+        error_msg = f"Failed to create backup: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to create backup: {str(e)}"
+            "error": error_msg
         }
 
-@Tool(
+@mcp.tool(
     name="restore_monitoring_backup",
-    description="Restore the monitoring stack's data from a backup",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'backup_file': {
-                'type': 'string',
-                'description': 'Path to the backup file to restore'
-            },
-            'target_dir': {
-                'type': 'string',
-                'default': '/',
-                'description': 'Target directory to restore to (default: /)'
-            }
-        },
-        'required': ['backup_file']
-    }
+    description="Restore the monitoring stack's data from a backup"
 )
-async def restore_monitoring_backup(
-    backup_file: str,
-    target_dir: str = "/"
-) -> Dict[str, Any]:
+async def restore_monitoring_backup(params: RestoreBackupParams) -> Dict[str, Any]:
     """
     Restore the monitoring stack's data from a backup.
     
     Args:
-        backup_file: Path to the backup file to restore
-        target_dir: Target directory to restore to (default: /)
+        params: RestoreBackupParams containing restore configuration
         
     Returns:
         Dictionary with the result of the operation
@@ -246,32 +261,25 @@ async def restore_monitoring_backup(
         }
     """
     try:
-        return backup_manager.restore_backup(backup_file, target_dir)
+        return backup_manager.restore_backup(params.backup_file, params.target_dir)
     except Exception as e:
+        error_msg = f"Failed to restore backup: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to restore backup: {str(e)}"
+            "error": error_msg
         }
 
-@Tool(
+@mcp.tool(
     name="list_monitoring_backups",
-    description="List available monitoring backups",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'backup_dir': {
-                'type': 'string',
-                'description': 'Directory containing the backups (optional)'
-            }
-        }
-    }
+    description="List available monitoring backups"
 )
-async def list_monitoring_backups(backup_dir: str = None) -> Dict[str, Any]:
+async def list_monitoring_backups(params: ListBackupsParams) -> Dict[str, Any]:
     """
     List available monitoring backups.
     
     Args:
-        backup_dir: Directory containing the backups (optional)
+        params: ListBackupsParams containing backup directory
         
     Returns:
         Dictionary with the list of available backups
@@ -292,10 +300,12 @@ async def list_monitoring_backups(backup_dir: str = None) -> Dict[str, Any]:
         }
     """
     try:
-        manager = MonitoringBackup(backup_dir) if backup_dir else backup_manager
+        manager = MonitoringBackup(params.backup_dir) if params.backup_dir else backup_manager
         return manager.list_backups()
     except Exception as e:
+        error_msg = f"Failed to list backups: {str(e)}"
+        logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
-            "error": f"Failed to list backups: {str(e)}"
+            "error": error_msg
         }
