@@ -10,7 +10,7 @@ import sys
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Type, TypeVar, Callable, Set, Generic
 
-from fastmcp.tools.tool import Tool
+from fastmcp import FastMCP  # Correct import for FastMCP 2.12
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel
 
@@ -73,8 +73,8 @@ def discover_tools() -> Set[str]:
             # Get all tools from the module
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
-                # Check if it's a FastMCP tool
-                if hasattr(attr, '__fastmcp_tool__'):
+                # Check if it's a FastMCP tool (decorated functions have __wrapped__ or are registered)
+                if hasattr(attr, '__wrapped__') or (callable(attr) and hasattr(attr, '_mcp_tool')):
                     discovered_tools.add(attr_name)
                     logger.info(f'Discovered tool: {attr_name} from {name}')
         except ImportError as e:
@@ -85,7 +85,7 @@ def discover_tools() -> Set[str]:
 
 def get_tools() -> List[Dict[str, Any]]:
     """Get metadata for all registered tools."""
-    # In FastMCP 2.12+, tools are automatically registered via the @Tool decorator
+    # In FastMCP 2.12+, tools are automatically registered via the @tool decorator
     # This function is kept for backward compatibility
     return []
 

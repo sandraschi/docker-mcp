@@ -1,0 +1,21 @@
+{
+  "mcp_tool": {},
+  "tool_decorator": {
+    "src\\dockermcp\\tools\\containers\\container_inspect.py": [
+      {
+        "line": "@tool(",
+        "line_number": 68,
+        "context": "        return {'rx_bytes': 0, 'tx_bytes': 0}\n\n@tool(\n    name=\"inspect_container\",\n    description=\"Inspect a Docker container and return detailed information\","
+      }
+    ]
+  },
+  "tool_class": {
+    "scripts\\fix_all_tool_decorators.py": [
+      {
+        "line": "@Tool(",
+        "line_number": 17,
+        "context": "    \n    def fix_decorator(match):\n        prefix = match.group(1)  # \"@Tool(\"\n        params_content = match.group(2)  # Everything between the parentheses\n        "
+      }
+    ]
+  }
+}

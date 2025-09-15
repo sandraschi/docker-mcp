@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 """
 Docker Network Management for FastMCP 2.12+
 
@@ -8,42 +10,60 @@ This module provides comprehensive tools for managing Docker networks including:
 - Listing and filtering networks
 - Managing IPAM (IP Address Management) configurations
 """
-"""Docker Network Management for FastMCP 2.12+.
-
-This module provides comprehensive tools for managing Docker networks including:
-- Creating and removing networks
-- Connecting and disconnecting containers
-- Inspecting network details
-- Listing and filtering networks
-- Managing IPAM (IP Address Management) configurations
-"""
-
-"""Docker Network Management for FastMCP 2.12+.
-
-This module provides comprehensive tools for managing Docker networks including:
-- Creating and removing networks
-- Connecting and disconnecting containers
-- Inspecting network details
-- Listing and filtering networks
-- Managing IPAM (IP Address Management) configurations
-"""
-
-from __future__ import annotations
 
 import ipaddress
 from datetime import datetime
 from enum import Enum
 from ipaddress import IPv4Network, IPv6Network
-from typing import Any, Dict, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
 import docker
 from docker.errors import DockerException, InvalidArgument
-from fastmcp.exceptions import ToolException
-from fastmcp.tools import Tool
-from pydantic import BaseModel, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork
+from fastmcp.exceptions import ToolError as ToolException
+# Import the mcp instance for tool registration
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork, TypeAdapter
 
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
+
+@mcp.tool("remove_network")
+async def remove_network(network_id: str, force: bool = False) -> Dict[str, Any]:
+    """
+    Remove a Docker network by ID or name.
+    
+    Args:
+        network_id: ID or name of the network to remove
+        force: Force removal even if in use
+        
+    Returns:
+        Dictionary with status and message indicating success or failure
+    """
+    try:
+        # Get the Docker client
+        client = mcp.docker_client
+        if client is None:
+            raise DockerException("Docker client not available")
+        
+        # Remove the network
+        network = client.networks.get(network_id)
+        network.remove(force=force)
+        
+        logger.info(f"Successfully removed network: {network_id}")
+        return {
+            "status": "success",
+            "message": f"Network '{network_id}' removed successfully",
+            "network_id": network_id
+        }
+        
+    except Exception as e:
+        error_msg = f"Failed to remove network {network_id}: {str(e)}"
+        logger.error(error_msg)
+        return {
+            "status": "error",
+            "message": error_msg,
+            "error": str(e),
+            "network_id": network_id
+        }
 
 # Type variables for generic response models
 T = TypeVar('T')
@@ -205,9 +225,67 @@ class NetworkSummary(BaseModel):
         }
     )
 
-class NetworkListResponse(BaseResponse[List[NetworkSummary]]):
+class NetworkListResponse(BaseModel):
     """Response model for listing Docker networks."""
-    count: int = Field(..., description="Number of networks returned")
+    status: str = Field(..., description="Status of the operation")
+    message: Optional[str] = Field(None, description="Human-readable message")
+    data: List[NetworkSummary] = Field(default_factory=list, description="List of network summaries")
+    count: int = Field(0, description="Number of networks returned")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Networks listed successfully",
+                "data": [
+                    {
+                        "id": "network1",
+                        "name": "bridge",
+                        "driver": "bridge",
+                        "scope": "local",
+                        "internal": False,
+                        "enable_ipv6": False,
+                        "ipam": {"Driver": "default"},
+                        "options": {},
+                        "labels": {}
+                    }
+                ],
+                "count": 1
+            }
+        }
+    )
+    
+    @classmethod
+    def model_validate(cls, data):
+        """Validate and parse the response data."""
+        if isinstance(data, dict):
+            if 'data' not in data:
+                data = {'data': data}
+            if 'count' not in data:
+                data['count'] = len(data.get('data', []))
+        return cls(**data)
+
+    @classmethod
+    def success(cls, data: List[NetworkSummary], message: str = "Networks listed successfully") -> 'NetworkListResponse':
+        """Create a success response for network listing."""
+        return cls(
+            status="success",
+            message=message,
+            data=data,
+            count=len(data)
+        )
+        
+    @classmethod
+    def error(cls, error: str, message: str = "Failed to list networks") -> 'NetworkListResponse':
+        """Create an error response for network listing."""
+        return cls(
+            status="error",
+            message=message,
+            error=error,
+            data=[],
+            count=0
+        )
 
 class NetworkIPAMConfig(BaseModel):
     """IPAM configuration for creating a Docker network."""
@@ -301,8 +379,10 @@ class NetworkCreateRequest(BaseModel):
         }
     )
 
-class NetworkCreateResponse(BaseResponse[Dict[str, Any]]):
+class NetworkCreateResponse(BaseModel):
     """Response model for creating a Docker network."""
+    status: str = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message")
     network_id: Optional[str] = Field(
         None,
         description="ID of the created network"
@@ -311,6 +391,39 @@ class NetworkCreateResponse(BaseResponse[Dict[str, Any]]):
         None,
         description="Optional warning message"
     )
+    error: Optional[str] = Field(
+        None,
+        description="Error message if operation failed"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Network created successfully",
+                "network_id": "a1b2c3d4e5f6",
+                "warning": "Optional warning message"
+            }
+        }
+    )
+
+    @classmethod
+    def success(cls, network_id: str, message: str = "Network created successfully") -> 'NetworkCreateResponse':
+        """Create a success response for network creation."""
+        return cls(
+            status="success",
+            message=message,
+            network_id=network_id
+        )
+        
+    @classmethod
+    def error(cls, error: str, message: str = "Failed to create network") -> 'NetworkCreateResponse':
+        """Create an error response for network creation."""
+        return cls(
+            status="error",
+            message=message,
+            error=error
+        )
 
     @classmethod
     def from_network(cls, network: Any) -> 'NetworkCreateResponse':
@@ -318,14 +431,8 @@ class NetworkCreateResponse(BaseResponse[Dict[str, Any]]):
         return cls(
             status="success",
             message="Network created successfully",
-            data={
-                "id": network.id,
-                "name": network.name,
-                "driver": network.attrs.get("Driver", ""),
-                "scope": network.attrs.get("Scope", ""),
-                "ipam": network.attrs.get("IPAM", {})
-            },
-            network_id=network.id
+            network_id=network.id,
+            warning=getattr(network, 'warning', None)
         )
 
 class NetworkRemoveRequest(BaseModel):
@@ -368,6 +475,56 @@ class NetworkRemoveResponse(BaseResponse[Dict[str, Any]]):
             message=message,
             data={"network_id": network_id},
             network_id=network_id
+        )
+
+
+class NetworkConnectResponse(BaseModel):
+    """Response model for connecting a container to a network."""
+    status: str = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message")
+    container_id: str = Field(..., description="ID of the container")
+    network_id: str = Field(..., description="ID of the network")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Container connected to network successfully",
+                "container_id": "c1d2e3f4g5h6",
+                "network_id": "n1m2n3m4n5m6"
+            }
+        }
+    )
+
+    @classmethod
+    def success(
+        cls,
+        container_id: str,
+        network_id: str,
+        message: str = "Container connected to network successfully"
+    ) -> 'NetworkConnectResponse':
+        """Create a success response for network connection."""
+        return cls(
+            status="success",
+            message=message,
+            container_id=container_id,
+            network_id=network_id
+        )
+        
+    @classmethod
+    def error(
+        cls,
+        error: str,
+        message: str = "Failed to connect container to network"
+    ) -> 'NetworkConnectResponse':
+        """Create an error response for network connection."""
+        return cls(
+            status="error",
+            message=message,
+            error=error,
+            container_id="",
+            network_id=""
         )
 
 
@@ -417,28 +574,6 @@ class NetworkConnectRequest(BaseModel):
     )
 
 
-class NetworkConnectResponse(BaseResponse[Dict[str, Any]]):
-    """Response model for connecting a container to a network."""
-    container_id: str = Field(..., description="ID of the container")
-    network_id: str = Field(..., description="ID of the network")
-    
-    @classmethod
-    def success_response(
-        cls,
-        container_id: str,
-        network_id: str,
-        message: str = "Container connected to network successfully"
-    ) -> 'NetworkConnectResponse':
-        """Create a success response for network connection."""
-        return cls(
-            status="success",
-            message=message,
-            data={"container_id": container_id, "network_id": network_id},
-            container_id=container_id,
-            network_id=network_id
-        )
-
-
 class NetworkDisconnectRequest(BaseModel):
     """Request model for disconnecting a container from a network."""
     container: str = Field(..., description="Container ID or name")
@@ -459,13 +594,38 @@ class NetworkDisconnectRequest(BaseModel):
     )
 
 
-class NetworkDisconnectResponse(BaseResponse[Dict[str, Any]]):
+class NetworkDisconnectResponse(BaseModel):
     """Response model for disconnecting a container from a network."""
+    status: str = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message")
     container_id: str = Field(..., description="ID of the container")
     network_id: str = Field(..., description="ID of the network")
+    data: Dict[str, Any] = Field(
+        default_factory=dict,
+        description="Additional response data"
+    )
+    error: Optional[str] = Field(
+        None,
+        description="Error message if operation failed"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Container disconnected from network successfully",
+                "container_id": "c1d2e3f4g5h6",
+                "network_id": "n1m2n3m4n5m6",
+                "data": {
+                    "container_id": "c1d2e3f4g5h6",
+                    "network_id": "n1m2n3m4n5m6"
+                }
+            }
+        }
+    )
     
     @classmethod
-    def success_response(
+    def success(
         cls,
         container_id: str,
         network_id: str,
@@ -475,9 +635,25 @@ class NetworkDisconnectResponse(BaseResponse[Dict[str, Any]]):
         return cls(
             status="success",
             message=message,
-            data={"container_id": container_id, "network_id": network_id},
             container_id=container_id,
-            network_id=network_id
+            network_id=network_id,
+            data={"container_id": container_id, "network_id": network_id}
+        )
+        
+    @classmethod
+    def error(
+        cls,
+        error: str,
+        message: str = "Failed to disconnect container from network"
+    ) -> 'NetworkDisconnectResponse':
+        """Create an error response for network disconnection."""
+        return cls(
+            status="error",
+            message=message,
+            error=error,
+            container_id="",
+            network_id="",
+            data={}
         )
 
 
@@ -544,16 +720,83 @@ class NetworkInspectRequest(BaseModel):
     )
 
 
-class NetworkInspectResponse(BaseResponse[NetworkInspectResult]):
+class NetworkInspectResponse(BaseModel):
     """Response model for inspecting a Docker network."""
+    status: str = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message")
+    data: NetworkInspectResult = Field(..., description="Detailed network information")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Network details retrieved successfully",
+                "data": {
+                    "id": "a1b2c3d4e5f6",
+                    "name": "my-network",
+                    "driver": "bridge",
+                    "scope": "local",
+                    "created": "2023-01-01T12:00:00Z",
+                    "enable_ipv6": False,
+                    "internal": False,
+                    "attachable": False,
+                    "ingress": False,
+                    "ipam": {"Driver": "default"},
+                    "options": {},
+                    "labels": {"environment": "development"},
+                    "containers": {}
+                }
+            }
+        }
+    )
+    
+    @classmethod
+    def success(
+        cls,
+        data: NetworkInspectResult,
+        message: str = "Network details retrieved successfully"
+    ) -> 'NetworkInspectResponse':
+        """Create a success response with network details."""
+        return cls(
+            status="success",
+            message=message,
+            data=data
+        )
     
     @classmethod
     def from_network(cls, network: Any) -> 'NetworkInspectResponse':
         """Create a response from a Docker network object."""
-        return cls(
-            status="success",
-            message="Network details retrieved successfully",
+        return cls.success(
             data=NetworkInspectResult.from_network(network)
+        )
+    
+    @classmethod
+    def error(
+        cls,
+        error: str,
+        message: str = "Failed to retrieve network details"
+    ) -> 'NetworkInspectResponse':
+        """Create an error response."""
+        return cls(
+            status="error",
+            message=message,
+            error=error,
+            data=NetworkInspectResult(
+                id="",
+                name="",
+                driver="",
+                scope="",
+                created=datetime.now(),
+                enable_ipv6=False,
+                internal=False,
+                attachable=False,
+                ingress=False,
+                ipam={},
+                options={},
+                labels={},
+                containers={}
+            )
         )
 
 
@@ -611,21 +854,6 @@ class NetworkSummary(BaseModel):
         default_factory=dict,
         description="Information about containers in the network"
     )
-
-
-class NetworkListResponse(BaseResponse[List[NetworkSummary]]):
-    """Response model for listing Docker networks."""
-    count: int = Field(..., description="Number of networks returned")
-
-    @classmethod
-    def success(cls, data: List[NetworkSummary], message: str = "Networks listed successfully") -> 'NetworkListResponse':
-        """Create a success response for network listing."""
-        return cls(
-            status="success",
-            message=message,
-            data=data,
-            count=len(data)
-        )
 
 
 @mcp.tool(

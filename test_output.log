@@ -2,39 +2,494 @@
 platform win32 -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- C:\Users\sandr\AppData\Local\Programs\Python\Python313\python.exe
 cachedir: .pytest_cache
 metadata: {'Python': '3.13.5', 'Platform': 'Windows-11-10.0.27938-SP0', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'langsmith': '0.3.42', 'asyncio': '0.23.8', 'html': '4.1.1', 'metadata': '3.1.1', 'mock': '3.14.1', 'cov': '2.12.1', 'anyio': '4.10.0', 'aio': '1.9.0', 'httpx': '0.35.0', 'randomly': '3.16.0', 'xdist': '3.8.0'}, 'JAVA_HOME': 'C:\\Program Files\\Microsoft\\jdk-17.0.15.6-hotspot'}
-Using --randomly-seed=26423148
+Using --randomly-seed=2050804555
 rootdir: D:\Dev\repos\dockermcp
-configfile: pyproject.toml
+configfile: pytest.ini
 plugins: langsmith-0.3.42, asyncio-0.23.8, html-4.1.1, metadata-3.1.1, mock-3.14.1, cov-2.12.1, anyio-4.10.0, aio-1.9.0, httpx-0.35.0, randomly-3.16.0, xdist-3.8.0
-asyncio: mode=Mode.STRICT
-collecting ... collected 0 items / 1 error
+asyncio: mode=Mode.AUTO
+collecting ... collected 9 items
 
-=================================== ERRORS ====================================
-_______________ ERROR collecting tests/test_list_containers.py ________________
-tests\test_list_containers.py:12: in <module>
-    from dockermcp.tools.containers.list_containers import list_containers, ListContainersRequest
-src\dockermcp\__init__.py:218: in <module>
-    register_tools()
-src\dockermcp\__init__.py:200: in register_tools
-    from .tools import containers, images, networks, volumes, system
-src\dockermcp\tools\__init__.py:53: in <module>
-    discover_and_register_tools()
-src\dockermcp\tools\__init__.py:46: in discover_and_register_tools
-    module = importlib.import_module(f".{module_name}", package=__name__)
-             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
-    return _bootstrap._gcd_import(name[level:], package, level)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-src\dockermcp\tools\compose\__init__.py:12: in <module>
-    from .compose_tools import (
-src\dockermcp\tools\compose\compose_tools.py:86: in <module>
-    @tool(
-E   TypeError: 'module' object is not callable
-------------------------------- Captured stdout -------------------------------
-INFO: Attempting to connect to Docker daemon...
-INFO: Successfully connected to Docker daemon
-INFO: Discovered tool modules: ['assorted_crap', 'compose', 'containers', 'images', 'networks', 'system', 'volumes', 'workflow']
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_invalid_parameters PASSED [ 11%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_concurrent_operations FAILED [ 22%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_container_in_abnormal_state FAILED [ 33%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_restart_policies PASSED [ 44%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_stop_container PASSED [ 55%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_start_container FAILED [ 66%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_remove_container FAILED [ 77%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_restart_container PASSED [ 88%]
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_force_remove_container FAILED [100%]
+
+================================== FAILURES ===================================
+______________ TestContainerLifecycle.test_concurrent_operations ______________
+
+self = <AsyncMock name='mock.containers.get().start' id='2314405385888'>
+
+    def assert_called_once(self):
+        """assert that the mock was called only once.
+        """
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to have been called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'start' to have been called once. Called 3 times.
+E           Calls: [call(), call(), call()].
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:958: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_container_lifecycle.TestContainerLifecycle testMethod=test_concurrent_operations>
+
+    async def test_concurrent_operations(self):
+        """Test handling of concurrent operations on the same container."""
+        # Simulate a slow operation
+        async def slow_start():
+            await asyncio.sleep(0.1)
+            return {"status": "started"}
+    
+        # Configure the mock to simulate a slow start
+        self.mock_container.start = AsyncMock(side_effect=slow_start)
+    
+        # Start multiple operations concurrently
+        tasks = []
+        for _ in range(3):
+            request = ContainerLifecycleRequest(
+                container_id=TEST_CONTAINER_ID,
+                action=ContainerAction.START
+            )
+            # Use the actual implementation function for testing concurrency
+            tasks.append(container_lifecycle._manage_container_lifecycle_impl(request))
+    
+        responses = await asyncio.gather(*tasks)
+    
+        # Verify all operations completed successfully
+        self.assertEqual(len(responses), 3)
+        for response in responses:
+            self.assertTrue(response["success"])
+            self.assertEqual(response["container_id"], TEST_CONTAINER_ID)
+        # Container start should only be called once due to operation deduplication
+>       self.mock_container.start.assert_called_once()
+E       AssertionError: Expected 'start' to have been called once. Called 3 times.
+E       Calls: [call(), call(), call()].
+
+tests\unit\tools\test_container_lifecycle.py:366: AssertionError
+___________ TestContainerLifecycle.test_container_in_abnormal_state ___________
+
+self = <MagicMock name='mock.containers.get().unpause' id='2314405394624'>
+
+    def assert_called_once(self):
+        """assert that the mock was called only once.
+        """
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to have been called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+>           raise AssertionError(msg)
+E           AssertionError: Expected 'unpause' to have been called once. Called 0 times.
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:958: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_container_lifecycle.TestContainerLifecycle testMethod=test_container_in_abnormal_state>
+
+    async def test_container_in_abnormal_state(self):
+        """Test handling of containers in various abnormal states."""
+        # Test with paused container
+        self.mock_container.attrs['State']['Paused'] = True
+        request = ContainerLifecycleRequest(
+            container_id=TEST_CONTAINER_ID,
+            action=ContainerAction.START
+        )
+    
+        response = await container_lifecycle._manage_container_lifecycle_impl(request)
+        self.assertTrue(response["success"])
+>       self.mock_container.unpause.assert_called_once()
+E       AssertionError: Expected 'unpause' to have been called once. Called 0 times.
+
+tests\unit\tools\test_container_lifecycle.py:265: AssertionError
+_________________ TestContainerLifecycle.test_start_container _________________
+
+self = <test_container_lifecycle.TestContainerLifecycle testMethod=test_start_container>
+
+    async def test_start_container(self):
+        """Test starting a container."""
+        # Test 1: Basic start container
+        request = ContainerLifecycleRequest(
+            container_id=TEST_CONTAINER_ID,
+            action=ContainerAction.START
+        )
+    
+        # Call the actual implementation directly for testing
+        response = await container_lifecycle._manage_container_lifecycle_impl(request)
+    
+        self.assertIsInstance(response, dict)
+        self.assertEqual(response["action"], "start")
+        self.assertEqual(response["container_id"], TEST_CONTAINER_ID)
+        self.assertTrue(response["success"])
+        self.mock_container.start.assert_called_once()
+        self.docker_client.containers.get.assert_called_once_with(TEST_CONTAINER_ID)
+    
+        # Test 2: Start already running container
+        self.mock_container.start.reset_mock()
+        self.mock_container.attrs['State']['Running'] = True
+    
+>       response = await manage_container_lifecycle(request)
+                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: 'FunctionTool' object is not callable
+
+tests\unit\tools\test_container_lifecycle.py:183: TypeError
+________________ TestContainerLifecycle.test_remove_container _________________
+
+self = <MagicMock name='mock.containers.get().remove' id='2314410172704'>
+args = (), kwargs = {'force': True}, expected = call(force=True)
+actual = call(force=True, v=False)
+_error_message = <function NonCallableMock.assert_called_with.<locals>._error_message at 0x0000021ADDA0F380>
+cause = None
+
+    def assert_called_with(self, /, *args, **kwargs):
+        """assert that the last call was made with the specified arguments.
+    
+        Raises an AssertionError if the args and keyword args passed in are
+        different to the last call to the mock."""
+        if self.call_args is None:
+            expected = self._format_mock_call_signature(args, kwargs)
+            actual = 'not called.'
+            error_message = ('expected call not found.\nExpected: %s\n  Actual: %s'
+                    % (expected, actual))
+            raise AssertionError(error_message)
+    
+        def _error_message():
+            msg = self._format_mock_failure_message(args, kwargs)
+            return msg
+        expected = self._call_matcher(_Call((args, kwargs), two=True))
+        actual = self._call_matcher(self.call_args)
+        if actual != expected:
+            cause = expected if isinstance(expected, Exception) else None
+>           raise AssertionError(_error_message()) from cause
+E           AssertionError: expected call not found.
+E           Expected: remove(force=True)
+E             Actual: remove(force=True, v=False)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:979: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <MagicMock name='mock.containers.get().remove' id='2314410172704'>
+args = (), kwargs = {'force': True}
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+            raise AssertionError(msg)
+>       return self.assert_called_with(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: expected call not found.
+E       Expected: remove(force=True)
+E         Actual: remove(force=True, v=False)
+E       
+E       pytest introspection follows:
+E       
+E       Kwargs:
+E       assert {'force': True, 'v': False} == {'force': True}
+E         
+E         Common items:
+E         {'force': True}
+E         Left contains 1 more item:
+E         {'v': False}
+E         
+E         Full diff:
+E           {
+E               'force': True,
+E         +     'v': False,
+E           }
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:991: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_container_lifecycle.TestContainerLifecycle testMethod=test_remove_container>
+
+    async def test_remove_container(self):
+        """Test removing a container."""
+        # Setup
+        request = ContainerLifecycleRequest(
+            container_id=TEST_CONTAINER_ID,
+            action=ContainerAction.REMOVE,
+            force=True
+        )
+    
+        # Execute
+        response = await container_lifecycle._manage_container_lifecycle_impl(request)
+    
+        # Assert
+        self.assertIsInstance(response, dict)
+        self.assertEqual(response["action"], "remove")
+        self.assertTrue(response["success"])
+>       self.mock_container.remove.assert_called_once_with(force=True)
+E       AssertionError: expected call not found.
+E       Expected: remove(force=True)
+E         Actual: remove(force=True, v=False)
+E       
+E       pytest introspection follows:
+E       
+E       Kwargs:
+E       assert {'force': True, 'v': False} == {'force': True}
+E         
+E         Common items:
+E         {'force': True}
+E         Left contains 1 more item:
+E         {'v': False}
+E         
+E         Full diff:
+E           {
+E               'force': True,
+E         +     'v': False,
+E           }
+
+tests\unit\tools\test_container_lifecycle.py:252: AssertionError
+_____________ TestContainerLifecycle.test_force_remove_container ______________
+
+self = <MagicMock name='mock.containers.get().remove' id='2314405384880'>
+args = (), kwargs = {'force': True}, expected = call(force=True)
+actual = call(force=True, v=False)
+_error_message = <function NonCallableMock.assert_called_with.<locals>._error_message at 0x0000021ADD6091C0>
+cause = None
+
+    def assert_called_with(self, /, *args, **kwargs):
+        """assert that the last call was made with the specified arguments.
+    
+        Raises an AssertionError if the args and keyword args passed in are
+        different to the last call to the mock."""
+        if self.call_args is None:
+            expected = self._format_mock_call_signature(args, kwargs)
+            actual = 'not called.'
+            error_message = ('expected call not found.\nExpected: %s\n  Actual: %s'
+                    % (expected, actual))
+            raise AssertionError(error_message)
+    
+        def _error_message():
+            msg = self._format_mock_failure_message(args, kwargs)
+            return msg
+        expected = self._call_matcher(_Call((args, kwargs), two=True))
+        actual = self._call_matcher(self.call_args)
+        if actual != expected:
+            cause = expected if isinstance(expected, Exception) else None
+>           raise AssertionError(_error_message()) from cause
+E           AssertionError: expected call not found.
+E           Expected: remove(force=True)
+E             Actual: remove(force=True, v=False)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:979: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <MagicMock name='mock.containers.get().remove' id='2314405384880'>
+args = (), kwargs = {'force': True}
+
+    def assert_called_once_with(self, /, *args, **kwargs):
+        """assert that the mock was called exactly once and that that call was
+        with the specified arguments."""
+        if not self.call_count == 1:
+            msg = ("Expected '%s' to be called once. Called %s times.%s"
+                   % (self._mock_name or 'mock',
+                      self.call_count,
+                      self._calls_repr()))
+            raise AssertionError(msg)
+>       return self.assert_called_with(*args, **kwargs)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: expected call not found.
+E       Expected: remove(force=True)
+E         Actual: remove(force=True, v=False)
+E       
+E       pytest introspection follows:
+E       
+E       Kwargs:
+E       assert {'force': True, 'v': False} == {'force': True}
+E         
+E         Common items:
+E         {'force': True}
+E         Left contains 1 more item:
+E         {'v': False}
+E         
+E         Full diff:
+E           {
+E               'force': True,
+E         +     'v': False,
+E           }
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:991: AssertionError
+
+During handling of the above exception, another exception occurred:
+
+self = <test_container_lifecycle.TestContainerLifecycle testMethod=test_force_remove_container>
+
+    async def test_force_remove_container(self):
+        """Test force removal of a running container."""
+        # Test force remove on running container
+        self.mock_container.attrs['State']['Running'] = True
+    
+        request = ContainerLifecycleRequest(
+            container_id=TEST_CONTAINER_ID,
+            action=ContainerAction.REMOVE,
+            force=True
+        )
+    
+        response = await container_lifecycle._manage_container_lifecycle_impl(request)
+        self.assertTrue(response["success"])
+>       self.mock_container.remove.assert_called_once_with(force=True)
+E       AssertionError: expected call not found.
+E       Expected: remove(force=True)
+E         Actual: remove(force=True, v=False)
+E       
+E       pytest introspection follows:
+E       
+E       Kwargs:
+E       assert {'force': True, 'v': False} == {'force': True}
+E         
+E         Common items:
+E         {'force': True}
+E         Left contains 1 more item:
+E         {'v': False}
+E         
+E         Full diff:
+E           {
+E               'force': True,
+E         +     'v': False,
+E           }
+
+tests\unit\tools\test_container_lifecycle.py:288: AssertionError
+============================== warnings summary ===============================
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: python_paths
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout_func_only
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout_method
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warn(
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'json_schema'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warn(
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\_internal\_config.py:323
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\_internal\_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkListResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkListResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkCreateResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkCreateResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkConnectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkConnectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkDisconnectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkDisconnectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkInspectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkInspectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_concurrent_operations
+  D:\Dev\repos\dockermcp\src\dockermcp\tools\containers\container_lifecycle.py:151: RuntimeWarning: coroutine 'AsyncMockMixin._execute_mock_call' was never awaited
+  Coroutine created at (most recent call last)
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\async_case.py", line 116, in _callMaybeAsync
+      return self._asyncioRunner.run(
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\asyncio\runners.py", line 118, in run
+      return self._loop.run_until_complete(task)
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 712, in run_until_complete
+      self.run_forever()
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 683, in run_forever
+      self._run_once()
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\asyncio\base_events.py", line 2034, in _run_once
+      handle._run()
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\asyncio\events.py", line 89, in _run
+      self._context.run(self._callback, *self._args)
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 2344, in _execute_mock_call
+      return await self._mock_wraps(*args, **kwargs)
+    File "D:\Dev\repos\dockermcp\src\dockermcp\tools\containers\container_lifecycle.py", line 151, in _manage_container_lifecycle_impl
+      container.start()
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 1169, in __call__
+      return self._mock_call(*args, **kwargs)
+    File "C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py", line 1173, in _mock_call
+      return self._execute_mock_call(*args, **kwargs)
+    container.start()
+  Enable tracemalloc to get traceback where the object was allocated.
+  See https://docs.pytest.org/en/stable/how-to/capture-warnings.html#resource-warnings for more info.
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------- generated xml file: D:\Dev\repos\dockermcp\test-results.xml ---------
 =========================== short test summary info ===========================
-ERROR tests/test_list_containers.py - TypeError: 'module' object is not callable
-!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
-============================== 1 error in 1.38s ===============================
+FAILED tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_concurrent_operations - AssertionError: Expected 'start' to have been called once. Called 3 times.
+Calls: [call(), call(), call()].
+FAILED tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_container_in_abnormal_state - AssertionError: Expected 'unpause' to have been called once. Called 0 times.
+FAILED tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_start_container - TypeError: 'FunctionTool' object is not callable
+FAILED tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_remove_container - AssertionError: expected call not found.
+Expected: remove(force=True)
+  Actual: remove(force=True, v=False)
+
+pytest introspection follows:
+
+Kwargs:
+assert {'force': True, 'v': False} == {'force': True}
+  
+  Common items:
+  {'force': True}
+  Left contains 1 more item:
+  {'v': False}
+  
+  Full diff:
+    {
+        'force': True,
+  +     'v': False,
+    }
+FAILED tests/unit/tools/test_container_lifecycle.py::TestContainerLifecycle::test_force_remove_container - AssertionError: expected call not found.
+Expected: remove(force=True)
+  Actual: remove(force=True, v=False)
+
+pytest introspection follows:
+
+Kwargs:
+assert {'force': True, 'v': False} == {'force': True}
+  
+  Common items:
+  {'force': True}
+  Left contains 1 more item:
+  {'v': False}
+  
+  Full diff:
+    {
+        'force': True,
+  +     'v': False,
+    }
+================== 5 failed, 4 passed, 13 warnings in 1.95s ===================

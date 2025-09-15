@@ -24,7 +24,7 @@ from docker.errors import (
     DockerException, APIError, NotFound, 
     ImageNotFound, ContainerError, InvalidArgument
 )
-from dockermcp.mcp_instance import mcp, datetime
+from dockermcp.mcp_instance import mcp
 from pydantic import BaseModel, Field, Field, validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger

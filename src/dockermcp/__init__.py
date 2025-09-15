@@ -196,24 +196,17 @@ system_mgr = SystemManager(docker_client) if docker_available else None
 
 # Register core tools
 def register_tools():
-    """Register all MCP tools with the server."""
-    # Import tools here to avoid circular imports
+    """Import all tool modules to register them with the FastMCP instance via decorators."""
+    # Import tools here to ensure they're registered via @mcp.tool decorators
     from .tools import containers, images, networks, volumes, system
     from .tools.docker_status import register_tool as register_status_tool
     from .tools.docker_reconnect import register_tool as register_reconnect_tool
     
-    # Register tool modules
-    mcp.register_tool(containers)
-    mcp.register_tool(images)
-    mcp.register_tool(networks)
-    mcp.register_tool(volumes)
-    mcp.register_tool(system)
+    # These imports will register their tools via decorators
+    _ = [containers, images, networks, volumes, system]
     
-    # Register Docker management tools
-    for tool in register_status_tool():
-        mcp.register_tool(tool)
-    for tool in register_reconnect_tool():
-        mcp.register_tool(tool)
+    # Register any additional tools that need dynamic registration
+    _ = [register_status_tool(), register_reconnect_tool()]
 
 # Initialize tools on import
 register_tools()

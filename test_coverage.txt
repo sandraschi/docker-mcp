@@ -1,0 +1,257 @@
+============================= test session starts =============================
+platform win32 -- Python 3.13.5, pytest-8.4.1, pluggy-1.6.0 -- C:\Users\sandr\AppData\Local\Programs\Python\Python313\python.exe
+cachedir: .pytest_cache
+metadata: {'Python': '3.13.5', 'Platform': 'Windows-11-10.0.27938-SP0', 'Packages': {'pytest': '8.4.1', 'pluggy': '1.6.0'}, 'Plugins': {'langsmith': '0.3.42', 'asyncio': '0.23.8', 'html': '4.1.1', 'metadata': '3.1.1', 'mock': '3.14.1', 'cov': '2.12.1', 'anyio': '4.10.0', 'aio': '1.9.0', 'httpx': '0.35.0', 'randomly': '3.16.0', 'xdist': '3.8.0'}, 'JAVA_HOME': 'C:\\Program Files\\Microsoft\\jdk-17.0.15.6-hotspot'}
+Using --randomly-seed=1815731419
+rootdir: D:\Dev\repos\dockermcp
+configfile: pytest.ini
+testpaths: tests
+plugins: langsmith-0.3.42, asyncio-0.23.8, html-4.1.1, metadata-3.1.1, mock-3.14.1, cov-2.12.1, anyio-4.10.0, aio-1.9.0, httpx-0.35.0, randomly-3.16.0, xdist-3.8.0
+asyncio: mode=Mode.AUTO
+collecting ... collected 50 items / 9 errors
+
+=================================== ERRORS ====================================
+_______________ ERROR collecting tests/e2e/test_docker_down.py ________________
+tests\e2e\test_docker_down.py:17: in <module>
+    from dockermcp import (
+src\dockermcp\__init__.py:219: in <module>
+    register_tools()
+src\dockermcp\__init__.py:201: in register_tools
+    from .tools import containers, images, networks, volumes, system
+src\dockermcp\tools\__init__.py:136: in <module>
+    from .networks.network_management import (
+src\dockermcp\tools\networks\network_management.py:29: in <module>
+    @Tool(
+E   TypeError: 'Tool' object is not callable
+------------------------------- Captured stdout -------------------------------
+{"timestamp": "2025-09-13T21:51:27.790025+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:27.809765+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.063708+00:00Z", "level": "error", "name": "dockermcp.logging_config", "message": "Failed to get GPU info: Command '['nvidia-smi', '--query-gpu=index,name,memory.total,memory.used,memory.free,utilization.gpu,utilization.memory,temperature.gpu,power.draw,power.limit,driver_version,pci.bus_id,uuid', '--format=json']' returned non-zero exit status 2.", "pid": 222388, "thread": 213688, "module": "gpu_management", "function": "_get_gpu_info_nvidia_smi", "line": 174, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.065471+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+_______ ERROR collecting tests/unit/tools/monitoring/test_monitoring.py _______
+import file mismatch:
+imported module 'test_monitoring' has this __file__ attribute:
+  D:\Dev\repos\dockermcp\tests\integration\test_monitoring.py
+which is not the same as the test file we want to collect:
+  D:\Dev\repos\dockermcp\tests\unit\tools\monitoring\test_monitoring.py
+HINT: remove __pycache__ / .pyc files and/or use a unique basename for your test file modules
+____ ERROR collecting tests/unit/tools/monitoring/test_monitoring_tools.py ____
+ImportError while importing test module 'D:\Dev\repos\dockermcp\tests\unit\tools\monitoring\test_monitoring_tools.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\tools\monitoring\test_monitoring_tools.py:25: in <module>
+    from dockermcp.tools.monitoring import start_monitoring, get_monitoring_status
+src\dockermcp\__init__.py:219: in <module>
+    register_tools()
+src\dockermcp\__init__.py:201: in register_tools
+    from .tools import containers, images, networks, volumes, system
+src\dockermcp\tools\__init__.py:149: in <module>
+    from .volumes.volume_management import (
+src\dockermcp\tools\volumes\volume_management.py:27: in <module>
+    from dockermcp.mcp_instance import mcp, datetime
+E   ImportError: cannot import name 'datetime' from 'dockermcp.mcp_instance' (D:\Dev\repos\dockermcp\src\dockermcp\mcp_instance.py)
+------------------------------- Captured stdout -------------------------------
+{"timestamp": "2025-09-13T21:51:28.416691+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.429446+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.433576+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.531013+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.544321+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.548998+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.551604+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.564061+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.568026+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+__________ ERROR collecting tests/unit/tools/test_container_exec.py ___________
+tests\unit\tools\test_container_exec.py:16: in <module>
+    from dockermcp.tools.containers.container_models import (
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1322: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:1262: in _find_spec
+    ???
+<frozen importlib._bootstrap_external>:1559: in find_spec
+    ???
+<frozen importlib._bootstrap_external>:1528: in _get_spec
+    ???
+<frozen importlib._bootstrap_external>:1399: in __iter__
+    ???
+<frozen importlib._bootstrap_external>:1386: in _recalculate
+    ???
+<frozen importlib._bootstrap_external>:1382: in _get_parent_path
+    ???
+E   KeyError: 'dockermcp.tools'
+_________ ERROR collecting tests/unit/tools/test_container_inspect.py _________
+tests\unit\tools\test_container_inspect.py:15: in <module>
+    from dockermcp.tools.containers.container_inspect import (
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1322: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:1262: in _find_spec
+    ???
+<frozen importlib._bootstrap_external>:1559: in find_spec
+    ???
+<frozen importlib._bootstrap_external>:1528: in _get_spec
+    ???
+<frozen importlib._bootstrap_external>:1399: in __iter__
+    ???
+<frozen importlib._bootstrap_external>:1386: in _recalculate
+    ???
+<frozen importlib._bootstrap_external>:1382: in _get_parent_path
+    ???
+E   KeyError: 'dockermcp.tools'
+_______ ERROR collecting tests/unit/tools/test_container_inspect_v2.py ________
+tests\unit\tools\test_container_inspect_v2.py:30: in <module>
+    from dockermcp.tools.containers.container_inspect_v2 import inspect_container
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1322: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:1262: in _find_spec
+    ???
+<frozen importlib._bootstrap_external>:1559: in find_spec
+    ???
+<frozen importlib._bootstrap_external>:1528: in _get_spec
+    ???
+<frozen importlib._bootstrap_external>:1399: in __iter__
+    ???
+<frozen importlib._bootstrap_external>:1386: in _recalculate
+    ???
+<frozen importlib._bootstrap_external>:1382: in _get_parent_path
+    ???
+E   KeyError: 'dockermcp.tools'
+__________ ERROR collecting tests/unit/tools/test_container_logs.py ___________
+ImportError while importing test module 'D:\Dev\repos\dockermcp\tests\unit\tools\test_container_logs.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\importlib\__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests\unit\tools\test_container_logs.py:15: in <module>
+    from dockermcp.tools.containers.container_logs import (
+E   ImportError: cannot import name 'stream_container_logs' from 'dockermcp.tools.containers.container_logs' (D:\Dev\repos\dockermcp\src\dockermcp\tools\containers\container_logs.py)
+------------------------------- Captured stdout -------------------------------
+{"timestamp": "2025-09-13T21:51:28.683813+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.697799+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.702205+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.705001+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Attempting to connect to Docker daemon...", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 97, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.717546+00:00Z", "level": "info", "name": "dockermcp.logging_config", "message": "Successfully connected to Docker daemon", "pid": 222388, "thread": 213688, "module": "__init__", "function": "initialize_docker_connection", "line": 105, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+{"timestamp": "2025-09-13T21:51:28.722370+00:00Z", "level": "warning", "name": "dockermcp.logging_config", "message": "Failed to import module monitoring: No module named 'dockermcp.exceptions'", "pid": 222388, "thread": 213688, "module": "__init__", "function": "discover_tools", "line": 81, "environment": "development", "hostname": "Goliath", "labels": {"job": "dockermcp", "app": "dockermcp", "environment": "development", "host": "Goliath"}, "tags": {}, "taskName": null}
+___________ ERROR collecting tests/unit/tools/test_network_tools.py ___________
+tests\unit\tools\test_network_tools.py:50: in <module>
+    from dockermcp.tools.networks.network_tools import (
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1322: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:1262: in _find_spec
+    ???
+<frozen importlib._bootstrap_external>:1559: in find_spec
+    ???
+<frozen importlib._bootstrap_external>:1528: in _get_spec
+    ???
+<frozen importlib._bootstrap_external>:1399: in __iter__
+    ???
+<frozen importlib._bootstrap_external>:1386: in _recalculate
+    ???
+<frozen importlib._bootstrap_external>:1382: in _get_parent_path
+    ???
+E   KeyError: 'dockermcp.tools'
+__________ ERROR collecting tests/unit/tools/test_prune_networks.py ___________
+tests\unit\tools\test_prune_networks.py:45: in <module>
+    from dockermcp.tools.networks.network_tools import prune_networks
+<frozen importlib._bootstrap>:1360: in _find_and_load
+    ???
+<frozen importlib._bootstrap>:1322: in _find_and_load_unlocked
+    ???
+<frozen importlib._bootstrap>:1262: in _find_spec
+    ???
+<frozen importlib._bootstrap_external>:1559: in find_spec
+    ???
+<frozen importlib._bootstrap_external>:1528: in _get_spec
+    ???
+<frozen importlib._bootstrap_external>:1399: in __iter__
+    ???
+<frozen importlib._bootstrap_external>:1386: in _recalculate
+    ???
+<frozen importlib._bootstrap_external>:1382: in _get_parent_path
+    ???
+E   KeyError: 'dockermcp.tools'
+============================== warnings summary ===============================
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: python_paths
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout_func_only
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\_pytest\config\__init__.py:1474: PytestConfigWarning: Unknown config option: timeout_method
+  
+    self._warn_or_fail_if_strict(f"Unknown config option: {key}\n")
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'example'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warn(
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\fields.py:1093: PydanticDeprecatedSince20: Using extra keyword arguments on `Field` is deprecated and will be removed. Use `json_schema_extra` instead. (Extra keys: 'json_schema'). Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warn(
+
+tests\integration\test_monitoring.py:25
+  D:\Dev\repos\dockermcp\tests\integration\test_monitoring.py:25: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+tests\integration\test_monitoring.py:84
+  D:\Dev\repos\dockermcp\tests\integration\test_monitoring.py:84: PytestUnknownMarkWarning: Unknown pytest.mark.integration - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.integration
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\_internal\_config.py:323
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\_internal\_config.py:323: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.11/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkListResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkListResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkCreateResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkCreateResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkConnectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkConnectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkDisconnectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkDisconnectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324
+  C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\site-packages\pydantic\json_schema.py:2324: PydanticJsonSchemaWarning: Default value <bound method NetworkInspectResponse.error of <class 'dockermcp.tools.networks.network_management.NetworkInspectResponse'>> is not JSON serializable; excluding default from JSON schema [non-serializable-default]
+    warnings.warn(message, PydanticJsonSchemaWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+--------- generated xml file: D:\Dev\repos\dockermcp\test-results.xml ---------
+=========================== short test summary info ===========================
+ERROR tests/e2e/test_docker_down.py - TypeError: 'Tool' object is not callable
+ERROR tests/unit/tools/monitoring/test_monitoring.py
+ERROR tests/unit/tools/monitoring/test_monitoring_tools.py
+ERROR tests/unit/tools/test_container_exec.py - KeyError: 'dockermcp.tools'
+ERROR tests/unit/tools/test_container_inspect.py - KeyError: 'dockermcp.tools'
+ERROR tests/unit/tools/test_container_inspect_v2.py - KeyError: 'dockermcp.to...
+ERROR tests/unit/tools/test_container_logs.py
+ERROR tests/unit/tools/test_network_tools.py - KeyError: 'dockermcp.tools'
+ERROR tests/unit/tools/test_prune_networks.py - KeyError: 'dockermcp.tools'
+!!!!!!!!!!!!!!!!!!! Interrupted: 9 errors during collection !!!!!!!!!!!!!!!!!!!
+======================= 14 warnings, 9 errors in 2.46s ========================

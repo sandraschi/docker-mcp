@@ -132,6 +132,79 @@ class ContainerLifecycleParams(BaseModel):
         description="Remove volumes when removing a container"
     )
 
+async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> Dict[str, Any]:
+    """
+    Internal async implementation of container lifecycle management.
+    """
+    try:
+        # Get Docker client
+        client = docker.from_env()
+        
+        # Get the container
+        try:
+            container = client.containers.get(params.container_id)
+        except docker.errors.NotFound:
+            raise ToolError(f"Container {params.container_id} not found")
+            
+        # Execute the requested action
+        if params.action == "start":
+            container.start()
+            message = f"Container {params.container_id} started successfully"
+            
+        elif params.action == "stop":
+            container.stop(timeout=params.timeout)
+            message = f"Container {params.container_id} stopped successfully"
+            
+        elif params.action == "restart":
+            container.restart(timeout=params.timeout)
+            message = f"Container {params.container_id} restarted successfully"
+            
+        elif params.action == "remove":
+            container.remove(force=params.force, v=params.remove_volumes)
+            message = f"Container {params.container_id} removed successfully"
+            
+        elif params.action == "pause":
+            container.pause()
+            message = f"Container {params.container_id} paused successfully"
+            
+        elif params.action == "unpause":
+            container.unpause()
+            message = f"Container {params.container_id} unpaused successfully"
+            
+        else:
+            raise ValueError(f"Unsupported action: {params.action}")
+            
+        # Get container state if it still exists
+        try:
+            container.reload()
+            state = {
+                "status": container.status,
+                "running": container.status == "running",
+                "paused": container.status == "paused",
+                "restarting": container.status == "restarting",
+                "started_at": container.attrs["State"]["StartedAt"]
+            }
+        except (docker.errors.NotFound, docker.errors.APIError):
+            # Container may have been removed
+            state = None
+            
+        return {
+            "success": True,
+            "message": message,
+            "container_id": params.container_id,
+            "action": params.action,
+            "state": state
+        }
+        
+    except docker.errors.APIError as e:
+        error_msg = f"Docker API error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise ToolError(error_msg)
+    except Exception as e:
+        error_msg = f"Error managing container {params.container_id}: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        raise ToolError(error_msg)
+
 @mcp.tool(
     name="manage_container_lifecycle",
     description="Manage the lifecycle of a Docker container (start, stop, restart, remove, pause, unpause)"
@@ -164,90 +237,4 @@ async def manage_container_lifecycle(params: ContainerLifecycleParams) -> Dict[s
         ... )
         >>> await manage_container_lifecycle(params)
     """
-    try:
-        # Initialize Docker client
-        client = docker.from_env()
-        
-        # Get the container
-        container = client.containers.get(params.container_id)
-        
-        # Store initial state for response
-        initial_state = container.attrs.get('State', {})
-        
-        # Execute the requested action
-        if params.action == 'start':
-            container.start()
-            action_performed = 'started'
-        elif params.action == 'stop':
-            container.stop(timeout=params.timeout)
-            action_performed = 'stopped'
-        elif params.action == 'restart':
-            container.restart(timeout=params.timeout)
-            action_performed = 'restarted'
-        elif params.action == 'pause':
-            container.pause()
-            action_performed = 'paused'
-        elif params.action == 'unpause':
-            container.unpause()
-            action_performed = 'unpaused'
-        elif params.action == 'remove':
-            container.remove(force=params.force, v=params.remove_volumes)
-            action_performed = 'removed'
-        else:
-            error_msg = f"Unsupported action: {params.action}"
-            logger.error(error_msg)
-            return {
-                "status": "error",
-                "message": error_msg,
-                "error": "UNSUPPORTED_ACTION"
-            }
-        
-        # Get updated state (if container still exists)
-        updated_state = {}
-        if params.action != 'remove':
-            container.reload()
-            updated_state = container.attrs.get('State', {})
-        
-        # Build response
-        response_data = {
-            "container_id": params.container_id,
-            "action": params.action,
-            "state": updated_state or initial_state
-        }
-        
-        return {
-            "status": "success",
-            "message": f"Container {params.container_id} {action_performed} successfully",
-            "data": response_data
-        }
-        
-    except NotFound as e:
-        error_msg = f"Container not found: {params.container_id}"
-        logger.error(error_msg)
-        return {
-            "status": "error",
-            "message": error_msg,
-            "error": str(e),
-            "container_id": params.container_id,
-            "action": params.action
-        }
-    except (DockerException, APIError) as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "message": error_msg,
-            "error": str(e),
-            "container_id": params.container_id,
-            "action": params.action
-        }
-    except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "message": error_msg,
-            "error": str(e),
-            "container_id": params.container_id if 'params' in locals() else 'unknown',
-            "action": params.action if 'params' in locals() else 'unknown'
-        }
+    return await _manage_container_lifecycle_impl(params)

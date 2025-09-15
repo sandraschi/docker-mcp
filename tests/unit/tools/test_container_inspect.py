@@ -12,10 +12,11 @@ from pydantic import ValidationError
 import docker
 
 # Import the tools we want to test
-from dockermcp.tools.containers.container_inspect import inspect_container
-from dockermcp.tools.containers.container_models import (
+from dockermcp.tools.containers.container_inspect import (
+    inspect_container,
     ContainerInspectRequest,
-    ContainerInspectResponse
+    ContainerInspectResponse,
+    BaseResponse
 )
 
 class TestContainerInspect(unittest.TestCase):
@@ -133,15 +134,12 @@ class TestContainerInspect(unittest.TestCase):
     
     async def test_inspect_container_basic(self):
         """Test basic container inspection."""
-        # Setup
-        request = ContainerInspectRequest(
+        # Execute
+        response = await inspect_container(
             container_id="test-container",
             show_stats=False,
             show_logs=False
         )
-        
-        # Execute
-        response = await inspect_container(request)
         
         # Assert
         self.assertIsInstance(response, dict)
@@ -153,15 +151,12 @@ class TestContainerInspect(unittest.TestCase):
     
     async def test_inspect_container_with_stats(self):
         """Test container inspection with stats."""
-        # Setup
-        request = ContainerInspectRequest(
+        # Execute
+        response = await inspect_container(
             container_id="test-container",
             show_stats=True,
             show_logs=False
         )
-        
-        # Execute
-        response = await inspect_container(request)
         
         # Assert
         self.assertIsInstance(response, dict)
@@ -175,15 +170,13 @@ class TestContainerInspect(unittest.TestCase):
         # Setup
         self.mock_container.logs.return_value = b"Log line 1\nLog line 2\n"
         
-        request = ContainerInspectRequest(
+        # Execute
+        response = await inspect_container(
             container_id="test-container",
             show_stats=False,
             show_logs=True,
             log_tail=10
         )
-        
-        # Execute
-        response = await inspect_container(request)
         
         # Assert
         self.assertIsInstance(response, dict)
@@ -195,9 +188,6 @@ class TestContainerInspect(unittest.TestCase):
         """Test handling of non-existent container."""
         # Setup
         self.docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
-        request = ContainerInspectRequest(
-            container_id="nonexistent-container"
-        )
         
         # Execute and assert
         with self.assertRaises(ToolError) as context:

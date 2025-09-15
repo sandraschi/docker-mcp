@@ -1,0 +1,46 @@
+{
+  "mcp_tool_patterns": {
+    "scripts\\find_tool_antipatterns.py": [
+      {
+        "line": "@mcp.tool(patterns=",
+        "line_number": 5,
+        "context": "\nAnti-patterns to find and remove:\n1. @mcp.tool(patterns=...) - Old pattern using 'patterns' parameter\n2. @Tool - Direct Tool class usage as decorator\n3. @tool - Lowercase tool decorator"
+      }
+    ]
+  },
+  "tool_decorator": {
+    "scripts\\fix_all_tool_decorators.py": [
+      {
+        "line": "@tool(",
+        "line_number": 68,
+        "context": "        \n        # Skip if no tool decorators found\n        if '@tool(' not in content and '@Tool(' not in content:\n            return False, \"No tool decorators found\"\n            "
+      }
+    ]
+  },
+  "tool_class": {
+    "scripts\\fix_all_tool_decorators.py": [
+      {
+        "line": "@Tool(",
+        "line_number": 26,
+        "context": "    \"\"\"\n    # Update @tool to @Tool\n    content = re.sub(r'@tool\\s*\\(', '@Tool(', content)\n    \n    # Remove 'returns' parameter from @Tool decorators"
+      },
+      {
+        "line": "@Tool(",
+        "line_number": 32,
+        "context": "    \n    def fix_decorator(match):\n        prefix = match.group(1)  # \"@Tool(\"\n        params_content = match.group(2)  # Everything between the parentheses\n        "
+      },
+      {
+        "line": "@Tool(",
+        "line_number": 68,
+        "context": "        \n        # Skip if no tool decorators found\n        if '@tool(' not in content and '@Tool(' not in content:\n            return False, \"No tool decorators found\"\n            "
+      }
+    ],
+    "src\\dockermcp\\tools\\containers\\container_inspect.py": [
+      {
+        "line": "@Tool(",
+        "line_number": 68,
+        "context": "        return {'rx_bytes': 0, 'tx_bytes': 0}\n\n@Tool(\n    name=\"inspect_container\",\n    description=\"Inspect a Docker container and return detailed information\","
+      }
+    ]
+  }
+}

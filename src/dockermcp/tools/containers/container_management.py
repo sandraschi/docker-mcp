@@ -18,6 +18,7 @@ from docker.errors import DockerException, APIError, NotFound, ImageNotFound
 from fastmcp.tools.tool import Tool
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field, ConfigDict
 
 from dockermcp.logging_config import logger
 
@@ -26,48 +27,30 @@ mcp = FastMCP("Docker MCP")
 
 # Import all container management tools to register them
 from .list_containers import list_containers
-from .container_lifecycle import (
-    create_container, 
-    start_container, 
-    stop_container,
-    restart_container,
-    pause_container,
-    unpause_container,
-    remove_container
-)
+from .container_lifecycle import manage_container_lifecycle
 from .container_inspect import inspect_container
 from .container_logs import get_container_logs
 from .container_exec import execute_in_container
-from .container_stats import get_container_stats, stream_container_stats
+from .container_stats import get_container_stats
 from .container_files import (
     list_container_directory,
     read_container_file,
     write_container_file
 )
-from .container_network import (
-    list_networks,
-    create_network,
-    remove_network,
-    connect_container_to_network,
-    disconnect_container_from_network
-)
+from .container_network import list_networks
 from .container_resources import (
     get_container_resources,
-    update_container_resources,
     reset_container_resources
 )
 from .container_volumes import (
     list_volumes,
     create_volume,
-    inspect_volume,
-    remove_volume,
-    prune_volumes
+    inspect_volume
 )
 from .container_images import (
     list_images,
     pull_image,
-    build_image,
-    remove_image
+    build_image
 )
 
 class ContainerAction(str, Enum):
@@ -87,22 +70,14 @@ class ContainerAction(str, Enum):
     READ_FILE = "read_file"
     WRITE_FILE = "write_file"
     LIST_NETWORKS = "list_networks"
-    CREATE_NETWORK = "create_network"
-    REMOVE_NETWORK = "remove_network"
-    CONNECT_NETWORK = "connect_network"
-    DISCONNECT_NETWORK = "disconnect_network"
     GET_RESOURCES = "get_resources"
-    UPDATE_RESOURCES = "update_resources"
     RESET_RESOURCES = "reset_resources"
     LIST_VOLUMES = "list_volumes"
     CREATE_VOLUME = "create_volume"
     INSPECT_VOLUME = "inspect_volume"
-    REMOVE_VOLUME = "remove_volume"
-    PRUNE_VOLUMES = "prune_volumes"
     LIST_IMAGES = "list_images"
     PULL_IMAGE = "pull_image"
     BUILD_IMAGE = "build_image"
-    REMOVE_IMAGE = "remove_image"
 
 
 class ContainerRequest(BaseModel):
@@ -155,7 +130,7 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
             - params: Action-specific parameters
             
     Returns:
-        ToolResponse[Dict[str, Any]]: Response containing the operation results
+        Dict[str, Any]: Response containing the operation results
         
     Raises:
         ToolError: If there's an error processing the request
@@ -166,87 +141,140 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         ...     container_id="my-container",
         ...     params={"wait": True, "timeout": 30}
         ... ))
-        >>> if response.success:
-        ...     print(f"Container started: {response.data['container_id']}")
+        >>> if response['status'] == 'success':
+        ...     print(f"Container started: {response['container_id']}")
     """
     try:
+        action = params.action
+        container_id = params.container_id
+        
         # Route to the appropriate handler based on action
-        if params.action == ContainerAction.CREATE:
-            result = await create_container(params.params)
-        elif params.action == ContainerAction.START:
-            result = await start_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.STOP:
-            result = await stop_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.RESTART:
-            result = await restart_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.PAUSE:
-            result = await pause_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.UNPAUSE:
-            result = await unpause_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.REMOVE:
-            result = await remove_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.INSPECT:
-            result = await inspect_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.LOGS:
-            result = await get_container_logs(params.container_id, **params.params)
-        elif params.action == ContainerAction.EXEC:
-            result = await execute_in_container(params.container_id, **params.params)
-        elif params.action == ContainerAction.STATS:
-            if params.params.get('stream', False):
-                return await stream_container_stats(params.container_id, **params.params)
-            else:
-                result = await get_container_stats(params.container_id, **params.params)
-        elif params.action == ContainerAction.LIST_FILES:
-            result = await list_container_directory(params.container_id, **params.params)
-        elif params.action == ContainerAction.READ_FILE:
-            result = await read_container_file(params.container_id, **params.params)
-        elif params.action == ContainerAction.WRITE_FILE:
-            result = await write_container_file(params.container_id, **params.params)
-        elif params.action == ContainerAction.LIST_NETWORKS:
-            result = await list_networks(**params.params)
-        elif params.action == ContainerAction.CREATE_NETWORK:
-            result = await create_network(**params.params)
-        elif params.action == ContainerAction.REMOVE_NETWORK:
-            result = await remove_network(**params.params)
-        elif params.action == ContainerAction.CONNECT_NETWORK:
-            result = await connect_container_to_network(params.container_id, **params.params)
-        elif params.action == ContainerAction.DISCONNECT_NETWORK:
-            result = await disconnect_container_from_network(params.container_id, **params.params)
-        elif params.action == ContainerAction.GET_RESOURCES:
-            result = await get_container_resources(params.container_id, **params.params)
-        elif params.action == ContainerAction.UPDATE_RESOURCES:
-            result = await update_container_resources(params.container_id, **params.params)
-        elif params.action == ContainerAction.RESET_RESOURCES:
-            result = await reset_container_resources(params.container_id, **params.params)
-        elif params.action == ContainerAction.LIST_VOLUMES:
-            result = await list_volumes(**params.params)
-        elif params.action == ContainerAction.CREATE_VOLUME:
-            result = await create_volume(**params.params)
-        elif params.action == ContainerAction.INSPECT_VOLUME:
-            result = await inspect_volume(params.params.get('volume_id'), **params.params)
-        elif params.action == ContainerAction.REMOVE_VOLUME:
-            result = await remove_volume(params.params.get('volume_id'), **params.params)
-        elif params.action == ContainerAction.PRUNE_VOLUMES:
-            result = await prune_volumes(**params.params)
-        elif params.action == ContainerAction.LIST_IMAGES:
-            result = await list_images(**params.params)
-        elif params.action == ContainerAction.PULL_IMAGE:
-            result = await pull_image(**params.params)
-        elif params.action == ContainerAction.BUILD_IMAGE:
-            result = await build_image(**params.params)
-        elif params.action == ContainerAction.REMOVE_IMAGE:
-            result = await remove_image(params.params.get('image_id'), **params.params)
-            image = params.get('image')
-            if not image:
-                raise ValueError("image is required in params for 'remove_image' action")
-            result = await remove_image(**params)
+        if action in [ContainerAction.CREATE, ContainerAction.START, ContainerAction.STOP, 
+                     ContainerAction.RESTART, ContainerAction.PAUSE, ContainerAction.UNPAUSE, 
+                     ContainerAction.REMOVE]:
+            # Use container lifecycle management
+            from .container_lifecycle import ContainerLifecycleParams
+            lifecycle_params = ContainerLifecycleParams(
+                container_id=container_id,
+                action=action.value,
+                **params.params
+            )
+            result = await manage_container_lifecycle(lifecycle_params)
+            
+        elif action == ContainerAction.INSPECT:
+            from .container_inspect import ContainerInspectParams
+            inspect_params = ContainerInspectParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await inspect_container(inspect_params)
+            
+        elif action == ContainerAction.LOGS:
+            from .container_logs import ContainerLogsParams
+            logs_params = ContainerLogsParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await get_container_logs(logs_params)
+            
+        elif action == ContainerAction.EXEC:
+            from .container_exec import ExecuteInContainerParams
+            exec_params = ExecuteInContainerParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await execute_in_container(exec_params)
+            
+        elif action == ContainerAction.STATS:
+            from .container_stats import ContainerStatsParams
+            stats_params = ContainerStatsParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await get_container_stats(stats_params)
+            
+        elif action == ContainerAction.LIST_FILES:
+            from .container_files import ListDirectoryParams
+            files_params = ListDirectoryParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await list_container_directory(files_params)
+            
+        elif action == ContainerAction.READ_FILE:
+            from .container_files import ReadFileParams
+            read_params = ReadFileParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await read_container_file(read_params)
+            
+        elif action == ContainerAction.WRITE_FILE:
+            from .container_files import WriteFileParams
+            write_params = WriteFileParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await write_container_file(write_params)
+            
+        elif action == ContainerAction.LIST_NETWORKS:
+            from .container_network import ListNetworksParams
+            network_params = ListNetworksParams(**params.params)
+            result = await list_networks(network_params)
+            
+        elif action == ContainerAction.GET_RESOURCES:
+            from .container_resources import GetContainerResourcesParams
+            resources_params = GetContainerResourcesParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await get_container_resources(resources_params)
+            
+        elif action == ContainerAction.RESET_RESOURCES:
+            from .container_resources import ResetContainerResourcesParams
+            reset_params = ResetContainerResourcesParams(
+                container_id=container_id,
+                **params.params
+            )
+            result = await reset_container_resources(reset_params)
+            
+        elif action == ContainerAction.LIST_VOLUMES:
+            from .container_volumes import ListVolumesParams
+            volumes_params = ListVolumesParams(**params.params)
+            result = await list_volumes(volumes_params)
+            
+        elif action == ContainerAction.CREATE_VOLUME:
+            from .container_volumes import CreateVolumeParams
+            create_vol_params = CreateVolumeParams(**params.params)
+            result = await create_volume(create_vol_params)
+            
+        elif action == ContainerAction.INSPECT_VOLUME:
+            from .container_volumes import InspectVolumeParams
+            inspect_vol_params = InspectVolumeParams(**params.params)
+            result = await inspect_volume(inspect_vol_params)
+            
+        elif action == ContainerAction.LIST_IMAGES:
+            from .container_images import ListImagesParams
+            images_params = ListImagesParams(**params.params)
+            result = await list_images(images_params)
+            
+        elif action == ContainerAction.PULL_IMAGE:
+            from .container_images import PullImageParams
+            pull_params = PullImageParams(**params.params)
+            result = await pull_image(pull_params)
+            
+        elif action == ContainerAction.BUILD_IMAGE:
+            from .container_images import BuildImageParams
+            build_params = BuildImageParams(**params.params)
+            result = await build_image(build_params)
+            
         else:
             raise ValueError(f"Unsupported action: {action}")
         
         # Return the result with additional context
         response = {
             'status': 'success',
-            'action': action,
+            'action': action.value,
             'result': result
         }
         
@@ -261,8 +289,8 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         return {
             'status': 'error',
             'error': error_msg,
-            'action': action,
-            'container_id': container_id
+            'action': action.value if 'action' in locals() else 'unknown',
+            'container_id': container_id if 'container_id' in locals() else None
         }
         
     except APIError as e:
@@ -271,8 +299,8 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         return {
             'status': 'error',
             'error': error_msg,
-            'action': action,
-            'container_id': container_id
+            'action': action.value if 'action' in locals() else 'unknown',
+            'container_id': container_id if 'container_id' in locals() else None
         }
         
     except DockerException as e:
@@ -281,8 +309,8 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         return {
             'status': 'error',
             'error': "Docker daemon not available",
-            'action': action,
-            'container_id': container_id
+            'action': action.value if 'action' in locals() else 'unknown',
+            'container_id': container_id if 'container_id' in locals() else None
         }
         
     except Exception as e:
@@ -291,6 +319,6 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         return {
             'status': 'error',
             'error': error_msg,
-            'action': action,
-            'container_id': container_id
+            'action': action.value if 'action' in locals() else 'unknown',
+            'container_id': container_id if 'container_id' in locals() else None
         }

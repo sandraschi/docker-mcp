@@ -5,9 +5,9 @@ This module contains Pydantic models for workflow management operations.
 """
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, ClassVar, Dict, List, Optional, Union
 
-from pydantic import BaseModel, Field, HttpUrl, AnyUrl, validator
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, AnyUrl, field_validator
 
 class WorkflowStatus(str, Enum):
     """Status of a workflow."""
@@ -26,27 +26,38 @@ class ServiceHealth(str, Enum):
 
 class ServiceDefinition(BaseModel):
     """Definition of a service in a workflow."""
-    name: str = Field(..., description="Name of the service")
-    image: str = Field(..., description="Docker image to use")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "web",
+                "image": "nginx:latest",
+                "ports": {"80": "8080"},
+                "environment": {"DEBUG": "true"}
+            }
+        }
+    )
+    
+    name: str = Field(..., json_schema={"description": "Name of the service"})
+    image: str = Field(..., json_schema={"description": "Docker image to use"})
     command: Optional[Union[str, List[str]]] = Field(
-        None,
-        description="Command to run in the container"
+        default=None,
+        json_schema={"description": "Command to run in the container"}
     )
     environment: Dict[str, str] = Field(
         default_factory=dict,
-        description="Environment variables"
+        json_schema={"description": "Environment variables"}
     )
     ports: Dict[str, str] = Field(
         default_factory=dict,
-        description="Port mappings (host:container)"
+        json_schema={"description": "Port mappings (host:container)"}
     )
     volumes: Dict[str, str] = Field(
         default_factory=dict,
-        description="Volume mappings (host:container)"
+        json_schema={"description": "Volume mappings (host:container)"}
     )
     depends_on: List[str] = Field(
         default_factory=list,
-        description="Services this service depends on"
+        json_schema={"description": "Services this service depends on"}
     )
     healthcheck: Optional[Dict[str, Any]] = Field(
         None,
@@ -67,151 +78,307 @@ class ServiceDefinition(BaseModel):
 
 class WorkflowDefinition(BaseModel):
     """Definition of a workflow."""
-    name: str = Field(..., description="Name of the workflow")
-    version: str = Field("1.0", description="Workflow version")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "web-app",
+                "version": "1.0",
+                "services": {
+                    "web": {
+                        "name": "web",
+                        "image": "nginx:latest",
+                        "ports": {"80": "8080"}
+                    }
+                }
+            }
+        }
+    )
+    
+    name: str = Field(..., json_schema={"description": "Name of the workflow"})
+    version: str = Field("1.0", json_schema={"description": "Workflow version"})
     services: Dict[str, ServiceDefinition] = Field(
         ...,
-        description="Services in the workflow"
+        json_schema={"description": "Services in the workflow"}
     )
     networks: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Networks to create"
+        json_schema={"description": "Networks to create"}
     )
     volumes: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Volumes to create"
+        json_schema={"description": "Volumes to create"}
     )
     environment: Dict[str, str] = Field(
         default_factory=dict,
-        description="Global environment variables"
+        json_schema={"description": "Global environment variables"}
     )
 
 class WorkflowState(BaseModel):
     """Runtime state of a workflow."""
-    workflow_id: str = Field(..., description="Unique ID of the workflow")
-    name: str = Field(..., description="Name of the workflow")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "name": "web-app",
+                "status": "running",
+                "created_at": "2023-01-01T12:00:00Z"
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "Unique ID of the workflow"})
+    name: str = Field(..., json_schema={"description": "Name of the workflow"})
     status: WorkflowStatus = Field(
-        WorkflowStatus.PENDING,
-        description="Current status of the workflow"
+        default=WorkflowStatus.PENDING,
+        json_schema={"description": "Current status of the workflow"}
     )
     start_time: Optional[datetime] = Field(
-        None,
-        description="When the workflow started"
+        default=None,
+        json_schema={"description": "When the workflow started"}
     )
     end_time: Optional[datetime] = Field(
-        None,
-        description="When the workflow ended"
+        default=None,
+        json_schema={"description": "When the workflow ended"}
     )
     services: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="State of each service"
+        json_schema={"description": "State of each service"}
     )
     error: Optional[str] = Field(
-        None,
-        description="Error message if the workflow failed"
+        default=None,
+        json_schema={"description": "Error message if the workflow failed"}
     )
     created_at: datetime = Field(
         default_factory=datetime.utcnow,
-        description="When the workflow was created"
+        json_schema={"description": "When the workflow was created"}
     )
 
 # Request and Response Models for API Endpoints
 class CreateWorkflowRequest(BaseModel):
     """Request model for creating a workflow."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_definition": {
+                    "name": "web-app",
+                    "services": {"web": {"image": "nginx:latest"}}
+                }
+            }
+        }
+    )
+    
     workflow_definition: WorkflowDefinition = Field(
         ...,
-        description="Workflow definition"
+        json_schema={"description": "Workflow definition"}
     )
     workflow_id: Optional[str] = Field(
-        None,
-        description="Optional workflow ID (generated if not provided)"
+        default=None,
+        json_schema={"description": "Optional workflow ID (generated if not provided)"}
     )
 
 class CreateWorkflowResponse(BaseModel):
     """Response model for creating a workflow."""
-    workflow_id: str = Field(..., description="ID of the created workflow")
-    name: str = Field(..., description="Name of the workflow")
-    status: WorkflowStatus = Field(..., description="Initial status of the workflow")
-    created_at: datetime = Field(..., description="When the workflow was created")
-    message: str = Field(..., description="Status message")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "name": "web-app",
+                "status": "pending",
+                "created_at": "2023-01-01T12:00:00Z",
+                "message": "Workflow created successfully"
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the created workflow"})
+    name: str = Field(..., json_schema={"description": "Name of the workflow"})
+    status: WorkflowStatus = Field(..., json_schema={"description": "Initial status of the workflow"})
+    created_at: datetime = Field(..., json_schema={"description": "When the workflow was created"})
+    message: str = Field(..., json_schema={"description": "Status message"})
 
 class StartWorkflowRequest(BaseModel):
     """Request model for starting a workflow."""
-    workflow_id: str = Field(..., description="ID of the workflow to start")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "timeout": 300
+            }
+        }
+    )
+    
+    workflow_id: str = Field(
+        ...,
+        description="ID of the workflow to start",
+        json_schema_extra={"example": "workflow_123"}
+    )
     timeout: int = Field(
-        300,
-        ge=1,
-        le=3600,
-        description="Timeout in seconds"
+        default=300,
+        description="Timeout in seconds",
+        json_schema_extra={
+            "description": "Timeout in seconds",
+            "minimum": 1,
+            "maximum": 3600
+        }
     )
 
 class StartWorkflowResponse(BaseModel):
     """Response model for starting a workflow."""
-    workflow_id: str = Field(..., description="ID of the workflow")
-    status: WorkflowStatus = Field(..., description="Current status of the workflow")
-    start_time: datetime = Field(..., description="When the workflow started")
-    message: str = Field(..., description="Status message")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "status": "running",
+                "start_time": "2023-01-01T12:00:00Z",
+                "message": "Workflow started successfully"
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the workflow"})
+    status: WorkflowStatus = Field(..., json_schema={"description": "Current status of the workflow"})
+    start_time: datetime = Field(..., json_schema={"description": "When the workflow started"})
+    message: str = Field(..., json_schema={"description": "Status message"})
 
 class StopWorkflowRequest(BaseModel):
     """Request model for stopping a workflow."""
-    workflow_id: str = Field(..., description="ID of the workflow to stop")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "force": False
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the workflow to stop"})
     force: bool = Field(
-        False,
-        description="Whether to force stop the workflow"
+        default=False,
+        json_schema={"description": "Whether to force stop the workflow"}
     )
 
 class StopWorkflowResponse(BaseModel):
     """Response model for stopping a workflow."""
-    workflow_id: str = Field(..., description="ID of the workflow")
-    status: WorkflowStatus = Field(..., description="Current status of the workflow")
-    end_time: datetime = Field(..., description="When the workflow was stopped")
-    message: str = Field(..., description="Status message")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "status": "stopped",
+                "end_time": "2023-01-01T12:05:00Z",
+                "message": "Workflow stopped successfully"
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the workflow"})
+    status: WorkflowStatus = Field(..., json_schema={"description": "Current status of the workflow"})
+    end_time: datetime = Field(..., json_schema={"description": "When the workflow was stopped"})
+    message: str = Field(..., json_schema={"description": "Status message"})
 
 class WorkflowStatusResponse(BaseModel):
     """Response model for workflow status."""
-    workflow_id: str = Field(..., description="ID of the workflow")
-    name: str = Field(..., description="Name of the workflow")
-    status: WorkflowStatus = Field(..., description="Current status of the workflow")
-    start_time: Optional[datetime] = Field(None, description="When the workflow started")
-    end_time: Optional[datetime] = Field(None, description="When the workflow ended")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "name": "web-app",
+                "status": "running",
+                "services": {"web": {"status": "running"}},
+                "start_time": "2023-01-01T12:00:00Z"
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the workflow"})
+    name: str = Field(..., json_schema={"description": "Name of the workflow"})
+    status: WorkflowStatus = Field(..., json_schema={"description": "Current status of the workflow"})
+    start_time: Optional[datetime] = Field(default=None, json_schema={"description": "When the workflow started"})
+    end_time: Optional[datetime] = Field(default=None, json_schema={"description": "When the workflow ended"})
     services: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Status of each service in the workflow"
+        json_schema={"description": "Status of each service in the workflow"}
     )
-    error: Optional[str] = Field(None, description="Error message if the workflow failed")
+    error: Optional[str] = Field(default=None, json_schema={"description": "Error message if the workflow failed"})
 
 class ListWorkflowsRequest(BaseModel):
     """Request model for listing workflows."""
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "running",
+                "limit": 10,
+                "offset": 0
+            }
+        }
+    )
+    
     status: str = Field(
-        "all",
-        description="Filter workflows by status (all, running, completed, failed, cancelled)"
+        default="all",
+        json_schema={
+            "description": "Filter workflows by status (all, running, completed, failed, cancelled)",
+            "enum": ["all", "running", "completed", "failed", "cancelled"]
+        }
     )
     limit: int = Field(
-        50,
-        ge=1,
-        le=1000,
-        description="Maximum number of workflows to return"
+        default=50,
+        json_schema={
+            "description": "Maximum number of workflows to return",
+            "minimum": 1,
+            "maximum": 1000
+        }
     )
     offset: int = Field(
-        0,
-        ge=0,
-        description="Number of workflows to skip"
+        default=0,
+        json_schema={
+            "description": "Number of workflows to skip",
+            "minimum": 0
+        }
     )
 
 class WorkflowSummary(BaseModel):
     """Summary of a workflow for listing."""
-    workflow_id: str = Field(..., description="ID of the workflow")
-    name: str = Field(..., description="Name of the workflow")
-    status: WorkflowStatus = Field(..., description="Current status of the workflow")
-    created_at: datetime = Field(..., description="When the workflow was created")
-    start_time: Optional[datetime] = Field(None, description="When the workflow started")
-    end_time: Optional[datetime] = Field(None, description="When the workflow ended")
-    service_count: int = Field(..., description="Number of services in the workflow")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflow_id": "workflow_123",
+                "name": "web-app",
+                "status": "running",
+                "created_at": "2023-01-01T12:00:00Z",
+                "start_time": "2023-01-01T12:00:00Z",
+                "service_count": 2
+            }
+        }
+    )
+    
+    workflow_id: str = Field(..., json_schema={"description": "ID of the workflow"})
+    name: str = Field(..., json_schema={"description": "Name of the workflow"})
+    status: WorkflowStatus = Field(..., json_schema={"description": "Current status of the workflow"})
+    created_at: datetime = Field(..., json_schema={"description": "When the workflow was created"})
+    start_time: Optional[datetime] = Field(default=None, json_schema={"description": "When the workflow started"})
+    end_time: Optional[datetime] = Field(default=None, json_schema={"description": "When the workflow ended"})
+    service_count: int = Field(..., json_schema={"description": "Number of services in the workflow"})
 
 class ListWorkflowsResponse(BaseModel):
     """Response model for listing workflows."""
-    workflows: List[WorkflowSummary] = Field(..., description="List of workflows")
-    total: int = Field(..., description="Total number of workflows")
-    limit: int = Field(..., description="Maximum number of workflows per page")
-    offset: int = Field(..., description="Number of workflows skipped")
-    message: str = Field(..., description="Status message")
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "workflows": [{
+                    "workflow_id": "workflow_123",
+                    "name": "web-app",
+                    "status": "running",
+                    "created_at": "2023-01-01T12:00:00Z"
+                }],
+                "total": 1,
+                "limit": 10,
+                "offset": 0,
+                "message": "Found 1 workflow(s)"
+            }
+        }
+    )
+    
+    workflows: List[WorkflowSummary] = Field(..., json_schema={"description": "List of workflows"})
+    total: int = Field(..., json_schema={"description": "Total number of workflows"})
+    limit: int = Field(..., json_schema={"description": "Maximum number of workflows per page"})
+    offset: int = Field(..., json_schema={"description": "Number of workflows skipped"})
+    message: str = Field(..., json_schema={"description": "Status message"})

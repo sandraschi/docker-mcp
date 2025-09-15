@@ -91,6 +91,89 @@ class FileContent(BaseModel):
     size: int = Field(..., description="Size of the content in bytes")
     truncated: bool = Field(..., description="Whether the content was truncated")
 
+class ReadFileParams(BaseModel):
+    """Parameters for reading files from containers."""
+    container_id: str = Field(..., description="ID or name of the container")
+    path: str = Field(..., description="Path to the file in the container")
+    offset: int = Field(0, ge=0, description="Byte offset to start reading from")
+    length: int = Field(
+        65536,  # 64KB default
+        ge=1,
+        le=10485760,  # 10MB max
+        description="Maximum number of bytes to read (default: 64KB, max: 10MB)"
+    )
+    encoding: str = Field(
+        "base64",
+        description="Encoding for the file content (base64, utf-8, or latin-1)"
+    )
+    
+    @field_validator('encoding')
+    @classmethod
+    def validate_encoding(cls, v: str) -> str:
+        """Validate that encoding is supported."""
+        valid_encodings = {'base64', 'utf-8', 'latin-1'}
+        if v.lower() not in valid_encodings:
+            raise ValueError(f"Encoding must be one of: {', '.join(valid_encodings)}")
+        return v.lower()
+    
+    @field_validator('path')
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        """Normalize the path to ensure it's absolute and uses forward slashes."""
+        path = os.path.normpath(v).replace('\\', '/')
+        return path if path.startswith('/') else f'/{path}'
+
+
+class WriteFileParams(BaseModel):
+    """Parameters for writing files to containers."""
+    container_id: str = Field(..., description="ID or name of the container")
+    path: str = Field(..., description="Path to the file in the container")
+    content: str = Field(..., description="Content to write (base64-encoded if binary)")
+    encoding: str = Field(
+        "base64",
+        description="Encoding of the content (base64, utf-8, or latin-1)"
+    )
+    mode: str = Field(
+        "644",
+        description="File mode in octal (e.g., 644 for rw-r--r--)"
+    )
+    owner: str = Field(
+        "root:root",
+        description="Owner in format user:group (e.g., root:root)"
+    )
+    mkdir: bool = Field(
+        False,
+        description="Create parent directories if they do not exist"
+    )
+    
+    @field_validator('encoding')
+    @classmethod
+    def validate_encoding(cls, v: str) -> str:
+        """Validate that encoding is supported."""
+        valid_encodings = {'base64', 'utf-8', 'latin-1'}
+        if v.lower() not in valid_encodings:
+            raise ValueError(f"Encoding must be one of: {', '.join(valid_encodings)}")
+        return v.lower()
+    
+    @field_validator('mode')
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        """Validate that mode is a valid octal string."""
+        try:
+            # Try to convert to int with base 8 to validate
+            int(v, 8)
+            return v
+        except ValueError:
+            raise ValueError(f"Mode must be a valid octal string (e.g., '644', '755')")
+    
+    @field_validator('path')
+    @classmethod
+    def normalize_path(cls, v: str) -> str:
+        """Normalize the path to ensure it's absolute and uses forward slashes."""
+        path = os.path.normpath(v).replace('\\', '/')
+        return path if path.startswith('/') else f'/{path}'
+
+
 class ListDirectoryParams(BaseModel):
     """Parameters for listing container directory contents."""
     container_id: str = Field(..., description="ID or name of the container")
@@ -340,6 +423,38 @@ def _parse_ls_output(ls_output: str, base_path: str, recursive: bool) -> List[Fi
     
     return entries
 
+
+def _create_tar_archive(file_obj: BinaryIO, filename: str) -> BytesIO:
+    """
+    Create a tar archive containing a single file.
+    
+    Args:
+        file_obj: File-like object to include in the archive
+        filename: Name for the file in the archive
+        
+    Returns:
+        BytesIO object containing the tar archive
+    """
+    tar_data = BytesIO()
+    
+    with tarfile.open(fileobj=tar_data, mode='w') as tar:
+        # Get file size
+        file_obj.seek(0, 2)  # Seek to end
+        file_size = file_obj.tell()
+        file_obj.seek(0)  # Seek back to beginning
+        
+        # Create tarinfo
+        tarinfo = tarfile.TarInfo(name=filename)
+        tarinfo.size = file_size
+        tarinfo.mode = 0o644
+        tarinfo.mtime = int(datetime.now().timestamp())
+        
+        # Add file to archive
+        tar.addfile(tarinfo, file_obj)
+    
+    tar_data.seek(0)
+    return tar_data
+
 @mcp.tool(
     name="read_container_file",
     description="Read the contents of a file from a container"
@@ -423,7 +538,7 @@ async def read_container_file(
             if len(stat_parts) < 6:
                 return {
                     "status": "error",
-                    "container_id": container_id,
+                    "container_id": params.container_id,
                     "error": "Failed to parse file information"
                 }
             

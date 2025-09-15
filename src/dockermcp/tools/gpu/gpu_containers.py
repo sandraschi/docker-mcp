@@ -7,10 +7,10 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Dict, List, Optional, Any, Union, Literal, Annotated
+from typing import Dict, List, Optional, Any, Union, Literal, Annotated, ClassVar
 
 import docker
-from pydantic import BaseModel, Field, validator, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, field_validator
 
 from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
@@ -47,12 +47,14 @@ class GPUContainerConfig(BaseModel):
         description="Driver capabilities to use (e.g., 'nvidia')"
     )
     
-    class Config:
-        json_encoders = {
+    model_config = ConfigDict(
+        json_encoders={
             'set': list
         }
+    )
     
-    @validator('gpu_ids', pre=True)
+    @field_validator('gpu_ids', mode='before')
+    @classmethod
     def validate_gpu_ids(cls, v):
         if v == 'all':
             return ['all']
@@ -60,7 +62,8 @@ class GPUContainerConfig(BaseModel):
             return [gpu_id.strip() for gpu_id in v.split(',')]
         return v
     
-    @validator('count', pre=True)
+    @field_validator('count', mode='before')
+    @classmethod
     def validate_count(cls, v):
         if isinstance(v, str) and v.lower() == 'all':
             return 'all'

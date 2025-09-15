@@ -3,13 +3,31 @@ Monitoring Tools for DockerMCP
 
 This module provides tools for managing the monitoring stack (Prometheus, Grafana, Loki, etc.).
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 import subprocess
 import logging
 from pathlib import Path
+from pydantic import BaseModel, Field, model_validator
+from typing_extensions import Annotated
 
 from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
+from dockermcp.exceptions import DockerOperationError
+
+class CommandResult(BaseModel):
+    """Result of a shell command execution."""
+    status: Literal["success", "error"]
+    returncode: int
+    stdout: str
+    stderr: str
+    command: str
+
+class MonitoringResponse(BaseModel):
+    """Standard response model for monitoring operations."""
+    status: Literal["success", "error"]
+    message: str
+    details: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    error: Optional[str] = None
 
 class MonitoringManager:
     """Manages the monitoring stack."""
@@ -17,11 +35,23 @@ class MonitoringManager:
     def __init__(self):
         self.monitoring_dir = Path(__file__).parent.parent.parent.parent.parent / "monitoring"
         self.compose_file = self.monitoring_dir / "docker-compose-monitoring.yml"
-        self.compose_cmd = ["docker-compose", "-f", str(self.compose_file)]
+        self.compose_cmd = ["docker", "compose", "-f", str(self.compose_file)]
     
-    def run_command(self, cmd: List[str]) -> Dict[str, Any]:
-        """Run a shell command and return the result."""
+    def run_command(self, cmd: List[str]) -> CommandResult:
+        """
+        Run a shell command and return the result.
+        
+        Args:
+            cmd: List of command arguments
+            
+        Returns:
+            CommandResult with the command execution details
+            
+        Raises:
+            DockerOperationError: If the command fails
+        """
         try:
+            logger.debug(f"Executing command: {' '.join(cmd)}")
             result = subprocess.run(
                 cmd,
                 cwd=str(self.monitoring_dir),
@@ -29,289 +59,464 @@ class MonitoringManager:
                 text=True,
                 check=False
             )
-            return {
-                "status": "success" if result.returncode == 0 else "error",
-                "returncode": result.returncode,
-                "stdout": result.stdout.strip(),
-                "stderr": result.stderr.strip(),
-                "command": " ".join(cmd)
-            }
+            
+            cmd_result = CommandResult(
+                status="success" if result.returncode == 0 else "error",
+                returncode=result.returncode,
+                stdout=result.stdout.strip(),
+                stderr=result.stderr.strip(),
+                command=" ".join(cmd)
+            )
+            
+            if cmd_result.status == "error":
+                logger.error(
+                    f"Command failed with code {cmd_result.returncode}: {cmd_result.stderr}"
+                )
+                
+            return cmd_result
+            
         except Exception as e:
-            return {
-                "status": "error",
-                "error": str(e),
-                "command": " ".join(cmd)
-            }
+            error_msg = f"Error executing command: {str(e)}"
+            logger.exception(error_msg)
+            raise DockerOperationError(error_msg) from e
     
-    def start_services(self) -> Dict[str, Any]:
-        """Start the monitoring services."""
-        return self.run_command(self.compose_cmd + ["up", "-d"])
+    def start_services(self, build: bool = False) -> CommandResult:
+        """
+        Start the monitoring services.
+        
+        Args:
+            build: Whether to build images before starting
+            
+        Returns:
+            CommandResult with the command execution details
+        """
+        cmd = self.compose_cmd + ["up", "--detach"]
+        if build:
+            cmd.append("--build")
+        return self.run_command(cmd)
     
-    def stop_services(self) -> Dict[str, Any]:
-        """Stop the monitoring services."""
-        return self.run_command(self.compose_cmd + ["down"])
+    def stop_services(self, remove_volumes: bool = False, timeout: int = 10) -> CommandResult:
+        """
+        Stop the monitoring services.
+        
+        Args:
+            remove_volumes: Whether to remove volumes
+            timeout: Timeout in seconds before killing containers
+            
+        Returns:
+            CommandResult with the command execution details
+        """
+        cmd = self.compose_cmd + ["down", f"--timeout={timeout}"]
+        if remove_volumes:
+            cmd.append("--volumes")
+        return self.run_command(cmd)
     
-    def restart_services(self) -> Dict[str, Any]:
-        """Restart the monitoring services."""
+    def restart_services(self, build: bool = False) -> CommandResult:
+        """
+        Restart the monitoring services.
+        
+        Args:
+            build: Whether to rebuild images before starting
+            
+        Returns:
+            CommandResult with the command execution details
+        """
         self.stop_services()
-        return self.start_services()
+        return self.start_services(build=build)
     
-    def get_status(self) -> Dict[str, Any]:
-        """Get the status of monitoring services."""
-        return self.run_command(self.compose_cmd + ["ps"])
+    def get_status(self, all_containers: bool = True) -> CommandResult:
+        """
+        Get the status of monitoring services.
+        
+        Args:
+            all_containers: Whether to show all containers (including stopped ones)
+            
+        Returns:
+            CommandResult with the command execution details
+        """
+        cmd = self.compose_cmd + ["ps", "--all"] if all_containers else self.compose_cmd + ["ps"]
+        return self.run_command(cmd)
     
-    def get_logs(self, service: Optional[str] = None, tail: int = 100) -> Dict[str, Any]:
-        """Get logs from monitoring services."""
+    def get_logs(
+        self, 
+        service: Optional[str] = None, 
+        tail: int = 100,
+        follow: bool = False,
+        timestamps: bool = False
+    ) -> CommandResult:
+        """
+        Get logs from monitoring services.
+        
+        Args:
+            service: Optional service name to get logs for
+            tail: Number of lines to show from the end
+            follow: Follow log output
+            timestamps: Include timestamps
+            
+        Returns:
+            CommandResult with the command execution details
+        """
         cmd = self.compose_cmd + ["logs", f"--tail={tail}"]
+        
+        if follow:
+            cmd.append("--follow")
+        if timestamps:
+            cmd.append("--timestamps")
         if service:
             cmd.append(service)
+            
         return self.run_command(cmd)
 
 # Create a singleton instance
 monitoring_manager = MonitoringManager()
 
+class StartMonitoringParams(BaseModel):
+    """Parameters for starting the monitoring stack."""
+    build: Annotated[bool, Field(
+        default=False,
+        description="Whether to rebuild the container images"
+    )] = False
+
 @mcp.tool(
     name="start_monitoring",
-    description="Start the monitoring stack (Prometheus, Grafana, Loki, etc.)",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'build': {
-                'type': 'boolean',
-                'description': 'Whether to rebuild the container images',
-                'default': False
-            }
-        },
-        'required': []
-    }
+    description="Start the monitoring stack (Prometheus, Grafana, Loki, etc.)"
 )
-async def start_monitoring(build: bool = False) -> Dict[str, Any]:
+async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
     """
     Start the monitoring stack including Prometheus, Grafana, Loki, and other services.
     
     Args:
-        build: Whether to rebuild the container images
+        params: StartMonitoringParams containing the build flag
         
     Returns:
-        Dictionary with the result of the operation
+        MonitoringResponse with the result of the operation
         
     Example:
-        >>> await start_monitoring()
+        >>> await start_monitoring(StartMonitoringParams(build=True))
         {
             'status': 'success',
             'message': 'Monitoring services started',
-            'services': ['prometheus', 'grafana', 'loki', 'promtail', 'redis']
+            'details': {
+                'services': ['prometheus', 'grafana', 'loki', 'promtail', 'redis'],
+                'output': '...'
+            }
         }
     """
     try:
-        if build:
-            result = monitoring_manager.run_command(
-                monitoring_manager.compose_cmd + ["build"]
-            )
-            if result["status"] == "error":
-                return result
+        result = monitoring_manager.start_services(build=params.build)
         
-        result = monitoring_manager.start_services()
-        if result["status"] == "success":
-            return {
-                "status": "success",
-                "message": "Monitoring services started",
-                "details": result["stdout"],
-                "services": ["prometheus", "grafana", "loki", "promtail", "redis"]
+        if result.status == "success":
+            return MonitoringResponse(
+                status="success",
+                message="Monitoring services started successfully",
+                details={
+                    "services": ["prometheus", "grafana", "loki", "promtail", "redis"],
+                    "output": result.stdout
+                }
+            ).model_dump()
+            
+        return MonitoringResponse(
+            status="error",
+            message="Failed to start monitoring services",
+            error=result.stderr or "Unknown error",
+            details={
+                "command": result.command,
+                "returncode": result.returncode,
+                "output": result.stdout
             }
-        return {
-            "status": "error",
-            "error": f"Failed to start monitoring services: {result.get('stderr', 'Unknown error')}"
-        }
+        ).model_dump()
+        
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Error starting monitoring services: {str(e)}"
-        }
+        logger.exception("Error starting monitoring services")
+        return MonitoringResponse(
+            status="error",
+            message="Failed to start monitoring services",
+            error=str(e)
+        ).model_dump()
+
+class StopMonitoringParams(BaseModel):
+    """Parameters for stopping the monitoring stack."""
+    remove_volumes: Annotated[bool, Field(
+        default=False,
+        description="Whether to remove volumes when stopping"
+    )] = False
+    
+    timeout: Annotated[int, Field(
+        default=10,
+        ge=1,
+        le=300,
+        description="Timeout in seconds before killing containers"
+    )] = 10
 
 @mcp.tool(
     name="stop_monitoring",
-    description="Stop the monitoring stack",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'remove_volumes': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to remove volumes when stopping'
-            }
-        }
-    }
+    description="Stop the monitoring stack"
 )
-async def stop_monitoring(remove_volumes: bool = False) -> Dict[str, Any]:
+async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
     """
     Stop the monitoring stack.
     
     Args:
-        remove_volumes: Whether to remove volumes when stopping
+        params: StopMonitoringParams containing stop options
         
     Returns:
-        Dictionary with the result of the operation
+        MonitoringResponse with the result of the operation
         
     Example:
-        >>> await stop_monitoring()
+        >>> await stop_monitoring(StopMonitoringParams(remove_volumes=True, timeout=30))
         {
             'status': 'success',
-            'message': 'Monitoring services stopped'
+            'message': 'Monitoring services stopped',
+            'details': {
+                'volumes_removed': True,
+                'output': '...'
+            }
         }
     """
     try:
-        cmd = monitoring_manager.compose_cmd + ["down"]
-        if remove_volumes:
-            cmd.append("-v")
+        result = monitoring_manager.stop_services(
+            remove_volumes=params.remove_volumes,
+            timeout=params.timeout
+        )
+        
+        if result.status == "success":
+            return MonitoringResponse(
+                status="success",
+                message="Monitoring services stopped successfully",
+                details={
+                    "volumes_removed": remove_volumes,
+                    "output": result.stdout
+                }
+            ).model_dump()
             
-        result = monitoring_manager.run_command(cmd)
-        if result["status"] == "success":
-            return {
-                "status": "success",
-                "message": "Monitoring services stopped",
-                "details": result["stdout"]
+        return MonitoringResponse(
+            status="error",
+            message="Failed to stop monitoring services",
+            error=result.stderr or "Unknown error",
+            details={
+                "command": result.command,
+                "returncode": result.returncode,
+                "output": result.stdout
             }
-        return {
-            "status": "error",
-            "error": f"Failed to stop monitoring services: {result.get('stderr', 'Unknown error')}"
-        }
+        ).model_dump()
+        
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Error stopping monitoring services: {str(e)}"
-        }
+        logger.exception("Error stopping monitoring services")
+        return MonitoringResponse(
+            status="error",
+            message="Failed to stop monitoring services",
+            error=str(e)
+        ).model_dump()
+
+class MonitoringStatusParams(BaseModel):
+    """Parameters for getting monitoring status."""
+    detailed: Annotated[bool, Field(
+        default=False,
+        description="Whether to include detailed container information"
+    )] = False
+    
+    all_containers: Annotated[bool, Field(
+        default=True,
+        description="Whether to include stopped containers"
+    )] = True
 
 @mcp.tool(
     name="monitoring_status",
-    description="Get the status of the monitoring stack",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'detailed': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Whether to include detailed container information'
-            }
-        }
-    }
+    description="Get the status of the monitoring stack"
 )
-async def monitoring_status(detailed: bool = False) -> Dict[str, Any]:
+async def monitoring_status(params: MonitoringStatusParams) -> MonitoringResponse:
     """
-    Get the status of the monitoring stack.
+    Get the status of monitoring stack services.
     
     Args:
-        detailed: Whether to include detailed container information
+        params: MonitoringStatusParams containing status options
         
     Returns:
-        Dictionary with the status of monitoring services
+        MonitoringResponse with the status of monitoring services
         
     Example:
-        >>> await monitoring_status()
+        >>> await monitoring_status(MonitoringStatusParams(detailed=True))
         {
             'status': 'success',
-            'services': [
-                {'name': 'prometheus', 'status': 'running'},
-                {'name': 'grafana', 'status': 'running'},
-                {'name': 'loki', 'status': 'running'},
-                {'name': 'promtail', 'status': 'running'},
-                {'name': 'redis', 'status': 'running'}
-            ]
+            'message': 'Found 5 monitoring services',
+            'details': {
+                'services': [
+                    {
+                        'name': 'prometheus',
+                        'status': 'running',
+                        'ports': '0.0.0.0:9090->9090/tcp'
+                    },
+                    ...
+                ]
+            }
         }
     """
     try:
-        if detailed:
+        if params.detailed:
             result = monitoring_manager.run_command(
-                ["docker", "ps", "--filter", "name=monitoring_", "--format", "{{.Names}}|{{.Status}}"]
+                ["docker", "ps", "--filter", "name=monitoring_", "--format", "{{.Names}}|{{.Status}}|{{.Ports}}"]
             )
+            
+            if result.status != "success":
+                return MonitoringResponse(
+                    status="error",
+                    message="Failed to get detailed monitoring status",
+                    error=result.stderr or "Unknown error",
+                    details={
+                        "command": result.command,
+                        "returncode": result.returncode
+                    }
+                ).model_dump()
+                
+            # Parse the detailed output
+            services = []
+            for line in result.stdout.splitlines():
+                if "|" in line:
+                    parts = line.split("|", 2)
+                    if len(parts) == 3:
+                        name, status, ports = parts
+                        services.append({
+                            "name": name,
+                            "status": status.lower(),
+                            "ports": ports
+                        })
         else:
-            result = monitoring_manager.get_status()
+            result = monitoring_manager.get_status(all_containers=params.all_containers)
+            
+            if result.status != "success":
+                return MonitoringResponse(
+                    status="error",
+                    message="Failed to get monitoring status",
+                    error=result.stderr or "Unknown error",
+                    details={
+                        "command": result.command,
+                        "returncode": result.returncode
+                    }
+                ).model_dump()
+                
+            # Parse the standard output
+            services = []
+            for line in result.stdout.splitlines():
+                if not line.strip() or 'NAME' in line and 'STATUS' in line:
+                    continue
+                    
+                parts = line.split()
+                if len(parts) >= 4:
+                    service = {
+                        'name': parts[0],
+                        'status': parts[3].lower(),
+                        'ports': ' '.join(parts[4:]) if len(parts) > 4 else ''
+                    }
+                    services.append(service)
         
-        if result["status"] != "success":
-            return result
+        return MonitoringResponse(
+            status="success",
+            message=f"Found {len(services)} monitoring services",
+            details={
+                "services": services or [{"error": "No monitoring services found or not running"}],
+                "raw_output": result.stdout if detailed else None
+            }
+        ).model_dump()
         
-        # Parse the output
-        services = []
-        for line in result["stdout"].splitlines():
-            if "|" in line:
-                name, status = line.split("|", 1)
-                services.append({"name": name, "status": status})
-        
-        return {
-            "status": "success",
-            "services": services or [{"error": "No monitoring services found or not running"}],
-            "raw_output": result["stdout"] if detailed else None
-        }
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Error getting monitoring status: {str(e)}"
-        }
+        logger.exception("Error getting monitoring status")
+        return MonitoringResponse(
+            status="error",
+            message="Failed to get monitoring status",
+            error=str(e)
+        ).model_dump()
+
+class MonitoringLogsParams(BaseModel):
+    """Parameters for getting monitoring logs."""
+    service: Annotated[Optional[str], Field(
+        default=None,
+        description="Name of the service to get logs from (optional)"
+    )] = None
+    
+    tail: Annotated[int, Field(
+        default=100,
+        ge=1,
+        le=10000,
+        description="Number of lines to show from the end of the logs"
+    )] = 100
+    
+    follow: Annotated[bool, Field(
+        default=False,
+        description="Whether to follow the log output"
+    )] = False
+    
+    timestamps: Annotated[bool, Field(
+        default=False,
+        description="Whether to include timestamps in logs"
+    )] = False
 
 @mcp.tool(
     name="monitoring_logs",
-    description="Get logs from monitoring services",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'service': {
-                'type': 'string',
-                'description': 'Name of the service to get logs from (optional)'
-            },
-            'tail': {
-                'type': 'integer',
-                'default': 100,
-                'description': 'Number of lines to show from the end of the logs'
-            },
-            'follow': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Follow log output'
-            }
-        }
-    }
+    description="Get logs from monitoring services"
 )
-async def monitoring_logs(service: Optional[str] = None, tail: int = 100, follow: bool = False) -> Dict[str, Any]:
+async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
     """
     Get logs from monitoring services.
     
     Args:
-        service: Name of the service to get logs from (optional)
-        tail: Number of lines to show from the end of the logs
-        follow: Whether to follow the log output
+        params: MonitoringLogsParams containing log retrieval options
         
     Returns:
-        Dictionary with the logs
+        MonitoringResponse with the logs and metadata
         
     Example:
-        >>> await monitoring_logs(service="grafana", tail=50)
+        >>> await monitoring_logs(MonitoringLogsParams(
+        ...     service="grafana",
+        ...     tail=50,
+        ...     timestamps=True
+        ... ))
         {
             'status': 'success',
-            'service': 'grafana',
-            'logs': '...last 50 lines of logs...'
+            'message': 'Retrieved 50 log lines',
+            'details': {
+                'service': 'grafana',
+                'lines_returned': 50,
+                'follow': False,
+                'timestamps': True
+            }
         }
     """
     try:
-        cmd = monitoring_manager.compose_cmd + ["logs", f"--tail={tail}"]
-        if follow:
-            cmd.append("-f")
-        if service:
-            cmd.append(service)
-            
-        result = monitoring_manager.run_command(cmd)
+        result = monitoring_manager.get_logs(
+            service=params.service,
+            tail=params.tail,
+            follow=params.follow,
+            timestamps=params.timestamps
+        )
         
-        if result["status"] == "success":
-            return {
-                "status": "success",
-                "service": service or "all",
-                "logs": result["stdout"] or "No logs available"
+        if result.status == "success":
+            lines = len(result.stdout.splitlines()) if result.stdout else 0
+            
+            return MonitoringResponse(
+                status="success",
+                message=f"Retrieved {lines} log lines" if not params.follow else "Following logs...",
+                details={
+                    "service": params.service or "all",
+                    "lines_returned": lines,
+                    "follow": params.follow,
+                    "timestamps": params.timestamps
+                }
+            ).model_dump()
+            
+        return MonitoringResponse(
+            status="error",
+            message="Failed to retrieve logs",
+            error=result.stderr or "Unknown error",
+            details={
+                "command": result.command,
+                "returncode": result.returncode
             }
-        return {
-            "status": "error",
-            "error": f"Failed to get logs: {result.get('stderr', 'Unknown error')}"
-        }
+        ).model_dump()
+        
     except Exception as e:
-        return {
-            "status": "error",
-            "error": f"Error getting logs: {str(e)}"
-        }
+        logger.exception("Error retrieving logs")
+        return MonitoringResponse(
+            status="error",
+            message="Failed to retrieve logs",
+            error=str(e)
+        ).model_dump()

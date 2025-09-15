@@ -1,195 +1,28 @@
 """
 Docker System Management for FastMCP 2.12+
 
-This module provides comprehensive tools for managing the Docker system including:
-- System-wide information and statistics
-- Disk usage and cleanup
-- Docker daemon configuration
-- System events and logs
+This module provides comprehensive tools for managing Docker system information,
+including system information, disk usage analysis, and system cleanup operations.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import re
-from datetime import datetime, timezone, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Literal, Annotated
+from typing import Any, Dict, List, Optional, Union, Annotated
 
 import docker
-from docker.errors import (
-    DockerException, APIError, NotFound,
-    ImageNotFound, ContainerError, InvalidArgument
-)
-from pydantic import BaseModel, Field, HttpUrl, AnyUrl, ConfigDict, validator
+from docker.errors import DockerException, APIError
+from fastmcp import FastMCP
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field, ConfigDict
 
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolException
 from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
 
-class SystemInfo(BaseModel):
-    """System information model."""
-    model_config = ConfigDict(extra='ignore')
-    
-    # Version information
-    docker_version: str = Field(..., description="Docker server version")
-    api_version: str = Field(..., description="Docker API version")
-    min_api_version: str = Field(..., description="Minimum API version supported by the server")
-    server_version: str = Field(..., description="Docker server version")
-    build_version: str = Field(..., description="Docker build version")
-    
-    # System information
-    os: str = Field(..., description="Host operating system")
-    arch: str = Field(..., description="CPU architecture")
-    kernel_version: str = Field(..., description="Kernel version")
-    name: str = Field(..., description="Name of the Docker host")
-    
-    # Resource information
-    n_cpu: int = Field(..., description="Number of CPUs available to the Docker daemon")
-    mem_total: int = Field(..., description="Total memory available to the Docker daemon in bytes")
-    
-    # Container information
-    containers_running: int = Field(..., description="Number of running containers")
-    containers_paused: int = Field(..., description="Number of paused containers")
-    containers_stopped: int = Field(..., description="Number of stopped containers")
-    containers_total: int = Field(..., description="Total number of containers")
-    
-    # Image information
-    images: int = Field(..., description="Number of images")
-    
-    # Network information
-    cluster_store: str = Field(..., description="Storage driver used for the cluster")
-    cluster_advertise: str = Field(..., description="Network address advertised for clustering")
-    
-    # Runtime information
-    default_runtime: str = Field(..., description="Default runtime configured")
-    runtimes: Dict[str, Any] = Field(..., description="Available container runtimes")
-    init_binary: str = Field(..., description="Path to the init binary")
-    
-    # Version control information
-    git_commit: str = Field(..., description="Git commit of the source code used to build the Docker daemon")
-    go_version: str = Field(..., description="Go version used to compile the Docker daemon")
-    containerd_commit: Dict[str, str] = Field(..., description="Containerd commit information")
-    runc_commit: Dict[str, str] = Field(..., description="Runc commit information")
-    init_commit: Dict[str, str] = Field(..., description="Init commit information")
-    
-    # Proxy and security
-    security_options: List[str] = Field(..., description="List of security options")
-    http_proxy: str = Field(..., description="HTTP proxy configured for the Docker daemon")
-    https_proxy: str = Field(..., description="HTTPS proxy configured for the Docker daemon")
-    no_proxy: str = Field(..., description="No proxy configured for the Docker daemon")
-    
-    # Status information
-    server_errors: List[str] = Field(..., description="List of warnings/errors from the Docker daemon")
-    debug: bool = Field(..., description="Whether debug mode is enabled")
-    experimental_build: bool = Field(..., description="Whether experimental features are enabled")
-
-class DiskUsageInfo(BaseModel):
-    """Disk usage information model."""
-    model_config = ConfigDict(extra='ignore')
-    
-    # Size information
-    layers_size: int = Field(0, description="Total size of filesystem layers in bytes")
-    total_size: int = Field(0, description="Total disk space used by Docker in bytes")
-    reclaimable_size: int = Field(0, description="Disk space that can be reclaimed in bytes")
-    
-    # Resource lists
-    images: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of images and their sizes"
-    )
-    containers: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of containers and their sizes"
-    )
-    volumes: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of volumes and their sizes"
-    )
-    build_cache: List[Dict[str, Any]] = Field(
-        default_factory=list,
-        description="List of build cache objects and their sizes"
-    )
-    
-    def calculate_totals(self) -> None:
-        """Calculate total and reclaimable sizes."""
-        self.total_size = self.layers_size
-        self.reclaimable_size = 0
-        
-        # Calculate image sizes and reclaimable space
-        for img in self.images:
-            self.total_size += img.get('Size', 0)
-            if img.get('Containers', 0) == 0:  # Unused image
-                self.reclaimable_size += img.get('Size', 0) - img.get('SharedSize', 0)
-        
-        # Add container sizes
-        for cnt in self.containers:
-            self.total_size += cnt.get('SizeRw', 0) + cnt.get('SizeRootFs', 0)
-
-class PruneResult(BaseModel):
-    """Prune operation result model."""
-    model_config = ConfigDict(extra='ignore')
-    
-    # Containers
-    containers_deleted: List[str] = Field(
-        default_factory=list,
-        description="List of deleted container IDs"
-    )
-    containers_space_reclaimed: int = Field(
-        0,
-        description="Disk space reclaimed from deleted containers in bytes"
-    )
-    
-    # Images
-    images_deleted: List[str] = Field(
-        default_factory=list,
-        description="List of deleted image IDs"
-    )
-    images_space_reclaimed: int = Field(
-        0,
-        description="Disk space reclaimed from deleted images in bytes"
-    )
-    
-    # Networks
-    networks_deleted: List[str] = Field(
-        default_factory=list,
-        description="List of deleted network IDs"
-    )
-    
-    # Volumes
-    volumes_deleted: List[str] = Field(
-        default_factory=list,
-        description="List of deleted volume names"
-    )
-    volumes_space_reclaimed: int = Field(
-        0,
-        description="Disk space reclaimed from deleted volumes in bytes"
-    )
-    
-    # Build cache
-    build_cache_deleted: List[str] = Field(
-        default_factory=list,
-        description="List of deleted build cache IDs"
-    )
-    build_cache_space_reclaimed: int = Field(
-        0,
-        description="Disk space reclaimed from deleted build cache in bytes"
-    )
-    
-    # Summary
-    total_space_reclaimed: int = Field(
-        0,
-        description="Total disk space reclaimed in bytes"
-    )
-    
-    def update_totals(self) -> None:
-        """Update the total_space_reclaimed field."""
-        self.total_space_reclaimed = (
-            self.containers_space_reclaimed +
-            self.images_space_reclaimed +
-            self.volumes_space_reclaimed +
-            self.build_cache_space_reclaimed
-        )
-
 # ============================================================================
 # Request/Response Models
 # ============================================================================
@@ -199,113 +32,152 @@ class SystemInfoRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     
     include_disk_usage: bool = Field(
-        default=False,
-        description="Whether to include disk usage information (may be slow)"
+        default=True,
+        json_schema_extra={"description": "Include disk usage information in the response"}
     )
-    
-    verbose: bool = Field(
+    include_swarm_info: bool = Field(
         default=False,
-        description="Whether to include detailed system information"
+        json_schema_extra={"description": "Include Docker Swarm information if available"}
     )
-
 
 class SystemInfoResponse(BaseModel):
     """Response model for get_system_info tool."""
     model_config = ConfigDict(extra='forbid')
     
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
+    status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
     system_info: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Detailed system information"
+        default=None,
+        json_schema_extra={"description": "Docker system information"}
     )
     error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
+        default=None,
+        json_schema_extra={"description": "Error message if operation failed"}
     )
-
 
 class DiskUsageRequest(BaseModel):
     """Request model for get_disk_usage tool."""
     model_config = ConfigDict(extra='forbid')
     
-    all: bool = Field(
-        default=False,
-        description="Show all disk usage, including unused data"
+    detailed: bool = Field(
+        default=True,
+        json_schema_extra={"description": "Include detailed breakdown of disk usage"}
     )
-    
-    types: List[Literal['container', 'image', 'volume', 'build-cache']] = Field(
-        default_factory=lambda: ['container', 'image', 'volume', 'build-cache'],
-        description="Filter by resource type"
-    )
-    
-    verbose: bool = Field(
-        default=False,
-        description="Whether to include detailed information for each resource"
-    )
-
 
 class DiskUsageResponse(BaseModel):
     """Response model for get_disk_usage tool."""
     model_config = ConfigDict(extra='forbid')
     
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    disk_usage: Optional[DiskUsageInfo] = Field(
-        None,
-        description="Detailed disk usage information"
+    status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
+    disk_usage: Optional[Dict[str, Any]] = Field(
+        default=None,
+        json_schema_extra={"description": "Disk usage information"}
     )
     error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
+        default=None,
+        json_schema_extra={"description": "Error message if operation failed"}
     )
-
 
 class PruneSystemRequest(BaseModel):
     """Request model for prune_system tool."""
     model_config = ConfigDict(extra='forbid')
     
+    prune_containers: bool = Field(
+        default=True,
+        json_schema_extra={"description": "Remove stopped containers"}
+    )
+    prune_images: bool = Field(
+        default=True,
+        json_schema_extra={"description": "Remove dangling images"}
+    )
+    prune_networks: bool = Field(
+        default=True,
+        json_schema_extra={"description": "Remove unused networks"}
+    )
     prune_volumes: bool = Field(
         default=False,
-        description="If True, prune volumes as well. WARNING: This will delete all unused volumes!"
+        json_schema_extra={"description": "Remove unused volumes (potentially dangerous)"}
     )
-    
     prune_build_cache: bool = Field(
-        default=False,
-        description="If True, prune build cache. This will remove all unused build cache."
+        default=True,
+        json_schema_extra={"description": "Remove build cache"}
     )
-    
-    filters: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Filters to process on the prune. For example: {'until': '24h'}"
-    )
-    
-    dry_run: bool = Field(
-        default=False,
-        description="If True, only show what would be deleted without actually deleting anything"
-    )
-
 
 class PruneSystemResponse(BaseModel):
     """Response model for prune_system tool."""
     model_config = ConfigDict(extra='forbid')
     
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    dry_run: bool = Field(..., description="Whether this was a dry run")
-    result: Optional[PruneResult] = Field(
-        None,
-        description="Results of the prune operation"
-    )
-    message: Optional[str] = Field(
-        None,
-        description="Human-readable status message"
+    status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
+    pruned_data: Optional[Dict[str, Any]] = Field(
+        default=None,
+        json_schema_extra={"description": "Information about pruned resources"}
     )
     error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
+        default=None,
+        json_schema_extra={"description": "Error message if operation failed"}
     )
 
+class ParseDurationRequest(BaseModel):
+    """Request model for parse_duration tool."""
+    model_config = ConfigDict(extra='forbid')
+    
+    duration_string: str = Field(
+        ...,
+        json_schema_extra={"description": "Duration string to parse (e.g., '24h', '30m', '2d')"}
+    )
+
+class ParseDurationResponse(BaseModel):
+    """Response model for parse_duration tool."""
+    model_config = ConfigDict(extra='forbid')
+    
+    status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
+    seconds: Optional[int] = Field(
+        default=None,
+        json_schema_extra={"description": "Duration converted to seconds"}
+    )
+    error: Optional[str] = Field(
+        default=None,
+        json_schema_extra={"description": "Error message if operation failed"}
+    )
 
 # ============================================================================
-# Tool Functions
+# Helper Functions
+# ============================================================================
+
+def format_bytes(size_bytes: int) -> str:
+    """Convert bytes to human readable format."""
+    if size_bytes == 0:
+        return "0B"
+    size_names = ["B", "KB", "MB", "GB", "TB", "PB"]
+    i = 0
+    while size_bytes >= 1024 and i < len(size_names) - 1:
+        size_bytes /= 1024.0
+        i += 1
+    return f"{size_bytes:.1f}{size_names[i]}"
+
+def parse_duration_string(duration_str: str) -> int:
+    """Parse duration string into seconds."""
+    duration_str = duration_str.strip().lower()
+    
+    # Match pattern like "24h", "30m", "2d", etc.
+    match = re.match(r'^(\d+)([smhdw])$', duration_str)
+    if not match:
+        raise ValueError(f"Invalid duration format: {duration_str}")
+    
+    value, unit = match.groups()
+    value = int(value)
+    
+    multipliers = {
+        's': 1,
+        'm': 60,
+        'h': 3600,
+        'd': 86400,
+        'w': 604800
+    }
+    
+    return value * multipliers[unit]
+
+# ============================================================================
+# Tool Implementations
 # ============================================================================
 
 @mcp.tool(
@@ -317,83 +189,79 @@ async def get_system_info(
     request: SystemInfoRequest
 ) -> SystemInfoResponse:
     """
-    Get detailed information about the Docker system.
-    
-    This function retrieves comprehensive information about the Docker system,
-    including version information, container and image counts, system resources,
-    and optionally disk usage.
+    Get comprehensive Docker system information.
     
     Args:
-        request: SystemInfoRequest object containing parameters
+        request: SystemInfoRequest with options for what to include
         
     Returns:
         SystemInfoResponse with system information or error details
     """
     try:
+        logger.info("Getting Docker system information")
         client = docker.from_env()
+        
+        # Get basic system info
         info = client.info()
+        version = client.version()
         
-        # Create system info object
-        system_info = SystemInfo(
-            docker_version=info.get("ServerVersion", "unknown"),
-            api_version=info.get("ApiVersion", "unknown"),
-            min_api_version=info.get("MinAPIVersion", "unknown"),
-            server_version=info.get("ServerVersion", "unknown"),
-            build_version=info.get("ServerVersion", "unknown"),
-            os=info.get("OperatingSystem", "unknown"),
-            arch=info.get("Architecture", "unknown"),
-            kernel_version=info.get("KernelVersion", "unknown"),
-            name=info.get("Name", ""),
-            n_cpu=info.get("NCPU", 0),
-            mem_total=info.get("MemTotal", 0),
-            containers_running=info.get("ContainersRunning", 0),
-            containers_paused=info.get("ContainersPaused", 0),
-            containers_stopped=info.get("ContainersStopped", 0),
-            containers_total=info.get("Containers", 0),
-            images=info.get("Images", 0),
-            cluster_store=info.get("ClusterStore", ""),
-            cluster_advertise=info.get("ClusterAdvertise", ""),
-            default_runtime=info.get("DefaultRuntime", ""),
-            runtimes=info.get("Runtimes", {}),
-            init_binary=info.get("InitBinary", ""),
-            git_commit=info.get("GitCommit", "unknown"),
-            go_version=info.get("GoVersion", "unknown"),
-            containerd_commit=info.get("ContainerdCommit", {}),
-            runc_commit=info.get("RuncCommit", {}),
-            init_commit=info.get("InitCommit", {}),
-            security_options=info.get("SecurityOptions", []),
-            http_proxy=info.get("HttpProxy", ""),
-            https_proxy=info.get("HttpsProxy", ""),
-            no_proxy=info.get("NoProxy", ""),
-            server_errors=info.get("ServerErrors", []),
-            debug=info.get("Debug", False),
-            experimental_build=info.get("ExperimentalBuild", False)
-        )
+        system_data = {
+            "docker_version": version.get("Version", "unknown"),
+            "api_version": version.get("ApiVersion", "unknown"),
+            "platform": version.get("Platform", {}).get("Name", "unknown"),
+            "architecture": version.get("Arch", "unknown"),
+            "kernel_version": version.get("KernelVersion", "unknown"),
+            "operating_system": version.get("Os", "unknown"),
+            "containers": {
+                "total": info.get("Containers", 0),
+                "running": info.get("ContainersRunning", 0),
+                "paused": info.get("ContainersPaused", 0),
+                "stopped": info.get("ContainersStopped", 0)
+            },
+            "images": {
+                "total": info.get("Images", 0)
+            },
+            "memory": {
+                "total": info.get("MemTotal", 0),
+                "total_formatted": format_bytes(info.get("MemTotal", 0))
+            },
+            "cpu": {
+                "cores": info.get("NCPU", 0)
+            }
+        }
         
-        # Get disk usage if requested
+        # Add disk usage if requested
         if request.include_disk_usage:
             try:
-                disk_usage = client.df()
-                disk_usage_info = DiskUsageInfo(
-                    layers_size=disk_usage.get("LayersSize", 0),
-                    images=disk_usage.get("Images", []),
-                    containers=disk_usage.get("Containers", []),
-                    volumes=disk_usage.get("Volumes", []),
-                    build_cache=disk_usage.get("BuildCache", [])
-                )
-                disk_usage_info.calculate_totals()
-                system_info.disk_usage = disk_usage_info
+                df_info = client.df()
+                system_data["disk_usage"] = {
+                    "containers_size": df_info.get("Containers", []),
+                    "images_size": df_info.get("Images", []),
+                    "volumes_size": df_info.get("Volumes", []),
+                    "build_cache_size": df_info.get("BuildCache", [])
+                }
             except Exception as e:
-                logger.warning(f"Could not get disk usage: {str(e)}")
-                system_info.disk_usage_error = str(e)
+                logger.warning(f"Could not get disk usage: {e}")
+                system_data["disk_usage"] = {"error": str(e)}
+        
+        # Add swarm info if requested
+        if request.include_swarm_info:
+            try:
+                swarm_attrs = client.swarm.attrs if hasattr(client, 'swarm') else None
+                system_data["swarm"] = swarm_attrs
+            except Exception as e:
+                logger.warning(f"Could not get swarm info: {e}")
+                system_data["swarm"] = {"error": str(e)}
+        
+        client.close()
         
         return SystemInfoResponse(
             status="success",
-            system_info=system_info.model_dump()
+            system_info=system_data
         )
         
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+    except DockerException as e:
+        error_msg = f"Docker error getting system info: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return SystemInfoResponse(
             status="error",
@@ -407,7 +275,6 @@ async def get_system_info(
             error=error_msg
         )
 
-
 @mcp.tool(
     name="get_disk_usage",
     description="Get detailed disk usage information about Docker resources "
@@ -417,634 +284,112 @@ async def get_disk_usage(
     request: DiskUsageRequest
 ) -> DiskUsageResponse:
     """
-    Get detailed disk usage information about Docker resources.
-    
-    This function retrieves detailed information about disk usage by Docker,
-    including space used by images, containers, volumes, and build cache.
+    Get detailed Docker disk usage information.
     
     Args:
-        request: DiskUsageRequest object containing parameters
+        request: DiskUsageRequest with options for detail level
         
     Returns:
         DiskUsageResponse with disk usage information or error details
     """
     try:
+        logger.info("Getting Docker disk usage information")
         client = docker.from_env()
         
-        # Get disk usage
-        disk_usage = client.df()
+        # Get disk usage data
+        df_info = client.df()
         
-        # Create disk usage info object
-        disk_usage_info = DiskUsageInfo(
-            layers_size=disk_usage.get("LayersSize", 0),
-            images=[],
-            containers=[],
-            volumes=[],
-            build_cache=[]
+        disk_data = {
+            "containers": [],
+            "images": [],
+            "volumes": [],
+            "build_cache": [],
+            "summary": {
+                "total_containers_size": 0,
+                "total_images_size": 0,
+                "total_volumes_size": 0,
+                "total_build_cache_size": 0,
+                "total_size": 0
+            }
+        }
+        
+        # Process containers
+        for container in df_info.get("Containers", []):
+            size_rw = container.get("SizeRw", 0) or 0
+            size_root_fs = container.get("SizeRootFs", 0) or 0
+            disk_data["containers"].append({
+                "id": container.get("Id", "unknown")[:12],
+                "name": container.get("Names", ["unknown"])[0].lstrip("/"),
+                "size_rw": size_rw,
+                "size_root_fs": size_root_fs,
+                "size_rw_formatted": format_bytes(size_rw),
+                "size_root_fs_formatted": format_bytes(size_root_fs)
+            })
+            disk_data["summary"]["total_containers_size"] += size_rw
+        
+        # Process images
+        for image in df_info.get("Images", []):
+            size = image.get("Size", 0) or 0
+            shared_size = image.get("SharedSize", 0) or 0
+            disk_data["images"].append({
+                "id": image.get("Id", "unknown").replace("sha256:", "")[:12],
+                "repository": image.get("RepoTags", ["<none>"])[0] if image.get("RepoTags") else "<none>",
+                "size": size,
+                "shared_size": shared_size,
+                "size_formatted": format_bytes(size),
+                "shared_size_formatted": format_bytes(shared_size)
+            })
+            disk_data["summary"]["total_images_size"] += size
+        
+        # Process volumes
+        for volume in df_info.get("Volumes", []):
+            usage_data = volume.get("UsageData", {}) or {}
+            size = usage_data.get("Size", 0) or 0
+            disk_data["volumes"].append({
+                "name": volume.get("Name", "unknown"),
+                "size": size,
+                "size_formatted": format_bytes(size),
+                "ref_count": usage_data.get("RefCount", 0)
+            })
+            disk_data["summary"]["total_volumes_size"] += size
+        
+        # Process build cache
+        for cache in df_info.get("BuildCache", []):
+            size = cache.get("Size", 0) or 0
+            disk_data["build_cache"].append({
+                "id": cache.get("ID", "unknown")[:12],
+                "size": size,
+                "size_formatted": format_bytes(size),
+                "in_use": cache.get("InUse", False),
+                "shared": cache.get("Shared", False)
+            })
+            disk_data["summary"]["total_build_cache_size"] += size
+        
+        # Calculate total
+        summary = disk_data["summary"]
+        summary["total_size"] = (
+            summary["total_containers_size"] + 
+            summary["total_images_size"] + 
+            summary["total_volumes_size"] + 
+            summary["total_build_cache_size"]
         )
         
-        # Filter and add resources based on request
-        if 'image' in request.types or request.all:
-            disk_usage_info.images = disk_usage.get("Images", [])
-            
-        if 'container' in request.types or request.all:
-            disk_usage_info.containers = disk_usage.get("Containers", [])
-            
-        if 'volume' in request.types or request.all:
-            disk_usage_info.volumes = disk_usage.get("Volumes", [])
-            
-        if 'build-cache' in request.types or request.all:
-            disk_usage_info.build_cache = disk_usage.get("BuildCache", [])
+        # Add formatted totals
+        summary["total_containers_size_formatted"] = format_bytes(summary["total_containers_size"])
+        summary["total_images_size_formatted"] = format_bytes(summary["total_images_size"])
+        summary["total_volumes_size_formatted"] = format_bytes(summary["total_volumes_size"])
+        summary["total_build_cache_size_formatted"] = format_bytes(summary["total_build_cache_size"])
+        summary["total_size_formatted"] = format_bytes(summary["total_size"])
         
-        # Calculate totals
-        disk_usage_info.calculate_totals()
+        client.close()
         
         return DiskUsageResponse(
             status="success",
-            disk_usage=disk_usage_info
+            disk_usage=disk_data
         )
         
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting disk usage: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-
-# ============================================================================
-# Request/Response Models
-# ============================================================================
-
-class SystemInfoRequest(BaseModel):
-    """Request model for get_system_info tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    include_disk_usage: bool = Field(
-        default=False,
-        description="Whether to include disk usage information (may be slow)"
-    )
-    
-    verbose: bool = Field(
-        default=False,
-        description="Whether to include detailed system information"
-    )
-
-
-class SystemInfoResponse(BaseModel):
-    """Response model for get_system_info tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    system_info: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Detailed system information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-class DiskUsageRequest(BaseModel):
-    """Request model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    all: bool = Field(
-        default=False,
-        description="Show all disk usage, including unused data"
-    )
-    
-    types: List[Literal['container', 'image', 'volume', 'build-cache']] = Field(
-        default_factory=lambda: ['container', 'image', 'volume', 'build-cache'],
-        description="Filter by resource type"
-    )
-    
-    verbose: bool = Field(
-        default=False,
-        description="Whether to include detailed information for each resource"
-    )
-
-
-class DiskUsageResponse(BaseModel):
-    """Response model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    disk_usage: Optional[DiskUsageInfo] = Field(
-        None,
-        description="Detailed disk usage information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-class PruneSystemRequest(BaseModel):
-    """Request model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    prune_volumes: bool = Field(
-        default=False,
-        description="If True, prune volumes as well. WARNING: This will delete all unused volumes!"
-    )
-    
-    prune_build_cache: bool = Field(
-        default=False,
-        description="If True, prune build cache. This will remove all unused build cache."
-    )
-    
-    filters: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Filters to process on the prune. For example: {'until': '24h'}"
-    )
-    
-    dry_run: bool = Field(
-        default=False,
-        description="If True, only show what would be deleted without actually deleting anything"
-    )
-
-
-class PruneSystemResponse(BaseModel):
-    """Response model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    dry_run: bool = Field(..., description="Whether this was a dry run")
-    result: Optional[PruneResult] = Field(
-        None,
-        description="Results of the prune operation"
-    )
-    message: Optional[str] = Field(
-        None,
-        description="Human-readable status message"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-# ============================================================================
-# Tool Functions
-# ============================================================================
-
-@mcp.tool(
-    name="get_system_info",
-    description="Get detailed information about the Docker system including version, "
-                "resource usage, and container/image counts."
-)
-async def get_system_info(
-    request: SystemInfoRequest
-) -> SystemInfoResponse:
-    """
-    Get detailed information about the Docker system.
-    
-    This function retrieves comprehensive information about the Docker system,
-    including version information, container and image counts, system resources,
-    and optionally disk usage.
-    
-    Args:
-        request: SystemInfoRequest object containing parameters
-        
-    Returns:
-        SystemInfoResponse with system information or error details
-    """
-    try:
-        client = docker.from_env()
-        info = client.info()
-        
-        # Create system info object
-        system_info = SystemInfo(
-            docker_version=info.get("ServerVersion", "unknown"),
-            api_version=info.get("ApiVersion", "unknown"),
-            min_api_version=info.get("MinAPIVersion", "unknown"),
-            server_version=info.get("ServerVersion", "unknown"),
-            build_version=info.get("ServerVersion", "unknown"),
-            os=info.get("OperatingSystem", "unknown"),
-            arch=info.get("Architecture", "unknown"),
-            kernel_version=info.get("KernelVersion", "unknown"),
-            name=info.get("Name", ""),
-            n_cpu=info.get("NCPU", 0),
-            mem_total=info.get("MemTotal", 0),
-            containers_running=info.get("ContainersRunning", 0),
-            containers_paused=info.get("ContainersPaused", 0),
-            containers_stopped=info.get("ContainersStopped", 0),
-            containers_total=info.get("Containers", 0),
-            images=info.get("Images", 0),
-            cluster_store=info.get("ClusterStore", ""),
-            cluster_advertise=info.get("ClusterAdvertise", ""),
-            default_runtime=info.get("DefaultRuntime", ""),
-            runtimes=info.get("Runtimes", {}),
-            init_binary=info.get("InitBinary", ""),
-            git_commit=info.get("GitCommit", "unknown"),
-            go_version=info.get("GoVersion", "unknown"),
-            containerd_commit=info.get("ContainerdCommit", {}),
-            runc_commit=info.get("RuncCommit", {}),
-            init_commit=info.get("InitCommit", {}),
-            security_options=info.get("SecurityOptions", []),
-            http_proxy=info.get("HttpProxy", ""),
-            https_proxy=info.get("HttpsProxy", ""),
-            no_proxy=info.get("NoProxy", ""),
-            server_errors=info.get("ServerErrors", []),
-            debug=info.get("Debug", False),
-            experimental_build=info.get("ExperimentalBuild", False)
-        )
-        
-        # Get disk usage if requested
-        if request.include_disk_usage:
-            try:
-                disk_usage = client.df()
-                disk_usage_info = DiskUsageInfo(
-                    layers_size=disk_usage.get("LayersSize", 0),
-                    images=disk_usage.get("Images", []),
-                    containers=disk_usage.get("Containers", []),
-                    volumes=disk_usage.get("Volumes", []),
-                    build_cache=disk_usage.get("BuildCache", [])
-                )
-                disk_usage_info.calculate_totals()
-                system_info.disk_usage = disk_usage_info
-            except Exception as e:
-                logger.warning(f"Could not get disk usage: {str(e)}")
-                system_info.disk_usage_error = str(e)
-        
-        return SystemInfoResponse(
-            status="success",
-            system_info=system_info.model_dump()
-        )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting system info: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-
-
-@mcp.tool(
-    name="get_disk_usage",
-    description="Get detailed disk usage information about Docker resources "
-                "including containers, images, volumes, and build cache."
-)
-async def get_disk_usage(
-    request: DiskUsageRequest
-) -> DiskUsageResponse:
-    """
-    Get detailed disk usage information about Docker resources.
-    
-    This function retrieves detailed information about disk usage by Docker,
-    including space used by images, containers, volumes, and build cache.
-    
-    Args:
-        request: DiskUsageRequest object containing parameters
-        
-    Returns:
-        DiskUsageResponse with disk usage information or error details
-    """
-    try:
-        client = docker.from_env()
-        
-        # Get disk usage
-        disk_usage = client.df()
-        
-        # Create disk usage info object
-        disk_usage_info = DiskUsageInfo(
-            layers_size=disk_usage.get("LayersSize", 0),
-            images=[],
-            containers=[],
-            volumes=[],
-            build_cache=[]
-        )
-        
-        # Filter and add resources based on request
-        if 'image' in request.types or request.all:
-            disk_usage_info.images = disk_usage.get("Images", [])
-            
-        if 'container' in request.types or request.all:
-            disk_usage_info.containers = disk_usage.get("Containers", [])
-            
-        if 'volume' in request.types or request.all:
-            disk_usage_info.volumes = disk_usage.get("Volumes", [])
-            
-        if 'build-cache' in request.types or request.all:
-            disk_usage_info.build_cache = disk_usage.get("BuildCache", [])
-        
-        # Calculate totals
-        disk_usage_info.calculate_totals()
-        
-        return DiskUsageResponse(
-            status="success",
-            disk_usage=disk_usage_info
-        )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting disk usage: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-
-# ============================================================================
-# Request/Response Models
-# ============================================================================
-
-class SystemInfoRequest(BaseModel):
-    """Request model for get_system_info tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    include_disk_usage: bool = Field(
-        default=False,
-        description="Whether to include disk usage information (may be slow)"
-    )
-    
-    verbose: bool = Field(
-        default=False,
-        description="Whether to include detailed system information"
-    )
-
-
-class SystemInfoResponse(BaseModel):
-    """Response model for get_system_info tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    system_info: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Detailed system information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-class DiskUsageRequest(BaseModel):
-    """Request model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    all: bool = Field(
-        default=False,
-        description="Show all disk usage, including unused data"
-    )
-    
-    types: List[Literal['container', 'image', 'volume', 'build-cache']] = Field(
-        default_factory=lambda: ['container', 'image', 'volume', 'build-cache'],
-        description="Filter by resource type"
-    )
-    
-    verbose: bool = Field(
-        default=False,
-        description="Whether to include detailed information for each resource"
-    )
-
-
-class DiskUsageResponse(BaseModel):
-    """Response model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    disk_usage: Optional[DiskUsageInfo] = Field(
-        None,
-        description="Detailed disk usage information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-class PruneSystemRequest(BaseModel):
-    """Request model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    prune_volumes: bool = Field(
-        default=False,
-        description="If True, prune volumes as well. WARNING: This will delete all unused volumes!"
-    )
-    
-    prune_build_cache: bool = Field(
-        default=False,
-        description="If True, prune build cache. This will remove all unused build cache."
-    )
-    
-    filters: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Filters to process on the prune. For example: {'until': '24h'}"
-    )
-    
-    dry_run: bool = Field(
-        default=False,
-        description="If True, only show what would be deleted without actually deleting anything"
-    )
-
-
-class PruneSystemResponse(BaseModel):
-    """Response model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    dry_run: bool = Field(..., description="Whether this was a dry run")
-    result: Optional[PruneResult] = Field(
-        None,
-        description="Results of the prune operation"
-    )
-    message: Optional[str] = Field(
-        None,
-        description="Human-readable status message"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-
-# ============================================================================
-# Tool Functions
-# ============================================================================
-
-@mcp.tool(
-    name="get_system_info",
-    description="Get detailed information about the Docker system including version, "
-                "resource usage, and container/image counts."
-)
-async def get_system_info(
-    request: SystemInfoRequest
-) -> SystemInfoResponse:
-    """
-    Get detailed information about the Docker system.
-    
-    This function retrieves comprehensive information about the Docker system,
-    including version information, container and image counts, system resources,
-    and optionally disk usage.
-    
-    Args:
-        request: SystemInfoRequest object containing parameters
-        
-    Returns:
-        SystemInfoResponse with system information or error details
-    """
-    try:
-        client = docker.from_env()
-        info = client.info()
-        
-        # Create system info object
-        system_info = SystemInfo(
-            docker_version=info.get("ServerVersion", "unknown"),
-            api_version=info.get("ApiVersion", "unknown"),
-            min_api_version=info.get("MinAPIVersion", "unknown"),
-            server_version=info.get("ServerVersion", "unknown"),
-            build_version=info.get("ServerVersion", "unknown"),
-            os=info.get("OperatingSystem", "unknown"),
-            arch=info.get("Architecture", "unknown"),
-            kernel_version=info.get("KernelVersion", "unknown"),
-            name=info.get("Name", ""),
-            n_cpu=info.get("NCPU", 0),
-            mem_total=info.get("MemTotal", 0),
-            containers_running=info.get("ContainersRunning", 0),
-            containers_paused=info.get("ContainersPaused", 0),
-            containers_stopped=info.get("ContainersStopped", 0),
-            containers_total=info.get("Containers", 0),
-            images=info.get("Images", 0),
-            cluster_store=info.get("ClusterStore", ""),
-            cluster_advertise=info.get("ClusterAdvertise", ""),
-            default_runtime=info.get("DefaultRuntime", ""),
-            runtimes=info.get("Runtimes", {}),
-            init_binary=info.get("InitBinary", ""),
-            git_commit=info.get("GitCommit", "unknown"),
-            go_version=info.get("GoVersion", "unknown"),
-            containerd_commit=info.get("ContainerdCommit", {}),
-            runc_commit=info.get("RuncCommit", {}),
-            init_commit=info.get("InitCommit", {}),
-            security_options=info.get("SecurityOptions", []),
-            http_proxy=info.get("HttpProxy", ""),
-            https_proxy=info.get("HttpsProxy", ""),
-            no_proxy=info.get("NoProxy", ""),
-            server_errors=info.get("ServerErrors", []),
-            debug=info.get("Debug", False),
-            experimental_build=info.get("ExperimentalBuild", False)
-        )
-        
-        # Get disk usage if requested
-        disk_usage = None
-        if request.include_disk_usage:
-            try:
-                disk_usage = client.df()
-                disk_usage_info = DiskUsageInfo(
-                    layers_size=disk_usage.get("LayersSize", 0),
-                    images=disk_usage.get("Images", []),
-                    containers=disk_usage.get("Containers", []),
-                    volumes=disk_usage.get("Volumes", []),
-                    build_cache=disk_usage.get("BuildCache", [])
-                )
-                disk_usage_info.calculate_totals()
-                system_info.disk_usage = disk_usage_info
-            except Exception as e:
-                logger.warning(f"Could not get disk usage: {str(e)}")
-                system_info.disk_usage_error = str(e)
-        
-        return SystemInfoResponse(
-            status="success",
-            system_info=system_info.model_dump()
-        )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting system info: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-
-
-@mcp.tool(
-    name="get_disk_usage",
-    description="Get detailed disk usage information about Docker resources "
-                "including containers, images, volumes, and build cache."
-)
-async def get_disk_usage(
-    request: DiskUsageRequest
-) -> DiskUsageResponse:
-    """
-    Get detailed disk usage information about Docker resources.
-    
-    This function retrieves detailed information about disk usage by Docker,
-    including space used by images, containers, volumes, and build cache.
-    
-    Args:
-        request: DiskUsageRequest object containing parameters
-        
-    Returns:
-        DiskUsageResponse with disk usage information or error details
-    """
-    try:
-        client = docker.from_env()
-        
-        # Get disk usage
-        disk_usage = client.df()
-        
-        # Create disk usage info object
-        disk_usage_info = DiskUsageInfo(
-            layers_size=disk_usage.get("LayersSize", 0),
-            images=[],
-            containers=[],
-            volumes=[],
-            build_cache=[]
-        )
-        
-        # Filter and add resources based on request
-        if 'image' in request.types or request.all:
-            disk_usage_info.images = disk_usage.get("Images", [])
-            
-        if 'container' in request.types or request.all:
-            disk_usage_info.containers = disk_usage.get("Containers", [])
-            
-        if 'volume' in request.types or request.all:
-            disk_usage_info.volumes = disk_usage.get("Volumes", [])
-            
-        if 'build-cache' in request.types or request.all:
-            disk_usage_info.build_cache = disk_usage.get("BuildCache", [])
-        
-        # Calculate totals
-        disk_usage_info.calculate_totals()
-        
-        return DiskUsageResponse(
-            status="success",
-            disk_usage=disk_usage_info
-        )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+    except DockerException as e:
+        error_msg = f"Docker error getting disk usage: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return DiskUsageResponse(
             status="error",
@@ -1062,941 +407,114 @@ async def get_disk_usage(
     name="prune_system",
     description="Remove unused Docker data (system prune). This will free up disk space by "
                 "removing stopped containers, unused networks, dangling images, and "
-                "optionally volumes and build cache."
+                "optionally unused volumes and build cache."
 )
 async def prune_system(
     request: PruneSystemRequest
 ) -> PruneSystemResponse:
     """
-    Remove unused Docker data (system prune).
-    
-    This function removes all stopped containers, unused networks,
-    dangling images, and optionally volumes and build cache.
+    Prune unused Docker system resources.
     
     Args:
-        request: PruneSystemRequest object containing:
-            - prune_volumes: Prune volumes as well as containers, networks, and images
-            - prune_build_cache: Prune build cache
-            - filters: Filters to process on the prune (e.g., {"until": "24h"})
-            - dry_run: If true, only show what would be deleted
-            
+        request: PruneSystemRequest with options for what to prune
+        
     Returns:
-        PruneSystemResponse object with results or error details
+        PruneSystemResponse with information about pruned resources
     """
     try:
+        logger.info("Starting Docker system prune operation")
         client = docker.from_env()
-        result = PruneResult()
         
-        if request.dry_run:
-            # Simulate a dry run by checking what would be pruned
-            return _simulate_prune(client, request, result)
-            
-        # Perform actual pruning
-        return _perform_prune(client, request, result)
+        pruned_data = {
+            "containers_pruned": [],
+            "images_pruned": [],
+            "networks_pruned": [],
+            "volumes_pruned": [],
+            "build_cache_pruned": [],
+            "total_space_reclaimed": 0
+        }
         
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error during prune: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return PruneSystemResponse(
-            status="error",
-            dry_run=request.dry_run,
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error during prune: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return PruneSystemResponse(
-            status="error",
-            dry_run=request.dry_run,
-            error=error_msg
-        )
-
-
-def _simulate_prune(
-    client: docker.DockerClient,
-    request: PruneSystemRequest,
-    result: PruneResult
-) -> PruneSystemResponse:
-    """Simulate a prune operation to see what would be removed."""
-    try:
-        # Check containers that would be removed
-        containers = client.containers.list(
-            all=True,
-            filters={"status": ["exited", "created", "dead"]}
-        )
-        
-        result.containers = [c.id for c in containers]
-        result.containers_space_reclaimed = sum(
-            c.attrs["SizeRootFs"] for c in containers
-        )
-        
-        # Check images that would be removed
-        images = client.images.list(filters={"dangling": True})
-        result.images = [img.id for img in images]
-        result.images_space_reclaimed = sum(
-            img.attrs["Size"] for img in images
-        )
-        
-        # Check networks that would be removed
-        networks = client.networks.list(ids=[], names=[])
-        result.networks = [n.id for n in networks]
-        
-        # Check volumes that would be removed (if requested)
-        if request.prune_volumes:
-            volumes = client.volumes.list(filters={"dangling": True})
-            result.volumes = [v.id for v in volumes.volumes]
-            result.volumes_space_reclaimed = sum(
-                v.attrs["UsageData"]["Size"] for v in volumes.volumes
-                if v.attrs["UsageData"] and "Size" in v.attrs["UsageData"]
-            )
-        
-        # Check build cache that would be removed (if requested)
-        if request.prune_build_cache:
-            # This is an approximation since there's no direct API for build cache
-            result.build_cache_space_reclaimed = 0
-        
-        # Update totals
-        result.update_totals()
-        
-        # Generate a human-readable message
-        message = "Would remove:\n"
-        if result.containers:
-            message += f"- {len(result.containers)} stopped containers ({_format_size(result.containers_space_reclaimed)})\n"
-        if result.images:
-            message += f"- {len(result.images)} unused images ({_format_size(result.images_space_reclaimed)})\n"
-        if result.networks:
-            message += f"- {len(result.networks)} unused networks\n"
-        if result.volumes and request.prune_volumes:
-            message += f"- {len(result.volumes)} unused volumes ({_format_size(result.volumes_space_reclaimed)})\n"
-        if request.prune_build_cache:
-            message += f"- Build cache ({_format_size(result.build_cache_space_reclaimed)})\n"
-        
-        message += f"\nTotal space that would be reclaimed: {_format_size(result.total_space_reclaimed)}"
-        
-        return PruneSystemResponse(
-            status="success",
-            dry_run=True,
-            result=result,
-            message=message
-        )
-        
-    except Exception as e:
-        error_msg = f"Error during dry run simulation: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return PruneSystemResponse(
-            status="error",
-            dry_run=True,
-            error=error_msg
-        )
-
-
-def _perform_prune(
-    client: docker.DockerClient,
-    request: PruneSystemRequest,
-    result: PruneResult
-) -> PruneSystemResponse:
-    """Perform the actual prune operation."""
-    try:
         # Prune containers
-        containers = client.containers.prune(filters=request.filters)
-        result.containers = containers.get("ContainersDeleted", [])
-        result.containers_space_reclaimed = containers.get("SpaceReclaimed", 0)
+        if request.prune_containers:
+            try:
+                result = client.containers.prune()
+                pruned_data["containers_pruned"] = result.get("ContainersDeleted", [])
+                pruned_data["total_space_reclaimed"] += result.get("SpaceReclaimed", 0)
+                logger.info(f"Pruned {len(pruned_data['containers_pruned'])} containers")
+            except Exception as e:
+                logger.warning(f"Failed to prune containers: {e}")
         
         # Prune images
-        images = client.images.prune(filters={"dangling": True, **request.filters})
-        result.images = images.get("ImagesDeleted", [])
-        result.images_space_reclaimed = images.get("SpaceReclaimed", 0)
+        if request.prune_images:
+            try:
+                result = client.images.prune(filters={"dangling": True})
+                pruned_data["images_pruned"] = result.get("ImagesDeleted", [])
+                pruned_data["total_space_reclaimed"] += result.get("SpaceReclaimed", 0)
+                logger.info(f"Pruned {len(pruned_data['images_pruned'])} images")
+            except Exception as e:
+                logger.warning(f"Failed to prune images: {e}")
         
         # Prune networks
-        networks = client.networks.prune(filters=request.filters)
-        result.networks = networks.get("NetworksDeleted", [])
-        
-        # Prune volumes if requested
-        if request.prune_volumes:
-            volumes = client.volumes.prune(filters=request.filters)
-            result.volumes = volumes.get("VolumesDeleted", [])
-            result.volumes_space_reclaimed = volumes.get("SpaceReclaimed", 0)
-        
-        # Prune build cache if requested
-        if request.prune_build_cache:
-            build_cache = client.api.prune_builds()
-            result.build_cache_space_reclaimed = build_cache.get("SpaceReclaimed", 0)
-        
-        # Update totals
-        result.update_totals()
-        
-        # Generate a human-readable message
-        message = "Removed:\n"
-        if result.containers:
-            message += f"- {len(result.containers)} stopped containers ({_format_size(result.containers_space_reclaimed)})\n"
-        if result.images:
-            message += f"- {len(result.images)} unused images ({_format_size(result.images_space_reclaimed)})\n"
-        if result.networks:
-            message += f"- {len(result.networks)} unused networks\n"
-        if result.volumes and request.prune_volumes:
-            message += f"- {len(result.volumes)} unused volumes ({_format_size(result.volumes_space_reclaimed)})\n"
-        if request.prune_build_cache:
-            message += f"- Build cache ({_format_size(result.build_cache_space_reclaimed)})\n"
-        
-        message += f"\nTotal space reclaimed: {_format_size(result.total_space_reclaimed)}"
-        
-        return PruneSystemResponse(
-            status="success",
-            dry_run=False,
-            result=result,
-            message=message
-        )
-        
-    except Exception as e:
-        error_msg = f"Error during prune operation: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return PruneSystemResponse(
-            status="error",
-            dry_run=False,
-            error=error_msg
-        )
-
-
-def _format_size(size_bytes: int) -> str:
-    """Format bytes into a human-readable string."""
-    if not size_bytes:
-        return "0B"
-    
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
-        if size_bytes < 1024.0:
-            return f"{size_bytes:.1f}{unit}"
-        size_bytes /= 1024.0
-    
-    return f"{size_bytes:.1f}PB"
-
-class SystemInfoResponse(BaseModel):
-    """Response model for get_system_info tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    system_info: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Detailed system information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-@mcp.tool(
-    name="get_system_info",
-    description="Get detailed information about the Docker system including version, "
-                "resource usage, and container/image counts."
-)
-async def get_system_info(
-    request: SystemInfoRequest
-) -> SystemInfoResponse:
-    """
-    Get detailed information about the Docker system.
-    
-    This function retrieves comprehensive information about the Docker system,
-    including version information, container and image counts, system resources,
-    and optionally disk usage.
-    
-    Args:
-        request: SystemInfoRequest object containing parameters
-        
-    Returns:
-        SystemInfoResponse with system information or error details
-        
-    Example:
-        >>> await get_system_info(SystemInfoRequest(include_disk_usage=True))
-        SystemInfoResponse(
-            status="success",
-            system_info={
-                "docker_version": "20.10.7",
-                "api_version": "1.41",
-                "min_api_version": "1.12",
-                "os": "linux",
-                "arch": "x86_64",
-                "kernel_version": "5.10.25-linuxkit",
-                "containers_running": 3,
-                "containers_paused": 0,
-                "containers_stopped": 2,
-                "containers_total": 5,
-                "images": 15,
-                "n_cpu": 4,
-                "mem_total": 17179869184,
-                "disk_usage": {
-                    "layers_size": 123456789,
-                    "images": [...],
-                    "containers": [...],
-                    "volumes": [...],
-                    "build_cache": [...],
-                    "total_size": 987654321,
-                    "reclaimable_size": 12345678
-                }
-            }
-        )
-    """
-    try:
-        client = docker.from_env()
-        info = client.info()
-        
-        system_info = {
-            "docker_version": info.get("ServerVersion", "unknown"),
-            "api_version": info.get("ApiVersion", "unknown"),
-            "min_api_version": info.get("MinAPIVersion", "unknown"),
-            "git_commit": info.get("GitCommit", "unknown"),
-            "go_version": info.get("GoVersion", "unknown"),
-            "os": info.get("OperatingSystem", "unknown"),
-            "arch": info.get("Architecture", "unknown"),
-            "kernel_version": info.get("KernelVersion", "unknown"),
-            "containers_running": info.get("ContainersRunning", 0),
-            "containers_paused": info.get("ContainersPaused", 0),
-            "containers_stopped": info.get("ContainersStopped", 0),
-            "containers_total": info.get("Containers", 0),
-            "images": info.get("Images", 0),
-            "n_cpu": info.get("NCPU", 0),
-            "mem_total": info.get("MemTotal", 0),
-            "server_version": info.get("ServerVersion", "unknown"),
-            "cluster_store": info.get("ClusterStore", ""),
-            "cluster_advertise": info.get("ClusterAdvertise", ""),
-            "default_runtime": info.get("DefaultRuntime", ""),
-            "runtimes": info.get("Runtimes", {}),
-            "init_binary": info.get("InitBinary", ""),
-            "http_proxy": info.get("HttpProxy", ""),
-            "https_proxy": info.get("HttpsProxy", ""),
-            "no_proxy": info.get("NoProxy", ""),
-            "name": info.get("Name", ""),
-            "server_errors": info.get("ServerErrors", []),
-            "debug": info.get("Debug", False),
-            "experimental_build": info.get("ExperimentalBuild", False),
-            "docker_root_dir": info.get("DockerRootDir", ""),
-            "labels": info.get("Labels", []),
-            "execution_driver": info.get("ExecutionDriver", ""),
-            "logging_driver": info.get("LoggingDriver", ""),
-            "cgroup_driver": info.get("CgroupDriver", ""),
-            "n_events_listener": info.get("NEventsListener", 0),
-            "kernel_memory": info.get("KernelMemory", False),
-            "cpu_cfs_period": info.get("CpuCfsPeriod", False),
-            "cpu_cfs_quota": info.get("CpuCfsQuota", False),
-            "oom_kill_disable": info.get("OomKillDisable", False),
-            "ipv4_forwarding": info.get("IPv4Forwarding", False),
-            "bridge_nf_iptables": info.get("BridgeNfIptables", False),
-            "bridge_nf_ip6tables": info.get("BridgeNfIp6tables", False),
-            "n_fd": info.get("NFd", 0),
-            "ngoroutines": info.get("NGoroutines", 0),
-            "system_time": info.get("SystemTime", ""),
-            "cgroup_version": info.get("CgroupVersion", "1"),
-            "operating_system": info.get("OperatingSystem", ""),
-            "os_type": info.get("OSType", ""),
-        }
-
-        if request.include_disk_usage:
+        if request.prune_networks:
             try:
-                disk_usage = client.df()
-                system_info["disk_usage"] = disk_usage
+                result = client.networks.prune()
+                pruned_data["networks_pruned"] = result.get("NetworksDeleted", [])
+                logger.info(f"Pruned {len(pruned_data['networks_pruned'])} networks")
             except Exception as e:
-                logger.warning(f"Could not get disk usage: {str(e)}")
-                system_info["disk_usage_error"] = str(e)
-
-        return SystemInfoResponse(
+                logger.warning(f"Failed to prune networks: {e}")
+        
+        # Prune volumes (optional, potentially dangerous)
+        if request.prune_volumes:
+            try:
+                result = client.volumes.prune()
+                pruned_data["volumes_pruned"] = result.get("VolumesDeleted", [])
+                pruned_data["total_space_reclaimed"] += result.get("SpaceReclaimed", 0)
+                logger.info(f"Pruned {len(pruned_data['volumes_pruned'])} volumes")
+            except Exception as e:
+                logger.warning(f"Failed to prune volumes: {e}")
+        
+        # Prune build cache
+        if request.prune_build_cache:
+            try:
+                # Build cache pruning via low-level API
+                result = client.api.prune_builds()
+                pruned_data["build_cache_pruned"] = result.get("CachesDeleted", [])
+                pruned_data["total_space_reclaimed"] += result.get("SpaceReclaimed", 0)
+                logger.info(f"Pruned build cache")
+            except Exception as e:
+                logger.warning(f"Failed to prune build cache: {e}")
+        
+        # Format the space reclaimed
+        pruned_data["total_space_reclaimed_formatted"] = format_bytes(
+            pruned_data["total_space_reclaimed"]
+        )
+        
+        client.close()
+        
+        return PruneSystemResponse(
             status="success",
-            system_info=system_info
+            pruned_data=pruned_data
         )
-
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting system info: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return SystemInfoResponse(
-            status="error",
-            error=error_msg
-        )
-
-
-class DiskUsageRequest(BaseModel):
-    """Request model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    all: bool = Field(
-        default=False,
-        description="Show all disk usage, including unused data"
-    )
-    type: List[Literal['container', 'image', 'volume', 'build-cache']] = Field(
-        default_factory=lambda: ['container', 'image', 'volume', 'build-cache'],
-        description="Filter by resource type"
-    )
-
-class DiskUsageResponse(BaseModel):
-    """Response model for get_disk_usage tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    disk_usage: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Detailed disk usage information"
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-@mcp.tool(
-    name="get_disk_usage",
-    description="Get detailed disk usage information about Docker resources "
-                "including containers, images, volumes, and build cache."
-)
-async def get_disk_usage(
-    request: DiskUsageRequest
-) -> DiskUsageResponse:
-    """
-    Get detailed disk usage information about Docker resources.
-    
-    This function retrieves detailed information about disk usage by Docker,
-    including space used by images, containers, volumes, and build cache.
-    
-    Args:
-        request: DiskUsageRequest object containing parameters
-        
-    Returns:
-        DiskUsageResponse with disk usage information or error details
-        
-    Example:
-        >>> await get_disk_usage(DiskUsageRequest(type=["image", "volume"]))
-        DiskUsageResponse(
-            status="success",
-            disk_usage={
-                "layers_size": 123456789,
-                "images": [
-                    {
-                        "id": "sha256:abc123...",
-                        "repository": "nginx",
-                        "tag": "latest",
-                        "size": 12345678,
-                        "shared_size": 1234567,
-                        "containers": 2
-                    }
-                ],
-                "volumes": [
-                    {
-                        "name": "my-volume",
-                        "driver": "local",
-                        "size": 10485760
-                    }
-                ],
-                "total_size": 22831438,
-                "reclaimable_size": 1234567
-            }
-        )
-    """
-    try:
-        client = docker.from_env()
-        
-        # Get disk usage
-        disk_usage = client.df()
-        
-        # Filter results if needed
-        if not request.all or request.type:
-            filtered_usage = {}
-            
-            # Filter images
-            if 'image' in request.type or request.all:
-                filtered_usage['images'] = [
-                    img for img in disk_usage.get('Images', [])
-                    if request.all or 'image' in request.type
-                ]
-            
-            # Filter containers
-            if 'container' in request.type or request.all:
-                filtered_usage['containers'] = [
-                    cnt for cnt in disk_usage.get('Containers', [])
-                    if request.all or 'container' in request.type
-                ]
-            
-            # Filter volumes
-            if 'volume' in request.type or request.all:
-                filtered_usage['volumes'] = [
-                    vol for vol in disk_usage.get('Volumes', [])
-                    if request.all or 'volume' in request.type
-                ]
-            
-            # Filter build cache
-            if 'build-cache' in request.type or request.all:
-                filtered_usage['build_cache'] = [
-                    cache for cache in disk_usage.get('BuildCache', [])
-                    if request.all or 'build-cache' in request.type
-                ]
-            
-            # Add summary fields
-            filtered_usage['layers_size'] = disk_usage.get('LayersSize', 0)
-            filtered_usage['total_size'] = sum(
-                img.get('Size', 0) for img in filtered_usage.get('images', [])
-            )
-            filtered_usage['reclaimable_size'] = sum(
-                img.get('Size', 0) - img.get('SharedSize', 0)
-                for img in filtered_usage.get('images', [])
-                if img.get('Containers', 0) == 0
-            )
-            
-            disk_usage = filtered_usage
-        
-        return DiskUsageResponse(
-            status="success",
-            disk_usage=disk_usage
-        )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-    except Exception as e:
-        error_msg = f"Unexpected error getting disk usage: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return DiskUsageResponse(
-            status="error",
-            error=error_msg
-        )
-
-@mcp.tool(
-    name="parse_duration",
-    description="Parse a human-readable duration string into seconds. "
-                "Supports units: s (seconds), m (minutes), h (hours), d (days), w (weeks)"
-)
-class ParseDurationRequest(BaseModel):
-    """Request model for parse_duration tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    duration: str = Field(
-        ...,
-        description="Human-readable duration string (e.g., '2h30m', '1d', '90s')",
-        min_length=1
-    )
-    default_seconds: Optional[int] = Field(
-        None,
-        description="Default value in seconds to return if parsing fails"
-    )
-
-class ParseDurationResponse(BaseModel):
-    """Response model for parse_duration tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    seconds: int = Field(..., description="Parsed duration in seconds")
-    message: str = Field(..., description="Human-readable status message")
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-@mcp.tool(
-    name="parse_duration",
-    description="Parse a human-readable duration string into seconds. "
-                "Supports units: s (seconds), m (minutes), h (hours), d (days), w (weeks)"
-)
-async def parse_duration(
-    request: ParseDurationRequest
-) -> ParseDurationResponse:
-    """
-    Parse a human-readable duration string into seconds.
-    
-    This function converts a string like '2h30m' or '1d' into the equivalent
-    number of seconds. It supports multiple units in a single string.
-    
-    Supported units:
-    - s: seconds
-    - m: minutes
-    - h: hours
-    - d: days
-    - w: weeks
-    
-    Args:
-        request: ParseDurationRequest object containing the duration string
-        
-    Returns:
-        ParseDurationResponse with the parsed duration in seconds
-    """
-    try:
-        duration_str = request.duration_str.strip().lower()
-        if not duration_str:
-            return ParseDurationResponse(
-                status="error",
-                error="Empty duration string"
-            )
-            
-        # Parse the duration string
-        pattern = r'(\d+)([smhdw]*)'
-        matches = re.findall(pattern, duration_str)
-        
-        if not matches:
-            return ParseDurationResponse(
-                status="error",
-                error=f"Invalid duration format: {duration_str}"
-            )
-            
-        total_seconds = 0.0
-        
-        for value, unit in matches:
-            value = float(value)
-            if unit == 's' or unit == '':
-                total_seconds += value
-            elif unit == 'm':
-                total_seconds += value * 60
-            elif unit == 'h':
-                total_seconds += value * 3600
-            elif unit == 'd':
-                total_seconds += value * 86400
-            elif unit == 'w':
-                total_seconds += value * 604800
-            else:
-                return ParseDurationResponse(
-                    status="error",
-                    error=f"Unsupported time unit: {unit}"
-                )
-                
-        return ParseDurationResponse(
-            status="success",
-            duration_seconds=total_seconds
-        )
-        
-    except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
         
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
-        
-    except Exception as e:
-        error_msg = f"Unexpected error getting disk usage: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
-
-from pydantic import BaseModel, ConfigDict, Field
-from typing import Any, Dict, List, Optional, Literal, Union
-from datetime import datetime, timezone
-import docker
-from docker.errors import APIError, DockerException
-
-class PruneSystemRequest(BaseModel):
-    """Request model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    prune_volumes: bool = Field(
-        default=False,
-        description="Prune volumes as well as containers, networks, and images"
-    )
-    prune_build_cache: bool = Field(
-        default=True,
-        description="Prune build cache"
-    )
-    filters: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Filters to apply when pruning (e.g., {'until': '24h'})"
-    )
-    dry_run: bool = Field(
-        default=False,
-        description="If True, only show what would be deleted"
-    )
-
-class PruneSystemResponse(BaseModel):
-    """Response model for prune_system tool."""
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    dry_run: bool = Field(
-        default=False, 
-        description="Whether this was a dry run (no actual pruning performed)"
-    )
-    would_prune: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Details about what would be pruned (dry run only)"
-    )
-    prune_result: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Results of the prune operation"
-    )
-    message: str = Field(..., description="Human-readable status message")
-    error: Optional[str] = Field(
-        None,
-        description="Error message if the operation failed"
-    )
-
-@mcp.tool(
-    name="prune_system",
-    description="Remove unused Docker data (system prune). This will free up disk space "
-                "by removing stopped containers, unused networks, dangling images, "
-                "and optionally volumes and build cache."
-)
-async def prune_system(request: PruneSystemRequest) -> PruneSystemResponse:
-    """
-    Remove unused Docker data (system prune).
-    
-    This function removes all stopped containers, unused networks,
-    dangling images, and optionally volumes and build cache.
-    
-    Args:
-        request: PruneSystemRequest object containing:
-            - prune_volumes: Prune volumes as well as containers, networks, and images
-            - prune_build_cache: Prune build cache
-            - filters: Filters to process on the prune (e.g., `{"until": "24h"}`)
-            - dry_run: If true, only show what would be deleted
-        
-    Returns:
-        PruneSystemResponse object with:
-            - status: 'success' or 'error'
-            - dry_run: Boolean indicating if this was a dry run
-            - would_prune: Details about what would be pruned (dry run only)
-            - prune_result: Results of the prune operation (actual run)
-            - message: Human-readable status message
-            - error: Error message if operation failed
-        
-    Example:
-        >>> request = PruneSystemRequest(
-        ...     prune_volumes=True,
-        ...     filters={"until": "24h"},
-        ...     dry_run=True
-        ... )
-        >>> await prune_system(request)
-        PruneSystemResponse(
-            status="success",
-            dry_run=True,
-            would_prune={
-                "containers": ["a1b2c3d4...", "b2c3d4e5..."],
-                "containers_space": 200000000,
-                "images": ["sha256:abc123..."],
-                "images_space": 200000000,
-                "networks": ["net1"],
-                "volumes": ["vol1"],
-                "volumes_space": 500000000,
-                "build_cache_space": 100000000,
-                "total_space": 1000000000
-            },
-            message="Would prune 2 containers, 1 image, 1 network, 1 volume (1000.0 MB total)"
-        )
-    """
-    try:
-        # Initialize Docker client
-        client = docker.from_env()
-        
-        # Initialize result dictionary
-        result = {
-            'containers_deleted': [],
-            'containers_space_reclaimed': 0,
-            'images_deleted': [],
-            'images_space_reclaimed': 0,
-            'networks_deleted': [],
-            'volumes_deleted': [],
-            'volumes_space_reclaimed': 0,
-            'build_cache_deleted': [],
-            'build_cache_space_reclaimed': 0,
-            'total_space_reclaimed': 0
-        }
-        
-        # Dry run mode - just calculate what would be pruned
-        if request.dry_run:
-            try:
-                # Get current state of resources that would be pruned
-                containers = client.containers.list(all=True, filters={'status': 'exited'})
-                images = client.images.list(filters={'dangling': True})
-                networks = client.networks.list(ids=[])  # Empty IDs list returns unused networks
-                volumes = client.volumes.list(filters={'dangling': True}) if request.prune_volumes else []
-                
-                # Filter by time if specified
-                if 'until' in request.filters:
-                    duration = await parse_duration(ParseDurationRequest(
-                        duration=request.filters['until']
-                    ))
-                    until_ts = datetime.now(timezone.utc).timestamp() - duration.seconds
-                    
-                    # Filter containers
-                    containers = [
-                        c for c in containers
-                        if datetime.fromisoformat(
-                            c.attrs['State']['FinishedAt'].replace('Z', '+00:00')
-                        ).timestamp() < until_ts
-                    ]
-                    
-                    # Simplified image filtering (in a real implementation, you'd check image creation time)
-                    if images:
-                        images = images[:max(1, len(images) // 2)]
-                
-                # Calculate space that would be reclaimed (estimates)
-                containers_space = len(containers) * 100000000  # ~100MB/container
-                images_space = len(images) * 200000000  # ~200MB/image
-                volumes_space = len(volumes) * 500000000  # ~500MB/volume
-                build_cache_space = 100000000 if request.prune_build_cache else 0
-                
-                total_space = containers_space + images_space + volumes_space + build_cache_space
-                
-                return PruneSystemResponse(
-                    status='success',
-                    dry_run=True,
-                    would_prune={
-                        'containers': [c.id[:12] for c in containers],
-                        'containers_space': containers_space,
-                        'images': [i.id for i in images],
-                        'images_space': images_space,
-                        'networks': [n.id[:12] for n in networks],
-                        'volumes': [v.name for v in volumes] if request.prune_volumes else [],
-                        'volumes_space': volumes_space if request.prune_volumes else 0,
-                        'build_cache_space': build_cache_space if request.prune_build_cache else 0,
-                        'total_space': total_space
-                    },
-                    message=(
-                        f'Would prune {len(containers)} containers, {len(images)} images, '
-                        f'{len(networks)} networks, {len(volumes)} volumes, and '
-                        f'{1 if request.prune_build_cache else 0} build cache entries '
-                        f'({total_space/1024/1024:.1f} MB total)'
-                    )
-                )
-                
-            except Exception as e:
-                error_msg = f"Error during dry run: {str(e)}"
-                logger.error(error_msg, exc_info=True)
-                return PruneSystemResponse(
-                    status="error",
-                    dry_run=True,
-                    error=error_msg,
-                    message="Failed to calculate what would be pruned"
-                )
-        
-        # Actual pruning
-        try:
-            # Prune containers
-            container_prune = client.containers.prune(filters=request.filters)
-            if container_prune.get('ContainersDeleted'):
-                result['containers_deleted'] = container_prune['ContainersDeleted']
-                result['containers_space_reclaimed'] = container_prune['SpaceReclaimed']
-                result['total_space_reclaimed'] += container_prune['SpaceReclaimed']
-            
-            # Prune images
-            image_prune = client.images.prune(filters=request.filters)
-            if image_prune.get('ImagesDeleted'):
-                result['images_deleted'] = [img['Deleted'] for img in image_prune['ImagesDeleted'] if 'Deleted' in img]
-                result['images_space_reclaimed'] = image_prune.get('SpaceReclaimed', 0)
-                result['total_space_reclaimed'] += image_prune.get('SpaceReclaimed', 0)
-            
-            # Prune networks
-            network_prune = client.networks.prune(filters=request.filters)
-            if network_prune.get('NetworksDeleted'):
-                result['networks_deleted'] = network_prune['NetworksDeleted']
-            
-            # Prune volumes if requested
-            if request.prune_volumes:
-                volume_prune = client.volumes.prune()
-                if volume_prune.get('VolumesDeleted'):
-                    result['volumes_deleted'] = volume_prune['VolumesDeleted']
-                    result['volumes_space_reclaimed'] = volume_prune.get('SpaceReclaimed', 0)
-                    result['total_space_reclaimed'] += volume_prune.get('SpaceReclaimed', 0)
-            
-            # Prune build cache if requested
-            if request.prune_build_cache:
-                build_cache_prune = client.api.prune_builds(filters=request.filters)
-                if build_cache_prune.get('CachesDeleted'):
-                    result['build_cache_deleted'] = build_cache_prune['CachesDeleted']
-                    result['build_cache_space_reclaimed'] = build_cache_prune.get('SpaceReclaimed', 0)
-                    result['total_space_reclaimed'] += build_cache_prune.get('SpaceReclaimed', 0)
-            
-            # Build success message
-            message_parts = []
-            if result['containers_deleted']:
-                message_parts.append(f"{len(result['containers_deleted'])} containers")
-            if result['images_deleted']:
-                message_parts.append(f"{len(result['images_deleted'])} images")
-            if result['networks_deleted']:
-                message_parts.append(f"{len(result['networks_deleted'])} networks")
-            if result['volumes_deleted']:
-                message_parts.append(f"{len(result['volumes_deleted'])} volumes")
-            if result['build_cache_deleted']:
-                message_parts.append(f"{len(result['build_cache_deleted'])} build cache entries")
-            
-            message = "No resources were pruned"
-            if message_parts:
-                message = f"Pruned {', '.join(message_parts)} " \
-                        f"({result['total_space_reclaimed']/1024/1024:.1f} MB reclaimed)"
-            
-            return PruneSystemResponse(
-                status='success',
-                dry_run=False,
-                prune_result=result,
-                message=message
-            )
-            
-        except Exception as e:
-            error_msg = f"Error during pruning: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return PruneSystemResponse(
-                status="error",
-                dry_run=request.dry_run if hasattr(request, 'dry_run') else False,
-                error=error_msg,
-                message="Failed to complete pruning operation"
-            )
-        
-    except docker.errors.APIError as e:
-        error_msg = f"Docker API error during prune: {str(e)}"
+        error_msg = f"Docker error during system prune: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return PruneSystemResponse(
             status="error",
-            dry_run=request.dry_run if hasattr(request, 'dry_run') else False,
-            error=error_msg,
-            message="Failed to prune system due to Docker API error"
-        )
-    except docker.errors.DockerException as e:
-        error_msg = f"Docker error during prune: {str(e)}"
-        logger.error(error_msg, exc_info=True)
-        return PruneSystemResponse(
-            status="error",
-            dry_run=request.dry_run if hasattr(request, 'dry_run') else False,
-            error=error_msg,
-            message="Failed to prune system due to Docker error"
+            error=error_msg
         )
     except Exception as e:
-        error_msg = f"Unexpected error during prune: {str(e)}"
+        error_msg = f"Unexpected error during system prune: {str(e)}"
         logger.error(error_msg, exc_info=True)
         return PruneSystemResponse(
             status="error",
-            dry_run=request.dry_run if hasattr(request, 'dry_run') else False,
-            error=error_msg,
-            message="An unexpected error occurred during pruning"
+            error=error_msg
         )
-
-
-
-class ParseDurationRequest(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    
-    duration_str: str = Field(
-        ...,
-        description="Duration string to parse (e.g., '24h', '1d', '3600s')",
-        min_length=1
-    )
-
-class ParseDurationResponse(BaseModel):
-    model_config = ConfigDict(extra='forbid')
-    
-    status: str = Field(..., description="Status of the operation ('success' or 'error')")
-    duration_seconds: Optional[float] = Field(
-        None, 
-        description="Parsed duration in seconds (if successful)",
-        ge=0
-    )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if parsing failed"
-    )
 
 @mcp.tool(
     name="parse_duration",
-    description="Parse a duration string into seconds. Supports units: s (seconds), "
-                "m (minutes), h (hours), d (days), w (weeks). Example: '24h' for 24 hours."
+    description="Parse a human-readable duration string into seconds. "
+                "Supports units: s (seconds), m (minutes), h (hours), d (days), w (weeks)"
 )
 async def parse_duration(
     request: ParseDurationRequest
@@ -2004,63 +522,52 @@ async def parse_duration(
     """
     Parse a duration string into seconds.
     
-    Supports units: s (seconds), m (minutes), h (hours), d (days), w (weeks).
-    If no unit is specified, assumes seconds.
-    
     Args:
-        duration_str: Duration string to parse (e.g., '24h', '1d', '3600s')
+        request: ParseDurationRequest with duration string to parse
         
     Returns:
-        Dictionary with:
-        - status: 'success' or 'error'
-        - duration_seconds: float (if successful)
-        - error: str (if error occurred)
-        
-    Example:
-        >>> await parse_duration("24h")
-        {
-            "status": "success",
-            "duration_seconds": 86400.0
-        }
+        ParseDurationResponse with parsed duration in seconds
     """
     try:
-        duration_str = duration_str.strip()
-        if not duration_str:
-            raise ValueError("Empty duration string")
+        logger.info(f"Parsing duration string: {request.duration_string}")
         
-        # Handle simple formats
-        if duration_str.endswith('s'):
-            seconds = float(duration_str[:-1])
-        elif duration_str.endswith('m'):
-            seconds = float(duration_str[:-1]) * 60
-        elif duration_str.endswith('h'):
-            seconds = float(duration_str[:-1]) * 3600
-        elif duration_str.endswith('d'):
-            seconds = float(duration_str[:-1]) * 86400
-        elif duration_str.endswith('w'):
-            seconds = float(duration_str[:-1]) * 604800
-        else:
-            # Default to seconds if no unit specified
-            try:
-                seconds = float(duration_str)
-            except ValueError as e:
-                raise ValueError(
-                    f"Invalid duration format: {duration_str}. "
-                    "Expected format: <number>[s|m|h|d|w]"
-                ) from e
+        seconds = parse_duration_string(request.duration_string)
         
-        if seconds < 0:
-            raise ValueError("Duration cannot be negative")
-            
-        return {
-            'status': 'success',
-            'duration_seconds': seconds
-        }
+        return ParseDurationResponse(
+            status="success",
+            seconds=seconds
+        )
         
+    except ValueError as e:
+        error_msg = f"Invalid duration format: {str(e)}"
+        logger.error(error_msg)
+        return ParseDurationResponse(
+            status="error",
+            error=error_msg
+        )
     except Exception as e:
-        error_msg = f"Error parsing duration: {str(e)}"
+        error_msg = f"Unexpected error parsing duration: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        return ParseDurationResponse(
+            status="error",
+            error=error_msg
+        )
+
+# ============================================================================
+# Module exports
+# ============================================================================
+
+__all__ = [
+    "get_system_info",
+    "get_disk_usage", 
+    "prune_system",
+    "parse_duration",
+    "SystemInfoRequest",
+    "SystemInfoResponse",
+    "DiskUsageRequest", 
+    "DiskUsageResponse",
+    "PruneSystemRequest",
+    "PruneSystemResponse",
+    "ParseDurationRequest",
+    "ParseDurationResponse"
+]
