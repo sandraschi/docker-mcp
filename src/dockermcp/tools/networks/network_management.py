@@ -19,9 +19,9 @@ from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
 
 import docker
 from docker.errors import DockerException, InvalidArgument
-from fastmcp.exceptions import ToolError as ToolException
+from fastmcp.exceptions import ToolError as ToolError
 # Import the mcp instance for tool registration
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork, TypeAdapter, field_validator
 
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
@@ -99,6 +99,7 @@ class BaseResponse(BaseModel, Generic[T]):
 
     class Config:
         json_encoders = {
+            datetime: lambda v: v.isoformat(),
             IPv4Network: str,
             IPv6Network: str,
             ipaddress.IPv4Address: str,

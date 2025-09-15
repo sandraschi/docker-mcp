@@ -48,7 +48,7 @@ from fastmcp.tools import Tool  # Wrong import
 from fastmcp.tools import tool, get_tools_metadata
 
 # Exception handling
-from fastmcp.exceptions import ToolException
+from fastmcp.exceptions import ToolError
 
 # Type hints
 from typing import Any, Dict, List, Optional
@@ -224,7 +224,7 @@ from typing import Any, Dict, List, Optional
 import logging
 
 from fastmcp.tools import tool
-from fastmcp.exceptions import ToolException
+from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field, field_validator
 
 logger = logging.getLogger(__name__)
@@ -254,7 +254,7 @@ async def greeter(request: ExampleRequest) -> Dict[str, Any]:
         Dictionary containing the greeting message and metadata
         
     Raises:
-        ToolException: If there's an error generating the greeting
+        ToolError: If there's an error generating the greeting
     """
     try:
         greeting = f"Hello, {request.name}!" * request.count
@@ -266,7 +266,7 @@ async def greeter(request: ExampleRequest) -> Dict[str, Any]:
         }
     except Exception as e:
         logger.error(f"Error in greeter: {str(e)}", exc_info=True)
-        raise ToolException(f"Failed to generate greeting: {str(e)}")
+        raise ToolError(f"Failed to generate greeting: {str(e)}")
 
 def get_tools() -> list:
     """Return all tools in this module for registration."""

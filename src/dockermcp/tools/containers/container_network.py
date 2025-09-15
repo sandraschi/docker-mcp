@@ -18,7 +18,7 @@ from docker.errors import DockerException, APIError, NotFound
 from fastmcp import FastMCP
 from fastmcp.tools import Tool
 from fastmcp.exceptions import ToolError
-from pydantic import BaseModel, Field, ConfigDict, validator, HttpUrl, AnyUrl
+from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger
 
@@ -52,7 +52,8 @@ class IPAMConfig(BaseModel):
         description="Auxiliary IPv4 or IPv6 addresses used by the network driver"
     )
 
-    @validator('subnet', 'ip_range', 'gateway')
+    @field_validator('subnet', 'ip_range', 'gateway')
+    @classmethod
     def validate_ip_address(cls, v):
         if v is None:
             return v

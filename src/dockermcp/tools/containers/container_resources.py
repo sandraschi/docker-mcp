@@ -15,8 +15,8 @@ from typing import Any, Dict, List, Optional, Union, Annotated
 
 import docker
 from docker.errors import APIError, ContainerError, DockerException, NotFound
-from fastmcp.tools import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolException
+from fastmcp.tools import Tool
+# from fastmcp.exceptions import ToolError  # Not used, causes import error in FastMCP 2.12+
 from fastmcp import FastMCP
 from pydantic import (
     BaseModel,
@@ -29,6 +29,7 @@ from pydantic import (
 )
 
 from dockermcp.logging_config import logger
+from dockermcp.tools import ToolResponse
 
 # Initialize FastMCP instance
 mcp = FastMCP("Container Resource Tools")
@@ -88,139 +89,6 @@ class ResourceUpdateResult(BaseModel):
         description="List of warning messages, if any"
     )
 
-class ContainerResourcesParams(BaseModel):
-    """Parameters for managing container resources."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "container_id": "my-container",
-                "cpu_priority": "high",
-                "memory_limit": "1g",
-                "memory_reservation": "512m",
-                "blkio_weight": 500,
-                "device_weights": [{"path": "/dev/sda", "weight": 200}],
-                "pids_limit": 1024
-            }
-        }
-    )
-    
-    container_id: str = Field(..., description="ID or name of the container")
-    cpu_priority: Optional[CpuPriority] = Field(
-        None,
-        description="CPU priority level (overrides cpu_shares if set)",
-        example="high"
-    )
-    cpu_shares: Optional[conint(ge=2, le=262144)] = Field(
-        None,
-        description="CPU shares (relative weight)",
-        example=512
-    )
-    cpu_quota: Optional[conint(ge=1000)] = Field(
-        None,
-        description="Microseconds of CPU time the container gets per cpu_period",
-        example=50000
-    )
-    cpu_period: conint(ge=1000, le=1000000) = Field(
-        100000,
-        description="The length of a CPU period in microseconds",
-        example=100000
-    )
-    cpus: Optional[str] = Field(
-        None,
-        description="CPUs in which to allow execution (0-3, 0,1)",
-        example="0-2"
-    )
-    memory_limit: Optional[str] = Field(
-        None,
-        description="Memory limit (e.g., 512m, 2g)",
-        example="1g"
-    )
-    memory_reservation: Optional[str] = Field(
-        None,
-        description="Memory soft limit (e.g., 512m, 2g)",
-        example="512m"
-    )
-    memory_swappiness: Optional[conint(ge=0, le=100)] = Field(
-        None,
-        description="Tune container memory swappiness (0-100)",
-        example=60
-    )
-    blkio_weight: Optional[conint(ge=10, le=1000)] = Field(
-        None,
-        description="Block IO weight (relative weight), between 10 and 1000",
-        example=500
-    )
-    device_weights: List[IoDeviceWeight] = Field(
-        default_factory=list,
-        description="List of per-device block IO weights"
-    )
-    device_read_bps: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="Limit read rate (bytes per second) from a device"
-    )
-    device_write_bps: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="Limit write rate (bytes per second) to a device"
-    )
-    device_read_iops: List[Dict[str, Union[str, int]]] = Field(
-        default_factory=list,
-        description="Limit read rate (IO per second) from a device"
-    )
-    device_write_iops: List[Dict[str, Union[str, int]]] = Field(
-        default_factory=list,
-        description="Limit write rate (IO per second) to a device"
-    )
-    pids_limit: Optional[int] = Field(
-        None,
-        description="Limit the number of processes (set -1 for unlimited)",
-        example=1024
-    )
-    restart_policy: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Restart policy to apply when a container exits"
-    )
-
-    @field_validator('memory_limit', 'memory_reservation', mode='before')
-    @classmethod
-    def validate_memory_string(cls, v):
-        """Validate memory string format."""
-        if v is not None:
-            try:
-                return _parse_memory_string(v)
-            except ValueError as e:
-                raise ValueError(f"Invalid memory format: {str(e)}") from e
-        return v
-
-class UpdateContainerResourcesResponse(BaseModel):
-    """Response model for updating container resources."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "container_id": "a1b2c3d4e5f6",
-                "updates": [
-                    {
-                        "resource_type": "cpu_shares",
-                        "previous_value": 1024,
-                        "new_value": 2048,
-                        "warnings": []
-                    },
-                    {
-                        "resource_type": "memory_limit",
-                        "previous_value": 536870912,
-                        "new_value": 1073741824,
-                        "warnings": []
-                    }
-                ]
-            }
-        }
-    )
-    
-    container_id: str = Field(..., description="ID of the container")
-    updates: List[ResourceUpdateResult] = Field(
-        ...,
-        description="List of resource updates that were applied"
-    )
-
 class GetContainerResourcesParams(BaseModel):
     """Parameters for getting container resources."""
     model_config = ConfigDict(
@@ -277,41 +145,6 @@ class ContainerResourcesResponse(BaseModel):
         None,
         description="Current resource usage statistics"
     )
-
-def _parse_memory_string(mem_str: str) -> int:
-    """Parse a memory string (e.g., '512m', '2g') into bytes."""
-    if not mem_str:
-        raise ValueError("Memory string cannot be empty")
-    
-    units = {
-        'b': 1,
-        'k': 1024,
-        'm': 1024 * 1024,
-        'g': 1024 * 1024 * 1024
-    }
-    
-    # Extract number and unit
-    num_str = ''
-    unit = 'b'
-    
-    for i, c in enumerate(mem_str.lower()):
-        if c.isdigit() or c == '.':
-            num_str += c
-        else:
-            unit = c
-            if unit not in units:
-                raise ValueError(f"Invalid memory unit: {unit}. Must be one of: {', '.join(units.keys())}")
-            break
-    
-    if not num_str:
-        raise ValueError("No numeric value found in memory string")
-    
-    try:
-        num = float(num_str)
-    except ValueError as e:
-        raise ValueError(f"Invalid numeric value in memory string: {num_str}") from e
-    
-    return int(num * units[unit])
 
 @mcp.tool(
     name="get_container_resources",
@@ -405,6 +238,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         
         return ToolResponse[ContainerResourcesResponse](
             success=True,
+            message=f"Retrieved resources for container {container.id}",
             data=ContainerResourcesResponse(
                 container_id=container.id,
                 resources=resources,
@@ -420,8 +254,8 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            error=f"Container not found: {str(e)}",
-            error_code="not_found"
+            message=f"Container not found: {str(e)}",
+            error=f"Container not found: {str(e)}"
         )
     except APIError as e:
         logger.error(
@@ -431,8 +265,8 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            error=f"Docker API error: {str(e)}",
-            error_code="docker_api_error"
+            message=f"Docker API error: {str(e)}",
+            error=f"Docker API error: {str(e)}"
         )
     except Exception as e:
         logger.error(
@@ -442,8 +276,8 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            error=f"Error getting container resources: {str(e)}",
-            error_code="internal_error"
+            message=f"Error getting container resources: {str(e)}",
+            error=f"Error getting container resources: {str(e)}"
         )
 
 class ResetContainerResourcesParams(BaseModel):
@@ -550,41 +384,7 @@ async def reset_container_resources(
             "PidsLimit": 0,  # 0 means no limit
             
             # Reset restart policy
-            "RestartPolicy": {"Name": "no"},
-            
-            # Other resource-related settings
-            "CgroupParent": "",
-            "DeviceRequests": None,
-            "OomKillDisable": False,
-            "OomScoreAdj": 0,
-            "CpuCount": 0,
-            "CpuPercent": 0,
-            "IOMaximumIOps": 0,
-            "IOMaximumBandwidth": 0,
-            "Ulimits": None,
-            "CpuRealtimePeriod": 0,
-            "CpuRealtimeRuntime": 0,
-            "CpuCfsPeriod": 0,
-            "CpuCfsQuota": 0,
-            "CpuQuota": 0,
-            "CpuPeriod": 0,
-            "CpuShares": 0,
-            "CpusetCpus": "",
-            "CpusetMems": "",
-            "DeviceCgroupRules": None,
-            "DeviceRequests": None,
-            "KernelMemory": 0,
-            "KernelMemoryTCP": 0,
-            "MemoryReservation": 0,
-            "MemorySwap": 0,
-            "MemorySwappiness": None,
-            "NanoCpus": 0,
-            "PidsLimit": 0,
-            "Ulimits": None,
-            "CpuCount": 0,
-            "CpuPercent": 0,
-            "IOMaximumIOps": 0,
-            "IOMaximumBandwidth": 0
+            "RestartPolicy": {"Name": "no"}
         }
         
         # Track which resources were reset
@@ -644,6 +444,7 @@ async def reset_container_resources(
         
         return ToolResponse[ResetContainerResourcesResponse](
             success=True,
+            message=f"Reset {len(reset_resources)} resources for container {container.id}",
             data=ResetContainerResourcesResponse(
                 container_id=container.id,
                 reset_resources=reset_resources
@@ -658,8 +459,8 @@ async def reset_container_resources(
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            error=f"Container not found: {str(e)}",
-            error_code="not_found"
+            message=f"Container not found: {str(e)}",
+            error=f"Container not found: {str(e)}"
         )
     except APIError as e:
         logger.error(
@@ -669,8 +470,8 @@ async def reset_container_resources(
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            error=f"Docker API error: {str(e)}",
-            error_code="docker_api_error"
+            message=f"Docker API error: {str(e)}",
+            error=f"Docker API error: {str(e)}"
         )
     except Exception as e:
         logger.error(
@@ -680,8 +481,8 @@ async def reset_container_resources(
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            error=f"Error resetting container resources: {str(e)}",
-            error_code="internal_error"
+            message=f"Error resetting container resources: {str(e)}",
+            error=f"Error resetting container resources: {str(e)}"
         )
 
 # Register tools with FastMCP

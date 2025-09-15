@@ -810,7 +810,7 @@ python -m pytest --last-failed
 
    ```python
    from fastmcp.tools import Tool
-   from fastmcp.exceptions import ToolException
+   from fastmcp.exceptions import ToolError
    
    def test_tool_registration():
        @Tool(name="test_tool", description="A test tool")

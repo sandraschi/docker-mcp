@@ -49,4 +49,4 @@ class TimeoutError(DockerMCPError):
     pass
 
 # For backward compatibility
-ToolException = ToolError
+ToolError = ToolError

@@ -22,7 +22,7 @@ from docker.errors import DockerException, APIError, NotFound, ContainerError
 from fastmcp import FastMCP
 from fastmcp.tools import Tool
 from fastmcp.exceptions import ToolError
-from pydantic import BaseModel, Field, ConfigDict, FieldValidationInfo, field_validator, HttpUrl, AnyUrl
+from pydantic import BaseModel, Field, ConfigDict, ValidationInfo, field_validator, HttpUrl, AnyUrl
 
 from dockermcp.logging_config import logger
 

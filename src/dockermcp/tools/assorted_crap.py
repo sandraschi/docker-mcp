@@ -6,7 +6,7 @@ into other modules.
 """
 import json
 import logging
-from typing import Any, Dict, Optional, Type, TypeVar, Union, List, Tuple
+from typing import Any, Dict, Optional, Type, TypeVar, Union, List, Tuple, TextIO
 
 from fastmcp import FastMCP
 
@@ -47,15 +47,36 @@ class SafeFastMCP(FastMCP):
                 request_id=request_id
             )
 
-def warn_with_log(message: str, category: Type[Warning] = UserWarning, stacklevel: int = 1) -> None:
+def warn_with_log(
+    message: Union[str, Warning], 
+    category: Type[Warning] = UserWarning, 
+    filename: str = "", 
+    lineno: int = 0, 
+    file: Optional[TextIO] = None, 
+    line: Optional[str] = None
+) -> None:
     """
     Log a warning message and emit a warning.
     
+    This function is compatible with warnings.showwarning signature and can be used
+    as a replacement for the built-in showwarning function.
+    
     Args:
-        message: The warning message
+        message: The warning message (str or Warning object)
         category: The warning category (default: UserWarning)
-        stacklevel: The stack level for the warning (default: 1)
+        filename: The filename where the warning occurred (default: "")
+        lineno: The line number where the warning occurred (default: 0)
+        file: The file to write the warning to (default: None)
+        line: The source code line (default: None)
     """
-    import warnings
-    logger.warning(f"{category.__name__}: {message}")
-    warnings.warn(message, category=category, stacklevel=stacklevel + 1)
+    # Convert message to string if it's a Warning object
+    if isinstance(message, Warning):
+        msg_str = str(message)
+    else:
+        msg_str = str(message)
+    
+    # Log the warning with location info if available
+    if filename and lineno:
+        logger.warning(f"{category.__name__}: {msg_str} (at {filename}:{lineno})")
+    else:
+        logger.warning(f"{category.__name__}: {msg_str}")

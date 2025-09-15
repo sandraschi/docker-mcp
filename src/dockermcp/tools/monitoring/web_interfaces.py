@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional, Literal
 
 from pydantic import BaseModel, Field, ConfigDict
 from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolException
+from fastmcp.exceptions import ToolError
 
 from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger

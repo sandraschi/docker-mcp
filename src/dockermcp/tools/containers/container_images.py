@@ -24,13 +24,14 @@ from docker.errors import (
     DockerException, APIError, ImageNotFound, BuildError, 
     ContainerError, NotFound
 )
-from fastmcp import FastMCP
-from pydantic import BaseModel, Field, validator, HttpUrl
-
-# Initialize FastMCP instance
-mcp = FastMCP("Container Image Tools")
+from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, Field, field_validator, HttpUrl
 
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import get_mcp
+
+# Get the shared FastMCP instance
+mcp = get_mcp()
 
 class ImagePullPolicy(str, Enum):
     """Policy for pulling container images."""
@@ -68,38 +69,7 @@ class ImageBuildResult(BaseModel):
     )
     error: Optional[str] = Field(None, description="Error message if build failed")
 
-@mcp.tool(
-    name="list_images",
-    description="List Docker images with filtering options"
-)
-@mcp.parameters(
-    {
-        'type': 'object',
-        'properties': {
-            'name': {
-                'type': 'string',
-                'default': None,
-                'description': 'Filter by image name or name:tag'
-            },
-            'all': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Show all images (default hides intermediate images)'
-            },
-            'filters': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Filter output based on conditions provided (e.g., `{"dangling":["true"]}`)'
-            },
-            'digests': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Show image digests'
-            }
-        }
-    }
-)
+@mcp.tool()
 async def list_images(
     name: Optional[str] = None,
     all: bool = False,
@@ -120,31 +90,6 @@ async def list_images(
         
     Returns:
         Dictionary with list of images and metadata
-        
-    Example:
-        >>> await list_images(
-        ...     name="nginx",
-        ...     filters={"dangling": ["false"]},
-        ...     digests=True
-        ... )
-        {
-            "status": "success",
-            "images": [
-                {
-                    "id": "sha256:2d389e545974d4a93d7f3b91f433c5a1a8e4f971e2c8f8a8a8f8a8f8a8f8a8f8a",
-                    "repo_tags": ["nginx:latest"],
-                    "repo_digests": ["nginx@sha256:..."],
-                    "created": "2023-01-01T12:00:00Z",
-                    "size": 1337000000,
-                    "virtual_size": 1337000000,
-                    "labels": {"maintainer": "NGINX Docker Maintainers"},
-                    "os": "linux",
-                    "architecture": "amd64",
-                    "docker_version": "20.10.7"
-                }
-            ],
-            "count": 1
-        }
     """
     try:
         # Initialize Docker client
@@ -168,8 +113,7 @@ async def list_images(
                     'repo_tags': image.tags if hasattr(image, 'tags') else [],
                     'repo_digests': image.attrs.get('RepoDigests', []),
                     'created': datetime.fromtimestamp(
-                        image.attrs['Created'],
-                        tz=datetime.timezone.utc
+                        image.attrs['Created']
                     ).isoformat(),
                     'size': image.attrs['Size'],
                     'virtual_size': image.attrs.get('VirtualSize', image.attrs['Size']),
@@ -198,66 +142,19 @@ async def list_images(
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
-        return {"status": "error", "error": error_msg}
+        raise ToolError(error_msg)
         
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
+        raise ToolError("Docker daemon not available")
         
     except Exception as e:
         error_msg = f"Unexpected error listing images: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {"status": "error", "error": error_msg}
+        raise ToolError(error_msg)
 
-@mcp.tool(
-    name="pull_image",
-    description="Pull a Docker image from a registry"
-)
-@mcp.parameters(
-    {
-        'type': 'object',
-        'properties': {
-            'repository': {
-                'type': 'string',
-                'description': 'Repository name (and optionally a tag or digest)'
-            },
-            'tag': {
-                'type': 'string',
-                'default': 'latest',
-                'description': 'Tag to pull (default: latest)'
-            },
-            'auth': {
-                'type': 'object',
-                'properties': {
-                    'username': {'type': 'string'},
-                    'password': {'type': 'string'},
-                    'email': {'type': 'string'},
-                    'registry': {'type': 'string'}
-                },
-                'additionalProperties': False,
-                'description': 'Authentication credentials'
-            },
-            'platform': {
-                'type': 'string',
-                'default': None,
-                'description': 'Platform in the format os[/arch[/variant]] (e.g., linux/amd64)'
-            },
-            'all_tags': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Download all tagged images in the repository'
-            },
-            'policy': {
-                'type': 'string',
-                'enum': [e.value for e in ImagePullPolicy],
-                'default': 'if-not-present',
-                'description': 'When to pull the image (always, if-not-present, never)'
-            }
-        },
-        'required': ['repository']
-    }
-)
+@mcp.tool()
 async def pull_image(
     repository: str,
     tag: str = 'latest',
@@ -269,9 +166,6 @@ async def pull_image(
     """
     Pull a Docker image from a registry.
     
-    This function pulls a Docker image from a registry with support for authentication,
-    platform selection, and pull policies.
-    
     Args:
         repository: Repository name (and optionally a tag or digest)
         tag: Tag to pull (default: latest)
@@ -282,27 +176,6 @@ async def pull_image(
         
     Returns:
         Dictionary with the pull results
-        
-    Example:
-        >>> await pull_image(
-        ...     repository="nginx",
-        ...     tag="alpine",
-        ...     auth={"username": "user", "password": "pass"},
-        ...     platform="linux/amd64"
-        ... )
-        {
-            "status": "success",
-            "image_id": "sha256:...",
-            "repository": "nginx",
-            "tag": "alpine",
-            "digest": "sha256:...",
-            "platform": "linux/amd64",
-            "progress": [
-                {"status": "Pulling from library/nginx", "id": "alpine"},
-                {"status": "Digest: sha256:..."},
-                {"status": "Status: Downloaded newer image for nginx:alpine"}
-            ]
-        }
     """
     try:
         # Initialize Docker client
@@ -341,12 +214,7 @@ async def pull_image(
                     'cached': True
                 }
             except (ImageNotFound, APIError) as e:
-                return {
-                    'status': 'error',
-                    'error': f'Image not found locally and pull policy is "never": {str(e)}',
-                    'repository': repository,
-                    'tag': tag
-                }
+                raise ToolError(f'Image not found locally and pull policy is "never": {str(e)}')
         
         # Prepare auth config
         auth_config = None
@@ -357,232 +225,41 @@ async def pull_image(
                 'email': auth.get('email', ''),
                 'registry': auth.get('registry', '')
             }
-            
-            # If registry is provided, remove it from the repository
-            if auth.get('registry') and repository.startswith(auth['registry']):
-                repository = repository[len(auth['registry']) + 1:]
         
-        # Pull the image
-        pull_kwargs = {
-            'repository': repository,
-            'tag': tag,
-            'auth_config': auth_config,
-            'platform': platform,
-            'all_tags': all_tags,
-            'decode': True
-        }
-        
-        # Remove None values
-        pull_kwargs = {k: v for k, v in pull_kwargs.items() if v is not None}
-        
-        # Execute the pull and capture the output
-        progress = []
+        # Pull the image using high-level API
         try:
-            # Low-level API for better progress tracking
-            api_client = docker.APIClient()
-            pull_logs = api_client.pull(
-                repository=repository,
-                tag=tag,
-                auth_config=auth_config,
-                platform=platform,
-                all_tags=all_tags,
-                stream=True,
-                decode=True
-            )
+            image = client.images.pull(repository, tag=tag, auth_config=auth_config, platform=platform, all_tags=all_tags)
             
-            # Process the pull logs
-            for log in pull_logs:
-                progress.append(log)
-                logger.debug(f"Docker pull: {log}")
+            return {
+                'status': 'success',
+                'image_id': image.id,
+                'repository': repository,
+                'tag': tag,
+                'digest': image.attrs.get('RepoDigests', [None])[0],
+                'platform': platform
+            }
             
-            # Get the pulled image
-            if all_tags:
-                # For all_tags, we can't easily determine which tags were pulled
-                image_id = f"{repository}:*"
-                digest = "multiple"
-            else:
-                image_ref = f"{repository}:{tag}" if tag and ':' not in repository else repository
-                try:
-                    image = client.images.get(image_ref)
-                    image_id = image.id
-                    digest = image.attrs.get('RepoDigests', [None])[0]
-                except (ImageNotFound, APIError):
-                    # Try to find the image by digest from the pull logs
-                    image_id = next(
-                        (log.get('id') for log in reversed(progress) 
-                         if 'id' in log and 'digest' in log),
-                        None
-                    )
-                    digest = next(
-                        (log.get('digest') for log in reversed(progress) 
-                         if 'digest' in log),
-                        None
-                    )
-                    
-                    if not image_id:
-                        return {
-                            'status': 'error',
-                            'error': 'Failed to determine pulled image ID',
-                            'repository': repository,
-                            'tag': tag,
-                            'progress': progress
-                        }
         except Exception as e:
             error_msg = f"Error during image pull: {str(e)}"
             logger.error(error_msg)
-            return {
-                'status': 'error',
-                'error': error_msg,
-                'repository': repository,
-                'tag': tag,
-                'progress': progress
-            }
-        finally:
-            try:
-                api_client.close()
-            except:
-                pass
-        
-        return {
-            'status': 'success',
-            'image_id': image_id,
-            'repository': repository,
-            'tag': tag,
-            'digest': digest,
-            'platform': platform,
-            'progress': progress
-        }
+            raise ToolError(error_msg)
         
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'repository': repository,
-            'tag': tag
-        }
+        raise ToolError(error_msg)
         
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'repository': repository,
-            'tag': tag
-        }
+        raise ToolError("Docker daemon not available")
         
     except Exception as e:
         error_msg = f"Unexpected error pulling image: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'repository': repository,
-            'tag': tag
-        }
+        raise ToolError(error_msg)
 
-@mcp.tool(
-    name="build_image",
-    description="Build a Docker image from a Dockerfile"
-)
-@mcp.parameters(
-    {
-        'type': 'object',
-        'properties': {
-            'path': {
-                'type': 'string',
-                'description': 'Path to the directory containing the Dockerfile'
-            },
-            'dockerfile': {
-                'type': 'string',
-                'default': 'Dockerfile',
-                'description': 'Name of the Dockerfile (default: Dockerfile)'
-            },
-            'tag': {
-                'type': 'string',
-                'default': None,
-                'description': 'Name and optionally a tag in the \'name:tag\' format'
-            },
-            'buildargs': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Build-time variables'
-            },
-            'labels': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Set metadata for the image'
-            },
-            'nocache': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Do not use cache when building the image'
-            },
-            'rm': {
-                'type': 'boolean',
-                'default': True,
-                'description': 'Remove intermediate containers after a successful build'
-            },
-            'forcerm': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Always remove intermediate containers'
-            },
-            'pull': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Attempt to pull a newer version of the image'
-            },
-            'platform': {
-                'type': 'string',
-                'default': None,
-                'description': 'Platform in the format os[/arch[/variant]]'
-            },
-            'target': {
-                'type': 'string',
-                'default': None,
-                'description': 'Set the target build stage to build'
-            },
-            'network_mode': {
-                'type': 'string',
-                'default': None,
-                'description': 'Set the networking mode for the RUN instructions during build'
-            },
-            'squash': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Squash newly built layers into a single new layer'
-            },
-            'extra_hosts': {
-                'type': 'object',
-                'additionalProperties': {'type': 'string'},
-                'default': {},
-                'description': 'Extra hosts to add to /etc/hosts in building containers'
-            },
-            'shmsize': {
-                'type': 'string',
-                'default': None,
-                'description': 'Size of /dev/shm in bytes. The size must be greater than 0.'
-            },
-            'quiet': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Suppress verbose build output'
-            },
-            'timeout': {
-                'type': 'integer',
-                'minimum': 0,
-                'default': 0,
-                'description': 'HTTP timeout in seconds (0 means no timeout)'
-            }
-        },
-        'required': ['path']
-    }
-)
+@mcp.tool()
 async def build_image(
     path: str,
     dockerfile: str = 'Dockerfile',
@@ -594,19 +271,10 @@ async def build_image(
     forcerm: bool = False,
     pull: bool = False,
     platform: Optional[str] = None,
-    target: Optional[str] = None,
-    network_mode: Optional[str] = None,
-    squash: bool = False,
-    extra_hosts: Dict[str, str] = {},
-    shmsize: Optional[str] = None,
-    quiet: bool = False,
-    timeout: int = 0
+    target: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Build a Docker image from a Dockerfile.
-    
-    This function builds a Docker image from a Dockerfile with support for various
-    build options and configurations.
     
     Args:
         path: Path to the directory containing the Dockerfile
@@ -620,209 +288,66 @@ async def build_image(
         pull: Attempt to pull a newer version of the image
         platform: Platform in the format os[/arch[/variant]]
         target: Set the target build stage to build
-        network_mode: Set the networking mode for the RUN instructions during build
-        squash: Squash newly built layers into a single new layer
-        extra_hosts: Extra hosts to add to /etc/hosts in building containers
-        shmsize: Size of /dev/shm in bytes
-        quiet: Suppress verbose build output
-        timeout: HTTP timeout in seconds (0 means no timeout)
         
     Returns:
         Dictionary with the build results
-        
-    Example:
-        >>> await build_image(
-        ...     path="/path/to/build/context",
-        ...     dockerfile="Dockerfile.alpine",
-        ...     tag="myapp:1.0.0",
-        ...     buildargs={"VERSION": "1.0.0"},
-        ...     labels={"maintainer": "dev@example.com"},
-        ...     platform="linux/amd64"
-        ... )
-        {
-            "status": "success",
-            "image_id": "sha256:...",
-            "tag": "myapp:1.0.0",
-            "logs": [
-                {"stream": "Step 1/10 : FROM alpine:3.14\n"},
-                {"stream": " ---> 14119a10abf4\n"},
-                {"stream": "Step 2/10 : WORKDIR /app\n"},
-                {"stream": " ---> Running in 8c4d8a4f8a4f\n"},
-                {"stream": " ---> 5f70bf18a086\n"},
-                {"stream": "Successfully built 5f70bf18a086\n"},
-                {"stream": "Successfully tagged myapp:1.0.0\n"}
-            ]
-        }
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
         
-        # Prepare build arguments
-        build_kwargs = {
-            'path': path,
-            'dockerfile': dockerfile,
-            'tag': tag,
-            'buildargs': buildargs,
-            'labels': labels,
-            'nocache': nocache,
-            'rm': rm,
-            'forcerm': forcerm,
-            'pull': pull,
-            'platform': platform,
-            'target': target,
-            'network_mode': network_mode,
-            'squash': squash,
-            'extra_hosts': extra_hosts,
-            'shmsize': shmsize,
-            'quiet': quiet,
-            'timeout': timeout,
-            'decode': True
-        }
-        
-        # Remove None values
-        build_kwargs = {k: v for k, v in build_kwargs.items() if v is not None}
-        
         # Build the image
-        build_logs = []
         try:
-            # Low-level API for better build log handling
-            api_client = docker.APIClient()
+            image, logs = client.images.build(
+                path=path,
+                dockerfile=dockerfile,
+                tag=tag,
+                buildargs=buildargs,
+                labels=labels,
+                nocache=nocache,
+                rm=rm,
+                forcerm=forcerm,
+                pull=pull,
+                platform=platform,
+                target=target
+            )
             
-            # Create a build context tar file
-            def create_tar(path):
-                f = BytesIO()
-                with tarfile.open(fileobj=f, mode='w') as tar:
-                    for root, _, files in os.walk(path):
-                        for file in files:
-                            file_path = os.path.join(root, file)
-                            arcname = os.path.relpath(file_path, path)
-                            tar.add(file_path, arcname=arcname)
-                f.seek(0)
-                return f
+            # Process logs
+            build_logs = []
+            for log in logs:
+                if 'stream' in log:
+                    build_logs.append({'stream': log['stream'].strip()})
+                elif 'error' in log:
+                    build_logs.append({'error': log['error'].strip()})
             
-            # Create the build context
-            build_context = create_tar(path)
-            
-            # Execute the build
-            for line in api_client.build(
-                fileobj=build_context,
-                custom_context=True,
-                **{k: v for k, v in build_kwargs.items() if k != 'path'}
-            ):
-                if 'stream' in line:
-                    line_text = line['stream'].strip()
-                    if line_text:
-                        build_logs.append({'stream': line_text})
-                        logger.info(f"Build: {line_text}")
-                elif 'error' in line:
-                    error_msg = line['error'].strip()
-                    build_logs.append({'error': error_msg})
-                    logger.error(f"Build error: {error_msg}")
-                    return {
-                        'status': 'error',
-                        'error': error_msg,
-                        'logs': build_logs
-                    }
-                elif 'status' in line:
-                    status = line['status'].strip()
-                    if status:
-                        build_logs.append({'status': status})
-                        logger.info(f"Build status: {status}")
-                elif 'aux' in line and 'ID' in line['aux']:
-                    image_id = line['aux']['ID']
-                
-                # Check for build success/failure
-                if 'stream' in line and 'Successfully built' in line['stream']:
-                    image_id = line['stream'].strip().split(' ')[-1]
-                elif 'error' in line:
-                    return {
-                        'status': 'error',
-                        'error': line['error'].strip(),
-                        'logs': build_logs
-                    }
-            
-            # If we got here, the build was successful
             return {
                 'status': 'success',
-                'image_id': image_id,
+                'image_id': image.id,
                 'tag': tag,
                 'logs': build_logs
             }
             
         except Exception as e:
             error_msg = f"Error during image build: {str(e)}"
-            logger.error(error_msg, exc_info=True)
-            return {
-                'status': 'error',
-                'error': error_msg,
-                'logs': build_logs
-            }
-        finally:
-            try:
-                api_client.close()
-            except:
-                pass
+            logger.error(error_msg)
+            raise ToolError(error_msg)
         
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'path': path,
-            'dockerfile': dockerfile,
-            'tag': tag
-        }
+        raise ToolError(error_msg)
         
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'path': path,
-            'dockerfile': dockerfile,
-            'tag': tag
-        }
+        raise ToolError("Docker daemon not available")
         
     except Exception as e:
         error_msg = f"Unexpected error building image: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'path': path,
-            'dockerfile': dockerfile,
-            'tag': tag
-        }
+        raise ToolError(error_msg)
 
-@mcp.tool(
-    name="remove_image",
-    description="Remove a Docker image"
-)
-@mcp.parameters(
-    {
-        'type': 'object',
-        'properties': {
-            'image': {
-                'type': 'string',
-                'description': 'Image ID or name (optionally with tag)'
-            },
-            'force': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Force removal of the image even if it is being used'
-            },
-            'noprune': {
-                'type': 'boolean',
-                'default': False,
-                'description': 'Do not delete untagged parent images'
-            }
-        },
-        'required': ['image']
-    }
-)
+@mcp.tool()
 async def remove_image(
     image: str,
     force: bool = False,
@@ -831,9 +356,6 @@ async def remove_image(
     """
     Remove a Docker image.
     
-    This function removes a Docker image by ID or name, with options to force
-    removal and control pruning of untagged parent images.
-    
     Args:
         image: Image ID or name (optionally with tag)
         force: Force removal of the image even if it is being used
@@ -841,15 +363,6 @@ async def remove_image(
         
     Returns:
         Dictionary with the removal results
-        
-    Example:
-        >>> await remove_image("nginx:alpine", force=True)
-        {
-            "status": "success",
-            "image": "nginx:alpine",
-            "untagged": ["nginx:alpine"],
-            "deleted": ["sha256:..."]
-        }
     """
     try:
         # Initialize Docker client
@@ -859,10 +372,7 @@ async def remove_image(
         try:
             img = client.images.get(image)
         except ImageNotFound:
-            return {
-                'status': 'error',
-                'error': f'Image not found: {image}'
-            }
+            raise ToolError(f'Image not found: {image}')
         
         # Remove the image
         result = client.images.remove(
@@ -873,9 +383,9 @@ async def remove_image(
         
         # Process the result
         if isinstance(result, list):
-            # For newer Docker versions, result is a list of strings
-            untagged = [line for line in result if 'Untagged' in line]
-            deleted = [line for line in result if 'Deleted' in line]
+            # For newer Docker versions, result is a list of dicts
+            untagged = [item.get('Untagged') for item in result if 'Untagged' in item]
+            deleted = [item.get('Deleted') for item in result if 'Deleted' in item]
         else:
             # For older Docker versions, result is a dict
             untagged = result.get('Untagged', [])
@@ -891,26 +401,14 @@ async def remove_image(
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'image': image
-        }
+        raise ToolError(error_msg)
         
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'image': image
-        }
+        raise ToolError("Docker daemon not available")
         
     except Exception as e:
         error_msg = f"Unexpected error removing image: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'image': image
-        }
+        raise ToolError(error_msg)

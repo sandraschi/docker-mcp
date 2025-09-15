@@ -11,7 +11,7 @@ from typing import Any, Dict, List, Optional, Union, cast
 
 import docker
 from docker.models.networks import Network
-from fastmcp.exceptions import ToolError as ToolException
+from fastmcp.exceptions import ToolError as ToolError
 
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
@@ -43,7 +43,7 @@ def prune_networks() -> Dict[str, Any]:
     except docker.errors.APIError as e:
         error_msg = f"Failed to prune networks: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def list_networks() -> List[Dict[str, Any]]:
@@ -77,7 +77,7 @@ def list_networks() -> List[Dict[str, Any]]:
     except docker.errors.APIError as e:
         error_msg = f"Failed to list networks: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def create_network(
@@ -148,7 +148,7 @@ def create_network(
     except docker.errors.APIError as e:
         error_msg = f"Failed to create network '{name}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def remove_network(network_id: str) -> Dict[str, Any]:
@@ -177,11 +177,11 @@ def remove_network(network_id: str) -> Dict[str, Any]:
     except docker.errors.NotFound:
         error_msg = f"Network '{network_id}' not found"
         logger.warning(error_msg)
-        raise ToolException(error_msg) from None
+        raise ToolError(error_msg) from None
     except docker.errors.APIError as e:
         error_msg = f"Failed to remove network '{network_id}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def connect_container_to_network(
@@ -240,7 +240,7 @@ def connect_container_to_network(
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to connect container to network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def disconnect_container_from_network(
@@ -280,7 +280,7 @@ def disconnect_container_from_network(
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to disconnect container from network: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def get_network_stats(network_id: str) -> Dict[str, Any]:
@@ -321,7 +321,7 @@ def get_network_stats(network_id: str) -> Dict[str, Any]:
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to get stats for network '{network_id}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
 
 
 def inspect_network(network_id: str) -> Dict[str, Any]:
@@ -377,4 +377,4 @@ def inspect_network(network_id: str) -> Dict[str, Any]:
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to inspect network '{network_id}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolException(error_msg) from e
+        raise ToolError(error_msg) from e
