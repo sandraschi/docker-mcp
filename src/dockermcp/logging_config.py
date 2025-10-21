@@ -8,21 +8,39 @@ This module provides a centralized logging configuration with the following feat
 - Performance metrics logging
 - Multiple log handlers (file, console, syslog)
 - Log rotation and retention policies
+- Async logging support
+- Loguru integration
+- Context-aware logging
 """
+from __future__ import annotations
+
+import asyncio
+import inspect
 import json
 import logging
 import logging.handlers
 import os
+import re
 import socket
 import sys
 import threading
+import time
+import traceback
 import uuid
+from collections import defaultdict
+from contextvars import ContextVar
 from datetime import datetime, timezone
+from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, Optional, Union, cast, Callable, TypeVar, List, Tuple
+from typing import (
+    Any, AsyncGenerator, Awaitable, Callable, Dict, List, 
+    Optional, Tuple, Type, TypeVar, Union, cast, overload
+)
 
 # Type variable for generic function wrapping
 F = TypeVar('F', bound=Callable[..., Any])
+P = TypeVar('P')
+T = TypeVar('T')
 
 # Third-party imports
 LOGURU_AVAILABLE = False

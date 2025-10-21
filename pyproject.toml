@@ -10,49 +10,50 @@ authors = [
     {name = "Sandra Schimanovich", email = "sandra@example.com"}
 ]
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = {text = "MIT"}
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3.8",
     "Programming Language :: Python :: 3.9",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: System :: Systems Administration",
-    "Operating System :: Microsoft :: Windows",
-    "Operating System :: POSIX :: Linux",
-    "Environment :: Console"
+    "Programming Language :: Python :: 3.12",
 ]
+
 dependencies = [
-    "fastmcp>=2.12.0",
-    "docker>=6.0.0",
-    "pydantic>=2.0.0",
-    "python-dotenv>=0.21.0",
-    "typing-extensions>=4.0.0; python_version<\"3.10\""
+    "fastmcp>=2.12.0,<3.0.0",
+    "docker>=6.1.0,<8.0.0",
+    "pydantic>=2.0.0,<3.0.0",
+    "python-dotenv>=1.0.0,<2.0.0",
+    "anyio>=3.6.0,<5.0.0",
+    "structlog>=23.1.0,<25.0.0",
+    "loguru>=0.7.0,<1.0.0",
+    "python-json-logger>=2.0.0,<3.0.0",
+    "cryptography>=41.0.0,<43.0.0",
+    "typing-extensions>=4.4.0; python_version<\"3.10\""
 ]
 
 [project.optional-dependencies]
 dev = [
-    "pytest>=7.0.0",
-    "pytest-cov>=4.0.0",
-    "black>=23.0.0",
-    "isort>=5.0.0",
-    "mypy>=1.0.0",
-    "types-python-dotenv>=1.0.0"
+    "pytest>=7.4.0,<8.0.0",
+    "pytest-cov>=4.1.0,<5.0.0",
+    "pytest-asyncio>=0.21.0,<1.0.0",
+    "black>=23.7.0,<25.0.0",
+    "isort>=5.12.0,<6.0.0",
+    "mypy>=1.5.0,<2.0.0",
+    "ruff>=0.0.282,<1.0.0"
 ]
 
 [project.urls]
 Homepage = "https://github.com/sandraschi/dockermcp"
 Documentation = "https://github.com/sandraschi/dockermcp#readme"
 Repository = "https://github.com/sandraschi/dockermcp"
-Changelog = "https://github.com/sandraschi/dockermcp/blob/main/CHANGELOG.md"
 
 [tool.setuptools]
 packages = ["dockermcp"]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
 
 [tool.black]
 line-length = 100
@@ -73,10 +74,3 @@ disallow_incomplete_defs = true
 disallow_untyped_decorators = true
 no_implicit_optional = true
 warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-
-[[tool.mypy.overrides]]
-module = ["fastmcp.*", "docker.*"]
-ignore_missing_imports = true

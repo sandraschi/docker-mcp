@@ -7,54 +7,36 @@ It follows FastMCP 2.12+ standards for tool registration and error handling.
 """
 from __future__ import annotations
 
-import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Literal, Type, TypeVar, cast, Generic
+from typing import Any, Dict, List, Optional, Union
 
 import docker
-from docker.errors import DockerException, APIError, NotFound, ImageNotFound
+from docker.errors import DockerException, APIError
 from fastmcp.tools.tool import Tool
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from dockermcp.logging_config import logger
+from .models import (
+    ContainerOperationResponse,
+    ContainerListResponse,
+    ContainerInspectResponse,
+    ContainerLogsResponse,
+    ContainerStatsResponse,
+    ContainerExecResponse,
+    ContainerFileResponse,
+    ContainerVolumeResponse,
+    ContainerImageResponse
+)
 
 # Initialize MCP instance
 mcp = FastMCP("Docker MCP")
 
-# Import all container management tools to register them
-from .list_containers import list_containers
-from .container_lifecycle import manage_container_lifecycle
-from .container_inspect import inspect_container
-from .container_logs import get_container_logs
-from .container_exec import execute_in_container
-from .container_stats import get_container_stats
-from .container_files import (
-    list_container_directory,
-    read_container_file,
-    write_container_file
-)
-from .container_network import list_networks
-from .container_resources import (
-    get_container_resources,
-    reset_container_resources
-)
-from .container_volumes import (
-    list_volumes,
-    create_volume,
-    inspect_volume
-)
-from .container_images import (
-    list_images,
-    pull_image,
-    build_image
-)
-
 class ContainerAction(str, Enum):
-    """Available container actions."""
+    """Available container actions with metadata."""
     CREATE = "create"
     START = "start"
     STOP = "stop"
@@ -79,10 +61,36 @@ class ContainerAction(str, Enum):
     PULL_IMAGE = "pull_image"
     BUILD_IMAGE = "build_image"
 
+    @property
+    def requires_container_id(self) -> bool:
+        """Check if this action requires a container_id."""
+        return self not in [
+            ContainerAction.LIST_VOLUMES,
+            ContainerAction.CREATE_VOLUME,
+            ContainerAction.LIST_IMAGES,
+            ContainerAction.PULL_IMAGE,
+            ContainerAction.BUILD_IMAGE
+        ]
+
+    @property
+    def is_read_only(self) -> bool:
+        """Check if this is a read-only operation."""
+        return self in [
+            ContainerAction.INSPECT,
+            ContainerAction.LOGS,
+            ContainerAction.STATS,
+            ContainerAction.LIST_FILES,
+            ContainerAction.READ_FILE,
+            ContainerAction.LIST_NETWORKS,
+            ContainerAction.GET_RESOURCES,
+            ContainerAction.INSPECT_VOLUME,
+            ContainerAction.LIST_VOLUMES,
+            ContainerAction.LIST_IMAGES
+        ]
 
 class ContainerRequest(BaseModel):
     """
-    Base model for container management requests.
+    Base model for container management requests with Pydantic v2 validation.
     
     Attributes:
         action: The action to perform on the container
@@ -91,11 +99,22 @@ class ContainerRequest(BaseModel):
     """
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "action": "start",
-                "container_id": "my-container",
-                "params": {"wait": True, "timeout": 30}
-            }
+            "examples": [
+                {
+                    "action": "start",
+                    "container_id": "my-container",
+                    "params": {"wait": True, "timeout": 30}
+                },
+                {
+                    "action": "create",
+                    "params": {
+                        "image": "nginx:latest",
+                        "name": "web-server",
+                        "ports": {"80/tcp": 8080},
+                        "environment": {"DEBUG": "true"}
+                    }
+                }
+            ]
         }
     )
     
@@ -112,16 +131,36 @@ class ContainerRequest(BaseModel):
         description="Action-specific parameters"
     )
 
+    @model_validator(mode='after')
+    def validate_container_id_required(self) -> 'ContainerRequest':
+        """Validate that container_id is provided when required."""
+        if self.action.requires_container_id and not self.container_id:
+            raise ValueError(
+                f"container_id is required for action: {self.action.value}"
+            )
+        return self
+
 @mcp.tool(
     name="manage_container",
-    description="Manage Docker containers and related resources"
+    description="Manage Docker containers and related resources with Pydantic v2 models"
 )
-async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
+async def manage_container(params: ContainerRequest) -> Union[
+    ContainerOperationResponse,
+    ContainerListResponse,
+    ContainerInspectResponse,
+    ContainerLogsResponse,
+    ContainerStatsResponse,
+    ContainerExecResponse,
+    ContainerFileResponse,
+    ContainerVolumeResponse,
+    ContainerImageResponse
+]:
     """
     Unified interface for managing Docker containers and related resources.
     
     This function routes container management requests to the appropriate
-    handler function based on the specified action.
+    handler function based on the specified action, using Pydantic v2 models
+    for request/response validation and serialization.
     
     Args:
         params: ContainerRequest containing:
@@ -130,7 +169,7 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
             - params: Action-specific parameters
             
     Returns:
-        Dict[str, Any]: Response containing the operation results
+        One of the container response models based on the action type
         
     Raises:
         ToolError: If there's an error processing the request
@@ -141,184 +180,117 @@ async def manage_container(params: ContainerRequest) -> Dict[str, Any]:
         ...     container_id="my-container",
         ...     params={"wait": True, "timeout": 30}
         ... ))
-        >>> if response['status'] == 'success':
-        ...     print(f"Container started: {response['container_id']}")
+        >>> if response.status == 'success':
+        ...     print(f"Container started: {response.container_id}")
     """
     try:
         action = params.action
         container_id = params.container_id
         
         # Route to the appropriate handler based on action
-        if action in [ContainerAction.CREATE, ContainerAction.START, ContainerAction.STOP, 
-                     ContainerAction.RESTART, ContainerAction.PAUSE, ContainerAction.UNPAUSE, 
-                     ContainerAction.REMOVE]:
-            # Use container lifecycle management
-            from .container_lifecycle import ContainerLifecycleParams
-            lifecycle_params = ContainerLifecycleParams(
-                container_id=container_id,
-                action=action.value,
-                **params.params
-            )
-            result = await manage_container_lifecycle(lifecycle_params)
+        if action in [
+            ContainerAction.CREATE, ContainerAction.START, 
+            ContainerAction.STOP, ContainerAction.RESTART, 
+            ContainerAction.PAUSE, ContainerAction.UNPAUSE,
+            ContainerAction.REMOVE
+        ]:
+            from .container_lifecycle import manage_container_lifecycle
+            return await manage_container_lifecycle(params)
             
         elif action == ContainerAction.INSPECT:
-            from .container_inspect import ContainerInspectParams
-            inspect_params = ContainerInspectParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await inspect_container(inspect_params)
+            from .container_inspect import inspect_container
+            return await inspect_container(container_id, **params.params)
             
         elif action == ContainerAction.LOGS:
-            from .container_logs import ContainerLogsParams
-            logs_params = ContainerLogsParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await get_container_logs(logs_params)
+            from .container_logs import get_container_logs
+            return await get_container_logs(container_id, **params.params)
             
         elif action == ContainerAction.EXEC:
-            from .container_exec import ExecuteInContainerParams
-            exec_params = ExecuteInContainerParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await execute_in_container(exec_params)
+            from .container_exec import execute_in_container
+            return await execute_in_container(container_id, **params.params)
             
         elif action == ContainerAction.STATS:
-            from .container_stats import ContainerStatsParams
-            stats_params = ContainerStatsParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await get_container_stats(stats_params)
+            from .container_stats import get_container_stats
+            return await get_container_stats(container_id, **params.params)
             
         elif action == ContainerAction.LIST_FILES:
-            from .container_files import ListDirectoryParams
-            files_params = ListDirectoryParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await list_container_directory(files_params)
+            from .container_files import list_container_directory
+            return await list_container_directory(container_id, **params.params)
             
         elif action == ContainerAction.READ_FILE:
-            from .container_files import ReadFileParams
-            read_params = ReadFileParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await read_container_file(read_params)
+            from .container_files import read_container_file
+            return await read_container_file(container_id, **params.params)
             
         elif action == ContainerAction.WRITE_FILE:
-            from .container_files import WriteFileParams
-            write_params = WriteFileParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await write_container_file(write_params)
+            from .container_files import write_container_file
+            return await write_container_file(container_id, **params.params)
             
         elif action == ContainerAction.LIST_NETWORKS:
-            from .container_network import ListNetworksParams
-            network_params = ListNetworksParams(**params.params)
-            result = await list_networks(network_params)
+            from .container_network import list_networks
+            return await list_networks(**params.params)
             
         elif action == ContainerAction.GET_RESOURCES:
-            from .container_resources import GetContainerResourcesParams
-            resources_params = GetContainerResourcesParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await get_container_resources(resources_params)
+            from .container_resources import get_container_resources
+            return await get_container_resources(container_id, **params.params)
             
         elif action == ContainerAction.RESET_RESOURCES:
-            from .container_resources import ResetContainerResourcesParams
-            reset_params = ResetContainerResourcesParams(
-                container_id=container_id,
-                **params.params
-            )
-            result = await reset_container_resources(reset_params)
+            from .container_resources import reset_container_resources
+            return await reset_container_resources(container_id, **params.params)
             
         elif action == ContainerAction.LIST_VOLUMES:
-            from .container_volumes import ListVolumesParams
-            volumes_params = ListVolumesParams(**params.params)
-            result = await list_volumes(volumes_params)
+            from .container_volumes import list_volumes
+            return await list_volumes(**params.params)
             
         elif action == ContainerAction.CREATE_VOLUME:
-            from .container_volumes import CreateVolumeParams
-            create_vol_params = CreateVolumeParams(**params.params)
-            result = await create_volume(create_vol_params)
+            from .container_volumes import create_volume
+            return await create_volume(**params.params)
             
         elif action == ContainerAction.INSPECT_VOLUME:
-            from .container_volumes import InspectVolumeParams
-            inspect_vol_params = InspectVolumeParams(**params.params)
-            result = await inspect_volume(inspect_vol_params)
+            from .container_volumes import inspect_volume
+            return await inspect_volume(params.params.get('volume_name'))
             
         elif action == ContainerAction.LIST_IMAGES:
-            from .container_images import ListImagesParams
-            images_params = ListImagesParams(**params.params)
-            result = await list_images(images_params)
+            from .container_images import list_images
+            return await list_images(**params.params)
             
         elif action == ContainerAction.PULL_IMAGE:
-            from .container_images import PullImageParams
-            pull_params = PullImageParams(**params.params)
-            result = await pull_image(pull_params)
+            from .container_images import pull_image
+            return await pull_image(params.params.get('image_name'), **params.params)
             
         elif action == ContainerAction.BUILD_IMAGE:
-            from .container_images import BuildImageParams
-            build_params = BuildImageParams(**params.params)
-            result = await build_image(build_params)
+            from .container_images import build_image
+            return await build_image(**params.params)
             
         else:
-            raise ValueError(f"Unsupported action: {action}")
-        
-        # Return the result with additional context
-        response = {
-            'status': 'success',
-            'action': action.value,
-            'result': result
-        }
-        
-        if container_id:
-            response['container_id'] = container_id
+            error_msg = f"Unsupported action: {action}"
+            logger.error(error_msg)
+            return ContainerOperationResponse.error(
+                container_id=container_id,
+                error=error_msg,
+                message=f"Unsupported action: {action}"
+            )
             
-        return response
-        
-    except ValueError as e:
-        error_msg = f"Validation error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'action': action.value if 'action' in locals() else 'unknown',
-            'container_id': container_id if 'container_id' in locals() else None
-        }
-        
-    except APIError as e:
+    except (DockerException, APIError) as e:
         error_msg = f"Docker API error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'action': action.value if 'action' in locals() else 'unknown',
-            'container_id': container_id if 'container_id' in locals() else None
-        }
-        
-    except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'action': action.value if 'action' in locals() else 'unknown',
-            'container_id': container_id if 'container_id' in locals() else None
-        }
+        logger.error(error_msg, exc_info=True)
+        return ContainerOperationResponse.error(
+            container_id=params.container_id,
+            error=error_msg,
+            message="Docker API error occurred"
+        )
         
     except Exception as e:
-        error_msg = f"Unexpected error during container management: {str(e)}"
+        error_msg = f"Error managing container: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'action': action.value if 'action' in locals() else 'unknown',
-            'container_id': container_id if 'container_id' in locals() else None
-        }
+        return ContainerOperationResponse.error(
+            container_id=params.container_id,
+            error=error_msg,
+            message="An unexpected error occurred"
+        )
+
+# Register the tool with MCP
+__all__ = [
+    'manage_container',
+    'ContainerRequest',
+    'ContainerAction'
+]

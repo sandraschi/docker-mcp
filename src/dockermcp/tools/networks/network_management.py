@@ -15,13 +15,26 @@ import ipaddress
 from datetime import datetime
 from enum import Enum
 from ipaddress import IPv4Network, IPv6Network
-from typing import Any, Dict, Generic, List, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Generic, List, Literal, Optional, Type, TypeVar, Union, get_args, get_origin
 
 import docker
 from docker.errors import DockerException, InvalidArgument
 from fastmcp.exceptions import ToolError as ToolError
 # Import the mcp instance for tool registration
-from pydantic import BaseModel, ConfigDict, Field, HttpUrl, IPvAnyAddress, IPvAnyNetwork, TypeAdapter, field_validator
+from pydantic import (
+    BaseModel, 
+    ConfigDict, 
+    Field, 
+    HttpUrl, 
+    IPvAnyAddress, 
+    IPvAnyNetwork, 
+    TypeAdapter,
+    field_validator,
+    model_validator,
+    ValidationInfo,
+    field_serializer
+)
+from pydantic_core import PydanticUndefined, field_validator
 
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
@@ -69,11 +82,81 @@ async def remove_network(network_id: str, force: bool = False) -> Dict[str, Any]
 T = TypeVar('T')
 
 class BaseResponse(BaseModel, Generic[T]):
-    """Base response model for all API responses."""
-    status: Literal['success', 'error'] = Field(..., description="Status of the operation")
-    message: Optional[str] = Field(None, description="Human-readable message about the result")
-    data: Optional[T] = Field(None, description="Response data if successful")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+    """Base response model for all API responses.
+
+    Generic type T represents the type of the data field.
+    """
+    status: Literal['success', 'error'] = Field(
+        ...,
+        description="Status of the operation, either 'success' or 'error'"
+    )
+    message: Optional[str] = Field(
+        default=None,
+        description="Human-readable message about the result"
+    )
+    data: Optional[T] = Field(
+        default=None,
+        description="Response data if the operation was successful"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if the operation failed"
+    )
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "status": "success",
+                "message": "Operation completed successfully",
+                "data": {},
+                "error": None
+            }
+        },
+        # Pydantic v2 specific settings
+        strict=True,
+        validate_assignment=True,
+        validate_default=True,
+        extra='ignore',
+        use_enum_values=True,
+        from_attributes=True
+    )
+    
+    @field_validator('data')
+    @classmethod
+    def validate_data(cls, v: Any, info: ValidationInfo) -> Any:
+        if info.data.get('status') == 'error' and v is not None:
+            raise ValueError("Data should be None when status is 'error'")
+        return v
+    
+    @field_validator('error')
+    @classmethod
+    def validate_error(cls, v: Optional[str], info: ValidationInfo) -> Optional[str]:
+        if info.data.get('status') == 'success' and v is not None:
+            raise ValueError("Error should be None when status is 'success'")
+        return v
+    
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation of the model with proper serialization."""
+        # Use the default serialization but ensure proper handling of custom types
+        return super().model_dump_json(
+            exclude_none=True,
+            **kwargs
+        )
+        
+    @classmethod
+    def model_validate_json(
+        cls: Type['BaseResponse[T]'],
+        json_data: str | bytes | bytearray,
+        *,
+        strict: bool | None = None,
+        context: dict[str, Any] | None = None,
+    ) -> 'BaseResponse[T]':
+        """Parse JSON data into a BaseResponse instance."""
+        return super().model_validate_json(
+            json_data,
+            strict=strict,
+            context=context
+        )
 
     @classmethod
     def success(
@@ -81,30 +164,50 @@ class BaseResponse(BaseModel, Generic[T]):
         data: T = None,
         message: str = "Operation completed successfully"
     ) -> 'BaseResponse[T]':
-        """Create a success response."""
+        """Create a success response.
+        
+        Args:
+            data: The data to include in the response
+            message: Optional success message
+            
+        Returns:
+            A BaseResponse instance with status 'success'
+        """
         return cls(status='success', message=message, data=data)
 
     @classmethod
     def error_response(
         cls: Type['BaseResponse[T]'],
         error: str,
-        message: str = None
+        message: str = None,
+        data: Any = None
     ) -> 'BaseResponse[T]':
-        """Create an error response."""
+        """Create an error response.
+        
+        Args:
+            error: Error message or description
+            message: Optional human-readable message
+            data: Optional additional error data
+            
+        Returns:
+            A BaseResponse instance with status 'error'
+        """
         return cls(
             status='error',
             message=message or "An error occurred",
-            error=error
+            error=error,
+            data=data
         )
-
-    class Config:
-        json_encoders = {
-            datetime: lambda v: v.isoformat(),
-            IPv4Network: str,
-            IPv6Network: str,
-            ipaddress.IPv4Address: str,
-            ipaddress.IPv6Address: str
-        }
+        
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation of the model.
+        
+        Overrides the default to ensure proper serialization of custom types.
+        """
+        return super().model_dump_json(
+            exclude_none=True,
+            **kwargs
+        )
 
 class NetworkDriver(str, Enum):
     """Supported Docker network drivers."""
@@ -135,12 +238,6 @@ class IPAMConfig(BaseModel):
     )
 
     model_config = ConfigDict(
-        json_encoders={
-            IPv4Network: str,
-            IPv6Network: str,
-            ipaddress.IPv4Address: str,
-            ipaddress.IPv6Address: str
-        },
         json_schema_extra={
             "example": {
                 "subnet": "172.28.0.0/16",
@@ -148,6 +245,33 @@ class IPAMConfig(BaseModel):
             }
         }
     )
+    
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation with proper serialization of IP addresses."""
+        # Convert IP addresses and networks to strings for JSON serialization
+        data = self.model_dump(exclude_none=True, **kwargs)
+        
+        # Handle IPv4Network and IPv6Network
+        if 'subnet' in data and data['subnet'] is not None:
+            if hasattr(data['subnet'], '__str__'):
+                data['subnet'] = str(data['subnet'])
+                
+        if 'ip_range' in data and data['ip_range'] is not None:
+            if hasattr(data['ip_range'], '__str__'):
+                data['ip_range'] = str(data['ip_range'])
+                
+        # Handle IPv4Address and IPv6Address in gateway and aux_addresses
+        if 'gateway' in data and data['gateway'] is not None:
+            if hasattr(data['gateway'], '__str__'):
+                data['gateway'] = str(data['gateway'])
+                
+        if 'aux_addresses' in data and data['aux_addresses'] is not None:
+            for key, value in data['aux_addresses'].items():
+                if hasattr(value, '__str__'):
+                    data['aux_addresses'][key] = str(value)
+        
+        import json
+        return json.dumps(data, default=str)
 
 class NetworkListRequest(BaseModel):
     """Request model for listing Docker networks."""
@@ -184,31 +308,45 @@ class NetworkListRequest(BaseModel):
     )
 
 class NetworkSummary(BaseModel):
-    """Summary information about a Docker network."""
-    id: str = Field(..., description="Network ID")
-    name: str = Field(..., description="Network name")
-    driver: str = Field(..., description="Network driver")
-    scope: str = Field(..., description="Network scope (e.g., 'local', 'swarm')")
-    created: Optional[datetime] = Field(None, description="When the network was created")
-    internal: bool = Field(..., description="Whether the network is internal")
-    enable_ipv6: bool = Field(..., description="Whether IPv6 is enabled")
+    """Summary information about a Docker network.
+    
+    This model provides a summary view of a Docker network, including its
+    configuration and connected containers.
+    """
+    id: str = Field(..., description="Unique identifier for the network")
+    name: str = Field(..., description="Name of the network")
+    driver: str = Field(..., description="Driver used by the network")
+    scope: str = Field(..., description="Scope of the network (e.g., 'local', 'swarm')")
+    created: Optional[datetime] = Field(
+        default=None,
+        description="When the network was created"
+    )
+    internal: bool = Field(
+        default=False,
+        description="Whether the network is internal (no external access)"
+    )
+    enable_ipv6: bool = Field(
+        default=False,
+        description="Whether IPv6 is enabled on the network"
+    )
     labels: Dict[str, str] = Field(
         default_factory=dict,
-        description="Network labels"
+        description="User-defined key/value metadata for the network"
     )
-    containers: Dict[str, Any] = Field(
+    containers: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Containers connected to the network"
+        description="Containers connected to the network, keyed by container ID"
     )
     ipam: Dict[str, Any] = Field(
         default_factory=dict,
-        description="IPAM configuration"
+        description="IP Address Management configuration"
     )
     options: Dict[str, str] = Field(
         default_factory=dict,
         description="Driver-specific options"
     )
-
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -216,23 +354,113 @@ class NetworkSummary(BaseModel):
                 "name": "my-network",
                 "driver": "bridge",
                 "scope": "local",
+                "created": "2023-01-01T12:00:00Z",
                 "internal": False,
                 "enable_ipv6": False,
                 "labels": {"environment": "development"},
-                "containers": {},
-                "ipam": {"Driver": "default", "Config": [{"Subnet": "172.28.0.0/16"}]},
-                "options": {}
+                "containers": {
+                    "container1": {
+                        "Name": "web",
+                        "EndpointID": "abcd1234...",
+                        "MacAddress": "02:42:ac:1c:00:02",
+                        "IPv4Address": "172.28.0.2/16",
+                        "IPv6Address": ""
+                    }
+                },
+                "ipam": {
+                    "Driver": "default",
+                    "Config": [
+                        {
+                            "Subnet": "172.28.0.0/16",
+                            "Gateway": "172.28.0.1"
+                        }
+                    ]
+                },
+                "options": {
+                    "com.docker.network.bridge.name": "docker0"
+                }
             }
         }
     )
+    
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation with proper datetime serialization."""
+        data = self.model_dump(exclude_none=True, **kwargs)
+        
+        # Ensure datetime is properly formatted
+        if 'created' in data and data['created'] is not None:
+            if hasattr(data['created'], 'isoformat'):
+                data['created'] = data['created'].isoformat()
+                
+        import json
+        return json.dumps(data, default=str)
+    
+    @classmethod
+    def from_docker_network(cls, network: Any) -> 'NetworkSummary':
+        """Create a NetworkSummary from a Docker network object.
+        
+        Args:
+            network: A Docker SDK network object
+            
+        Returns:
+            A NetworkSummary instance populated from the Docker network
+        """
+        if not network:
+            raise ValueError("Network cannot be None")
+            
+        return cls(
+            id=network.id,
+            name=network.name,
+            driver=network.attrs.get('Driver', ''),
+            scope=network.attrs.get('Scope', ''),
+            created=network.attrs.get('Created'),
+            internal=network.attrs.get('Internal', False),
+            enable_ipv6=network.attrs.get('EnableIPv6', False),
+            labels=network.attrs.get('Labels', {}),
+            containers=network.attrs.get('Containers', {}),
+            ipam=network.attrs.get('IPAM', {}),
+            options=network.attrs.get('Options', {})
+        )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model.
+        
+        Overrides the default to ensure proper serialization of custom types.
+        """
+        data = super().model_dump(exclude_none=True, **kwargs)
+        
+        # Ensure datetime is properly formatted
+        if 'created' in data and data['created']:
+            if isinstance(data['created'], datetime):
+                data['created'] = data['created'].isoformat()
+                
+        return data
 
 class NetworkListResponse(BaseModel):
-    """Response model for listing Docker networks."""
-    status: str = Field(..., description="Status of the operation")
-    message: Optional[str] = Field(None, description="Human-readable message")
-    data: List[NetworkSummary] = Field(default_factory=list, description="List of network summaries")
-    count: int = Field(0, description="Number of networks returned")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+    """Response model for listing Docker networks.
+    
+    This extends BaseResponse with additional fields specific to network listing.
+    """
+    status: Literal['success', 'error'] = Field(
+        ...,
+        description="Status of the operation, either 'success' or 'error'"
+    )
+    message: str = Field(
+        ...,
+        description="Human-readable message about the result"
+    )
+    data: List[NetworkSummary] = Field(
+        default_factory=list,
+        description="List of network summaries"
+    )
+    count: int = Field(
+        default=0,
+        description="Number of networks returned in the response"
+    )
+    error: Optional[str] = Field(
+        default=None,
+        description="Error message if the operation failed"
+    )
     
     model_config = ConfigDict(
         json_schema_extra={
@@ -245,64 +473,221 @@ class NetworkListResponse(BaseModel):
                         "name": "bridge",
                         "driver": "bridge",
                         "scope": "local",
+                        "created": "2023-01-01T12:00:00Z",
                         "internal": False,
                         "enable_ipv6": False,
+                        "labels": {"environment": "development"},
+                        "containers": {},
                         "ipam": {"Driver": "default"},
-                        "options": {},
-                        "labels": {}
+                        "options": {}
                     }
                 ],
-                "count": 1
+                "count": 1,
+                "error": None
+            }
+        },
+        # Pydantic v2 specific settings
+        strict=True,
+        validate_assignment=True,
+        validate_default=True,
+        extra='ignore',
+        use_enum_values=True,
+        from_attributes=True
+    )
+    
+    @classmethod
+    def model_validate(
+        cls,
+        obj: Any,
+        *,
+        strict: bool | None = None,
+        from_attributes: bool | None = None,
+        context: dict[str, Any] | None = None
+    ) -> 'NetworkListResponse':
+        """Validate and parse the input data into a model instance."""
+        # Ensure data is properly converted to NetworkSummary objects
+        if isinstance(obj, dict):
+            data = obj.get('data', [])
+            if data and not all(isinstance(item, NetworkSummary) for item in data):
+                obj['data'] = [NetworkSummary.model_validate(item) for item in data]
+        return super().model_validate(
+            obj,
+            strict=strict,
+            from_attributes=from_attributes,
+            context=context
+        )
+    
+    @field_validator('data', mode='before')
+    @classmethod
+    def validate_data(cls, v: Any) -> List[NetworkSummary]:
+        """Validate and convert data field to List[NetworkSummary]."""
+        if v is None:
+            return []
+        if isinstance(v, list):
+            return [
+                item if isinstance(item, NetworkSummary) else NetworkSummary.model_validate(item)
+                for item in v
+            ]
+        return [NetworkSummary.model_validate(v)]
+    
+    @classmethod
+    def from_networks(
+        cls,
+        networks: List[Any],
+        message: str = "Networks listed successfully"
+    ) -> 'NetworkListResponse':
+        """Create a response from a list of Docker network objects.
+        
+        Args:
+            networks: List of Docker SDK network objects
+            message: Optional success message
+            
+        Returns:
+            A NetworkListResponse instance with the network data
+        """
+        network_summaries = [
+            NetworkSummary.from_docker_network(network)
+            for network in networks
+        ]
+        
+        return cls(
+            status="success",
+            message=message,
+            data=network_summaries,
+            count=len(network_summaries)
+        )
+    
+    @classmethod
+    def success(
+        cls,
+        data: List[Union[NetworkSummary, dict]],
+        message: str = "Networks listed successfully"
+    ) -> 'NetworkListResponse':
+        """Create a success response for network listing.
+        
+        Args:
+            data: List of NetworkSummary objects or dicts
+            message: Optional success message
+            
+        Returns:
+            A NetworkListResponse instance with status 'success'
+        """
+        validated_data = [
+            item if isinstance(item, NetworkSummary) else NetworkSummary.model_validate(item)
+            for item in data
+        ]
+        return cls(
+            status="success",
+            message=message,
+            data=validated_data,
+            count=len(validated_data)
+        )
+    
+    @classmethod
+    def error(
+        cls,
+        error: Union[str, Exception],
+        message: str = "Failed to list networks"
+    ) -> 'NetworkListResponse':
+        """Create an error response for network listing.
+        
+        Args:
+            error: Error message or exception
+            message: Optional error message
+            
+        Returns:
+            A NetworkListResponse instance with status 'error'
+        """
+        error_msg = str(error)
+        return cls(
+            status="error",
+            message=message,
+            error=error_msg,
+            data=[],
+            count=0
+        )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model."""
+        return super().model_dump(exclude_none=True, **kwargs)
+        
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation of the model."""
+        return super().model_dump_json(exclude_none=True, **kwargs)
+
+class NetworkIPAMConfig(BaseModel):
+    """IPAM (IP Address Management) configuration for Docker networks.
+    
+    This model represents the IPAM configuration used when creating or updating
+    a Docker network, including the driver, configuration blocks, and options.
+    """
+    driver: str = Field(
+        default="default",
+        description="Name of the IPAM driver to use"
+    )
+    config: List[Dict[str, str]] = Field(
+        default_factory=list,
+        description="List of IPAM configuration blocks, each with subnet, IP range, and gateway"
+    )
+    options: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Driver-specific options as key-value pairs"
+    )
+    
+    # Pydantic v2 model configuration
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "driver": "default",
+                "config": [
+                    {
+                        "Subnet": "172.28.0.0/16",
+                        "IPRange": "172.28.5.0/24",
+                        "Gateway": "172.28.5.1"
+                    }
+                ],
+                "options": {
+                    "foo": "bar"
+                }
             }
         }
     )
     
-    @classmethod
-    def model_validate(cls, data):
-        """Validate and parse the response data."""
-        if isinstance(data, dict):
-            if 'data' not in data:
-                data = {'data': data}
-            if 'count' not in data:
-                data['count'] = len(data.get('data', []))
-        return cls(**data)
-
-    @classmethod
-    def success(cls, data: List[NetworkSummary], message: str = "Networks listed successfully") -> 'NetworkListResponse':
-        """Create a success response for network listing."""
-        return cls(
-            status="success",
-            message=message,
-            data=data,
-            count=len(data)
-        )
+    def model_dump_json(self, **kwargs) -> str:
+        """Generate a JSON representation with proper serialization of IP addresses."""
+        # Convert the model to a dictionary
+        data = self.model_dump(exclude_none=True, **kwargs)
         
-    @classmethod
-    def error(cls, error: str, message: str = "Failed to list networks") -> 'NetworkListResponse':
-        """Create an error response for network listing."""
-        return cls(
-            status="error",
-            message=message,
-            error=error,
-            data=[],
-            count=0
-        )
-
-class NetworkIPAMConfig(BaseModel):
-    """IPAM configuration for creating a Docker network."""
-    driver: str = Field(
-        default="default",
-        description="IPAM driver to use"
-    )
-    config: List[Dict[str, str]] = Field(
-        default_factory=list,
-        description="List of IPAM config blocks"
-    )
-    options: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Driver-specific options"
-    )
-
+        # Ensure all IP addresses and networks are properly serialized to strings
+        if 'config' in data and isinstance(data['config'], list):
+            for config_item in data['config']:
+                for key, value in config_item.items():
+                    if hasattr(value, '__str__'):
+                        config_item[key] = str(value)
+                        
+        # Handle options if needed
+        if 'options' in data and data['options'] is not None:
+            for key, value in data['options'].items():
+                if hasattr(value, '__str__'):
+                    data['options'][key] = str(value)
+        
+        import json
+        return json.dumps(data, default=str)
+        
+    def to_docker_dict(self) -> Dict[str, Any]:
+        """Convert to a dictionary compatible with Docker SDK.
+        
+        Returns:
+            Dictionary with the IPAM configuration in Docker SDK format
+        """
+        return {
+            'Driver': self.driver,
+            'Config': [
+                {k: str(v) for k, v in config.items() if v is not None}
+                for config in self.config
+            ],
+            'Options': self.options or {}
+        }
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -318,44 +703,56 @@ class NetworkIPAMConfig(BaseModel):
     )
 
 class NetworkCreateRequest(BaseModel):
-    """Request model for creating a new Docker network."""
-    name: str = Field(..., description="Name of the network")
+    """Request model for creating a Docker network.
+    
+    This model defines the parameters required to create a new Docker network,
+    including network configuration, IPAM settings, and driver options.
+    """
+    name: str = Field(
+        ...,
+        min_length=2,
+        max_length=255,
+        pattern=r'^[a-zA-Z0-9][a-zA-Z0-9_.-]*$',
+        description="Name of the network to create (2-255 chars, alphanumeric with ._-)"
+    )
     driver: NetworkDriver = Field(
         default=NetworkDriver.BRIDGE,
-        description="Driver to manage the Network"
+        description="Network driver to use"
     )
     check_duplicate: bool = Field(
         default=True,
-        description="Check for networks with duplicate names"
+        description="If True, checks for networks with duplicate names"
     )
     internal: bool = Field(
         default=False,
-        description="Restrict external access to the network"
+        description="If True, restricts external access to the network"
     )
     attachable: bool = Field(
         default=False,
-        description="Enable manual container attachment"
+        description="If True, allows manual container attachment"
     )
     ingress: bool = Field(
         default=False,
-        description="Create an ingress network which provides the routing-mesh"
+        description="If True, creates an ingress network for Swarm services"
+    )
+    ipam: NetworkIPAMConfig = Field(
+        default_factory=NetworkIPAMConfig,
+        description="IP Address Management configuration"
     )
     enable_ipv6: bool = Field(
         default=False,
-        description="Enable IPv6 on the network"
-    )
-    options: Dict[str, str] = Field(
-        default_factory=dict,
-        description="Driver-specific options"
+        description="If True, enables IPv6 on the network"
     )
     labels: Dict[str, str] = Field(
         default_factory=dict,
-        description="Labels to set on the network"
+        description="Metadata in key-value pairs"
     )
-    ipam: Optional[NetworkIPAMConfig] = Field(
-        default=None,
-        description="Optional custom IPAM configuration"
+    options: Dict[str, str] = Field(
+        default_factory=dict,
+        description="Driver-specific options as key-value pairs"
     )
+    
+    # Pydantic v2 model configuration
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -479,25 +876,38 @@ class NetworkRemoveResponse(BaseResponse[Dict[str, Any]]):
         )
 
 
-class NetworkConnectResponse(BaseModel):
-    """Response model for connecting a container to a network."""
-    status: str = Field(..., description="Status of the operation")
-    message: str = Field(..., description="Human-readable message")
-    container_id: str = Field(..., description="ID of the container")
-    network_id: str = Field(..., description="ID of the network")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+class NetworkConnectResponse(BaseResponse[Dict[str, str]]):
+    """Response model for connecting a container to a Docker network.
     
+    This model extends BaseResponse with container and network identifiers
+    to provide detailed feedback about the connection operation.
+    """
+    container_id: str = Field(
+        default="",
+        description="ID of the container that was connected"
+    )
+    network_id: str = Field(
+        default="",
+        description="ID of the network the container was connected to"
+    )
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "status": "success",
                 "message": "Container connected to network successfully",
+                "data": {
+                    "container_id": "c1d2e3f4g5h6",
+                    "network_id": "n1m2n3m4n5m6"
+                },
                 "container_id": "c1d2e3f4g5h6",
-                "network_id": "n1m2n3m4n5m6"
+                "network_id": "n1m2n3m4n5m6",
+                "error": None
             }
         }
     )
-
+    
     @classmethod
     def success(
         cls,
@@ -505,10 +915,20 @@ class NetworkConnectResponse(BaseModel):
         network_id: str,
         message: str = "Container connected to network successfully"
     ) -> 'NetworkConnectResponse':
-        """Create a success response for network connection."""
+        """Create a success response for network connection.
+        
+        Args:
+            container_id: ID of the connected container
+            network_id: ID of the network
+            message: Optional success message
+            
+        Returns:
+            A NetworkConnectResponse instance with status 'success'
+        """
         return cls(
             status="success",
             message=message,
+            data={"container_id": container_id, "network_id": network_id},
             container_id=container_id,
             network_id=network_id
         )
@@ -516,52 +936,88 @@ class NetworkConnectResponse(BaseModel):
     @classmethod
     def error(
         cls,
-        error: str,
-        message: str = "Failed to connect container to network"
+        error: Union[str, Exception],
+        message: str = "Failed to connect container to network",
+        container_id: str = "",
+        network_id: str = ""
     ) -> 'NetworkConnectResponse':
-        """Create an error response for network connection."""
+        """Create an error response for network connection.
+        
+        Args:
+            error: Error message or exception
+            message: Optional error message
+            container_id: Optional container ID if known
+            network_id: Optional network ID if known
+            
+        Returns:
+            A NetworkConnectResponse instance with status 'error'
+        """
+        error_msg = str(error)
         return cls(
             status="error",
             message=message,
-            error=error,
-            container_id="",
-            network_id=""
+            error=error_msg,
+            data={"container_id": container_id, "network_id": network_id},
+            container_id=container_id,
+            network_id=network_id
         )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model.
+        
+        Overrides the default to ensure proper serialization of nested models.
+        """
+        data = super().model_dump(exclude_none=True, **kwargs)
+        return data
 
 
 class NetworkConnectRequest(BaseModel):
-    """Request model for connecting a container to a network."""
-    container: str = Field(..., description="Container ID or name")
-    network: str = Field(..., description="Network ID or name")
+    """Request model for connecting a container to a Docker network.
+    
+    This model defines the parameters required to connect a container to a network,
+    including IP addressing, aliases, and driver options.
+    """
+    container: str = Field(
+        ...,
+        min_length=1,
+        description="ID or name of the container to connect"
+    )
+    network: str = Field(
+        ...,
+        min_length=1,
+        description="ID or name of the network to connect to"
+    )
     ipv4_address: Optional[IPvAnyAddress] = Field(
         default=None,
-        description="IPv4 address (e.g., 172.30.100.104)"
+        description="IPv4 address to assign to the container (e.g., 172.30.100.104)"
     )
     ipv6_address: Optional[IPvAnyAddress] = Field(
         default=None,
-        description="IPv6 address (e.g., 2001:db8::33)"
+        description="IPv6 address to assign to the container (e.g., 2001:db8::33)"
     )
     aliases: List[str] = Field(
         default_factory=list,
-        description="List of network-scoped aliases for the container"
+        description="Network-scoped aliases for the container"
     )
     links: Dict[str, str] = Field(
         default_factory=dict,
-        description="Mapping of container name to alias for linking"
+        description="Mapping of container names to aliases for service discovery"
     )
     link_local_ips: List[str] = Field(
         default_factory=list,
-        description="List of link-local IP addresses"
+        description="List of link-local IP addresses for the container"
     )
     driver_opt: Dict[str, str] = Field(
         default_factory=dict,
-        description="Driver options for the endpoint"
+        description="Driver-specific options for the endpoint"
     )
     mac_address: Optional[str] = Field(
         default=None,
-        description="MAC address for the container on this network"
+        pattern=r'^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$',
+        description="MAC address for the container's network interface (format: 00:11:22:33:44:55)"
     )
-
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -576,14 +1032,27 @@ class NetworkConnectRequest(BaseModel):
 
 
 class NetworkDisconnectRequest(BaseModel):
-    """Request model for disconnecting a container from a network."""
-    container: str = Field(..., description="Container ID or name")
-    network: str = Field(..., description="Network ID or name")
+    """Request model for disconnecting a container from a Docker network.
+    
+    This model defines the parameters required to disconnect a container from a network,
+    including an option to force the disconnection if the container is running.
+    """
+    container: str = Field(
+        ...,
+        min_length=1,
+        description="ID or name of the container to disconnect"
+    )
+    network: str = Field(
+        ...,
+        min_length=1,
+        description="ID or name of the network to disconnect from"
+    )
     force: bool = Field(
         default=False,
-        description="Force the container to disconnect from the network"
+        description="Force disconnection even if the container is running"
     )
-
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -593,34 +1062,47 @@ class NetworkDisconnectRequest(BaseModel):
             }
         }
     )
+    
+    def to_docker_params(self) -> Dict[str, Any]:
+        """Convert the request to parameters for Docker SDK.
+        
+        Returns:
+            Dictionary of parameters for Docker SDK disconnect operation
+        """
+        return {
+            "container": self.container,
+            "force": self.force
+        }
 
 
-class NetworkDisconnectResponse(BaseModel):
-    """Response model for disconnecting a container from a network."""
-    status: str = Field(..., description="Status of the operation")
-    message: str = Field(..., description="Human-readable message")
-    container_id: str = Field(..., description="ID of the container")
-    network_id: str = Field(..., description="ID of the network")
-    data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Additional response data"
+class NetworkDisconnectResponse(BaseResponse[Dict[str, str]]):
+    """Response model for disconnecting a container from a Docker network.
+    
+    This model extends BaseResponse with container and network identifiers
+    to provide detailed feedback about the disconnection operation.
+    """
+    container_id: str = Field(
+        default="",
+        description="ID of the container that was disconnected"
     )
-    error: Optional[str] = Field(
-        None,
-        description="Error message if operation failed"
+    network_id: str = Field(
+        default="",
+        description="ID of the network the container was disconnected from"
     )
     
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "status": "success",
                 "message": "Container disconnected from network successfully",
-                "container_id": "c1d2e3f4g5h6",
-                "network_id": "n1m2n3m4n5m6",
                 "data": {
                     "container_id": "c1d2e3f4g5h6",
                     "network_id": "n1m2n3m4n5m6"
-                }
+                },
+                "container_id": "c1d2e3f4g5h6",
+                "network_id": "n1m2n3m4n5m6",
+                "error": None
             }
         }
     )
@@ -632,54 +1114,187 @@ class NetworkDisconnectResponse(BaseModel):
         network_id: str,
         message: str = "Container disconnected from network successfully"
     ) -> 'NetworkDisconnectResponse':
-        """Create a success response for network disconnection."""
+        """Create a success response for network disconnection.
+        
+        Args:
+            container_id: ID of the disconnected container
+            network_id: ID of the network
+            message: Optional success message
+            
+        Returns:
+            A NetworkDisconnectResponse instance with status 'success'
+        """
         return cls(
             status="success",
             message=message,
+            data={"container_id": container_id, "network_id": network_id},
             container_id=container_id,
-            network_id=network_id,
-            data={"container_id": container_id, "network_id": network_id}
+            network_id=network_id
         )
         
     @classmethod
     def error(
         cls,
-        error: str,
-        message: str = "Failed to disconnect container from network"
+        error: Union[str, Exception],
+        message: str = "Failed to disconnect container from network",
+        container_id: str = "",
+        network_id: str = ""
     ) -> 'NetworkDisconnectResponse':
-        """Create an error response for network disconnection."""
+        """Create an error response for network disconnection.
+        
+        Args:
+            error: Error message or exception
+            message: Optional error message
+            container_id: Optional container ID if known
+            network_id: Optional network ID if known
+            
+        Returns:
+            A NetworkDisconnectResponse instance with status 'error'
+        """
+        error_msg = str(error)
         return cls(
             status="error",
             message=message,
-            error=error,
-            container_id="",
-            network_id="",
-            data={}
+            error=error_msg,
+            data={"container_id": container_id, "network_id": network_id},
+            container_id=container_id,
+            network_id=network_id
         )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model.
+        
+        Overrides the default to ensure proper serialization of nested models.
+        """
+        data = super().model_dump(exclude_none=True, **kwargs)
+        return data
 
 
 class NetworkInspectResult(BaseModel):
-    """Detailed information about a Docker network."""
-    name: str = Field(..., description="Name of the network")
-    id: str = Field(..., description="ID of the network")
-    created: datetime = Field(..., description="When the network was created")
-    scope: str = Field(..., description="Scope of the network (e.g., 'local', 'swarm')")
-    driver: str = Field(..., description="Driver used by the network")
-    enable_ipv6: bool = Field(..., description="Whether IPv6 is enabled")
-    internal: bool = Field(..., description="Whether the network is internal")
-    attachable: bool = Field(..., description="Whether the network is attachable")
-    ingress: bool = Field(..., description="Whether this is the ingress network")
-    ipam: Dict[str, Any] = Field(..., description="IPAM configuration")
-    options: Dict[str, str] = Field(..., description="Driver-specific options")
-    labels: Dict[str, str] = Field(..., description="User-defined key/value metadata")
+    """Detailed information about a Docker network.
+    
+    This model provides a comprehensive view of a Docker network's configuration,
+    including its properties, connected containers, and IPAM settings.
+    """
+    name: str = Field(
+        ...,
+        description="Name of the network"
+    )
+    id: str = Field(
+        ...,
+        description="Unique identifier for the network"
+    )
+    created: datetime = Field(
+        ...,
+        description="Timestamp when the network was created"
+    )
+    scope: str = Field(
+        ...,
+        description="Scope of the network (e.g., 'local', 'swarm')"
+    )
+    driver: str = Field(
+        ...,
+        description="Network driver in use"
+    )
+    enable_ipv6: bool = Field(
+        ...,
+        description="Whether IPv6 is enabled on the network"
+    )
+    internal: bool = Field(
+        ...,
+        description="Whether the network is internal (no external access)"
+    )
+    attachable: bool = Field(
+        ...,
+        description="Whether containers can be attached to this network"
+    )
+    ingress: bool = Field(
+        ...,
+        description="Whether this is the ingress network for a Swarm"
+    )
+    ipam: Dict[str, Any] = Field(
+        ...,
+        description="IP Address Management configuration"
+    )
+    options: Dict[str, str] = Field(
+        ...,
+        description="Driver-specific options as key-value pairs"
+    )
+    labels: Dict[str, str] = Field(
+        ...,
+        description="User-defined metadata as key-value pairs"
+    )
     containers: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Information about containers in the network"
+        description="Containers connected to the network, keyed by container ID"
+    )
+    
+    # Pydantic v2 model configuration
+    model_config = ConfigDict(
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None
+        },
+        json_schema_extra={
+            "example": {
+                "name": "bridge",
+                "id": "7d86d31b1478...",
+                "created": "2023-01-01T12:00:00Z",
+                "scope": "local",
+                "driver": "bridge",
+                "enable_ipv6": False,
+                "internal": False,
+                "attachable": False,
+                "ingress": False,
+                "ipam": {
+                    "Driver": "default",
+                    "Config": [
+                        {
+                            "Subnet": "172.17.0.0/16",
+                            "Gateway": "172.17.0.1"
+                        }
+                    ]
+                },
+                "options": {
+                    "com.docker.network.bridge.default_bridge": "true",
+                    "com.docker.network.bridge.enable_icc": "true",
+                    "com.docker.network.bridge.enable_ip_masquerade": "true",
+                    "com.docker.network.bridge.host_binding_ipv4": "0.0.0.0",
+                    "com.docker.network.bridge.name": "docker0",
+                    "com.docker.network.driver.mtu": "1500"
+                },
+                "labels": {
+                    "com.docker.compose.network": "default",
+                    "com.docker.compose.project": "myproject"
+                },
+                "containers": {
+                    "container1": {
+                        "Name": "web",
+                        "EndpointID": "abcd1234...",
+                        "MacAddress": "02:42:ac:11:00:02",
+                        "IPv4Address": "172.17.0.2/16",
+                        "IPv6Address": ""
+                    }
+                }
+            }
+        }
     )
     
     @classmethod
     def from_network(cls, network: Any) -> 'NetworkInspectResult':
-        """Create a NetworkInspectResult from a Docker network object."""
+        """Create a NetworkInspectResult from a Docker network object.
+        
+        Args:
+            network: A Docker SDK network object
+            
+        Returns:
+            A NetworkInspectResult instance populated from the Docker network
+            
+        Raises:
+            ValueError: If the network object is None or invalid
+        """
+        if not network:
+            raise ValueError("Network cannot be None")
+            
         attrs = network.attrs
         return cls(
             name=attrs.get('Name', ''),
@@ -687,7 +1302,7 @@ class NetworkInspectResult(BaseModel):
             created=attrs.get('Created', ''),
             scope=attrs.get('Scope', ''),
             driver=attrs.get('Driver', ''),
-            enable_ipam=attrs.get('EnableIPv6', False),
+            enable_ipv6=attrs.get('EnableIPv6', False),
             internal=attrs.get('Internal', False),
             attachable=attrs.get('Attachable', False),
             ingress=attrs.get('Ingress', False),
@@ -696,20 +1311,44 @@ class NetworkInspectResult(BaseModel):
             labels=attrs.get('Labels', {}),
             containers=attrs.get('Containers', {})
         )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model.
+        
+        Overrides the default to ensure proper serialization of custom types.
+        """
+        data = super().model_dump(exclude_none=True, **kwargs)
+        
+        # Ensure datetime is properly formatted
+        if 'created' in data and data['created']:
+            if isinstance(data['created'], datetime):
+                data['created'] = data['created'].isoformat()
+                
+        return data
 
 
 class NetworkInspectRequest(BaseModel):
-    """Request model for inspecting a Docker network."""
-    network_id: str = Field(..., description="Network ID or name")
+    """Request model for inspecting a Docker network.
+    
+    This model defines the parameters for retrieving detailed information
+    about a Docker network, including its configuration and connected containers.
+    """
+    network_id: str = Field(
+        ...,
+        min_length=1,
+        description="ID or name of the network to inspect"
+    )
     verbose: bool = Field(
         default=False,
-        description="Detailed inspect output for the network"
+        description="If True, includes additional low-level information"
     )
     scope: str = Field(
         default="local",
-        description="Scope of the network (local or swarm)"
+        description="Scope of the network ('local' or 'swarm')",
+        pattern=r'^(local|swarm)$'
     )
-
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -719,35 +1358,73 @@ class NetworkInspectRequest(BaseModel):
             }
         }
     )
-
-
-class NetworkInspectResponse(BaseModel):
-    """Response model for inspecting a Docker network."""
-    status: str = Field(..., description="Status of the operation")
-    message: str = Field(..., description="Human-readable message")
-    data: NetworkInspectResult = Field(..., description="Detailed network information")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
     
+    def to_docker_params(self) -> Dict[str, Any]:
+        """Convert the request to parameters for Docker SDK.
+        
+        Returns:
+            Dictionary of parameters for Docker SDK inspect operation
+        """
+        return {
+            "name": self.network_id,
+            "verbose": self.verbose,
+            "scope": self.scope
+        }
+
+
+class NetworkInspectResponse(BaseResponse[NetworkInspectResult]):
+    """Response model for inspecting a Docker network.
+    
+    This model extends BaseResponse with detailed network information
+    retrieved from the Docker daemon.
+    """
+    data: NetworkInspectResult = Field(
+        ...,
+        description="Detailed network information and configuration"
+    )
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "status": "success",
                 "message": "Network details retrieved successfully",
                 "data": {
-                    "id": "a1b2c3d4e5f6",
-                    "name": "my-network",
-                    "driver": "bridge",
-                    "scope": "local",
+                    "name": "bridge",
+                    "id": "7d86d31b1478...",
                     "created": "2023-01-01T12:00:00Z",
+                    "scope": "local",
+                    "driver": "bridge",
                     "enable_ipv6": False,
                     "internal": False,
                     "attachable": False,
                     "ingress": False,
-                    "ipam": {"Driver": "default"},
-                    "options": {},
-                    "labels": {"environment": "development"},
-                    "containers": {}
-                }
+                    "ipam": {
+                        "Driver": "default",
+                        "Config": [
+                            {
+                                "Subnet": "172.17.0.0/16",
+                                "Gateway": "172.17.0.1"
+                            }
+                        ]
+                    },
+                    "options": {
+                        "com.docker.network.bridge.default_bridge": "true",
+                        "com.docker.network.bridge.enable_icc": "true"
+                    },
+                    "labels": {
+                        "com.docker.compose.network": "default"
+                    },
+                    "containers": {
+                        "container1": {
+                            "Name": "web",
+                            "EndpointID": "abcd1234...",
+                            "MacAddress": "02:42:ac:11:00:02",
+                            "IPv4Address": "172.17.0.2/16"
+                        }
+                    }
+                },
+                "error": None
             }
         }
     )
@@ -758,7 +1435,15 @@ class NetworkInspectResponse(BaseModel):
         data: NetworkInspectResult,
         message: str = "Network details retrieved successfully"
     ) -> 'NetworkInspectResponse':
-        """Create a success response with network details."""
+        """Create a success response with network details.
+        
+        Args:
+            data: NetworkInspectResult containing the network details
+            message: Optional success message
+            
+        Returns:
+            A NetworkInspectResponse instance with status 'success'
+        """
         return cls(
             status="success",
             message=message,
@@ -767,16 +1452,30 @@ class NetworkInspectResponse(BaseModel):
     
     @classmethod
     def from_network(cls, network: Any) -> 'NetworkInspectResponse':
-        """Create a response from a Docker network object."""
+        """Create a response from a Docker network object.
+        
+        Args:
+            network: A Docker SDK network object
+            
+        Returns:
+            A NetworkInspectResponse with the network details
+            
+        Raises:
+            ValueError: If the network object is None or invalid
+        """
+        if not network:
+            raise ValueError("Network cannot be None")
+            
         return cls.success(
             data=NetworkInspectResult.from_network(network)
         )
-    
+        
     @classmethod
     def error(
         cls,
-        error: str,
-        message: str = "Failed to retrieve network details"
+        error: Union[str, Exception],
+        message: str = "Failed to inspect network",
+        network_id: str = ""
     ) -> 'NetworkInspectResponse':
         """Create an error response."""
         return cls(
@@ -802,28 +1501,33 @@ class NetworkInspectResponse(BaseModel):
 
 
 class NetworkListRequest(BaseModel):
-    """Request model for listing Docker networks."""
+    """Request model for listing Docker networks with filtering options.
+    
+    This model defines the parameters for listing Docker networks with various
+    filtering capabilities to narrow down the results.
+    """
     names: Optional[List[str]] = Field(
         default=None,
-        description="Filter networks by name"
+        description="List of network names to include in the results"
     )
     ids: Optional[List[str]] = Field(
         default=None,
-        description="Filter networks by ID"
+        description="List of network IDs to include in the results"
     )
     driver: Optional[str] = Field(
         default=None,
-        description="Filter by network driver"
+        description="Filter networks by driver (e.g., 'bridge', 'host')"
     )
     network_type: str = Field(
         default="all",
-        description="Filter by network type: 'all', 'custom', or 'builtin'"
+        description="Type of networks to include: 'all', 'custom', or 'builtin'"
     )
     labels: Optional[Dict[str, str]] = Field(
         default=None,
-        description="Filter networks by labels"
+        description="Filter networks by label key-value pairs"
     )
-
+    
+    # Pydantic v2 model configuration
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -834,27 +1538,183 @@ class NetworkListRequest(BaseModel):
             }
         }
     )
+    
+    def to_docker_filters(self) -> Dict[str, Any]:
+        """Convert the request to Docker API filters.
+        
+        Returns:
+            Dictionary of filters compatible with Docker SDK
+        """
+        filters = {}
+        
+        if self.names:
+            filters["name"] = self.names
+            
+        if self.ids:
+            filters["id"] = self.ids
+            
+        if self.driver:
+            filters["driver"] = [self.driver]
+            
+        if self.network_type != 'all':
+            is_builtin = self.network_type == 'builtin'
+            builtin_names = ['bridge', 'host', 'none']
+            
+            if is_builtin:
+                if 'name' in filters:
+                    filters['name'] = [n for n in filters['name'] if n in builtin_names]
+                else:
+                    filters['name'] = builtin_names
+            else:
+                if 'name' in filters:
+                    filters['name'] = [n for n in filters['name'] if n not in builtin_names]
+                else:
+                    # This is a bit of a hack since Docker doesn't have a 'not in' filter
+                    # We'll need to handle this in the actual filtering logic
+                    pass
+                    
+        if self.labels:
+            filters["label"] = [f"{k}={v}" for k, v in self.labels.items()]
+            
+        return filters
 
 
 class NetworkSummary(BaseModel):
-    """Summary information about a Docker network."""
-    id: str = Field(..., description="ID of the network")
-    name: str = Field(..., description="Name of the network")
-    driver: str = Field(..., description="Driver used by the network")
-    scope: str = Field(..., description="Scope of the network (e.g., 'local', 'swarm')")
+    """Summary information about a Docker network.
+    
+    This model provides a condensed view of a Docker network's properties,
+    suitable for listing multiple networks without the full detail of inspection.
+    """
+    id: str = Field(
+        ...,
+        description="Unique identifier for the network"
+    )
+    name: str = Field(
+        ...,
+        description="Name of the network"
+    )
+    driver: str = Field(
+        ...,
+        description="Network driver in use (e.g., 'bridge', 'host', 'overlay')"
+    )
+    scope: str = Field(
+        ...,
+        description="Scope of the network ('local' or 'swarm')"
+    )
     created: Optional[datetime] = Field(
         None,
-        description="When the network was created"
+        description="Timestamp when the network was created"
     )
-    internal: bool = Field(..., description="Whether the network is internal")
-    enable_ipv6: bool = Field(..., description="Whether IPv6 is enabled")
-    ipam: Dict[str, Any] = Field(..., description="IPAM configuration")
-    options: Dict[str, str] = Field(..., description="Driver-specific options")
-    labels: Dict[str, str] = Field(..., description="User-defined key/value metadata")
+    internal: bool = Field(
+        ...,
+        description="Whether the network is internal (no external access)"
+    )
+    enable_ipv6: bool = Field(
+        ...,
+        description="Whether IPv6 is enabled on the network"
+    )
+    ipam: Dict[str, Any] = Field(
+        ...,
+        description="IP Address Management configuration"
+    )
+    options: Dict[str, str] = Field(
+        ...,
+        description="Driver-specific options as key-value pairs"
+    )
+    labels: Dict[str, str] = Field(
+        ...,
+        description="User-defined metadata as key-value pairs"
+    )
     containers: Dict[str, Dict[str, Any]] = Field(
         default_factory=dict,
-        description="Information about containers in the network"
+        description="Containers connected to the network, keyed by container ID"
     )
+    
+    # Pydantic v2 model configuration
+    model_config = ConfigDict(
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None
+        },
+        json_schema_extra={
+            "example": {
+                "id": "7d86d31b1478...",
+                "name": "bridge",
+                "driver": "bridge",
+                "scope": "local",
+                "created": "2023-01-01T12:00:00Z",
+                "internal": False,
+                "enable_ipv6": False,
+                "ipam": {
+                    "Driver": "default",
+                    "Config": [
+                        {
+                            "Subnet": "172.17.0.0/16",
+                            "Gateway": "172.17.0.1"
+                        }
+                    ]
+                },
+                "options": {
+                    "com.docker.network.bridge.default_bridge": "true"
+                },
+                "labels": {
+                    "com.docker.compose.network": "default"
+                },
+                "containers": {
+                    "container1": {
+                        "Name": "web",
+                        "EndpointID": "abcd1234...",
+                        "MacAddress": "02:42:ac:11:00:02",
+                        "IPv4Address": "172.17.0.2/16"
+                    }
+                }
+            }
+        }
+    )
+    
+    @classmethod
+    def from_network(cls, network: Any) -> 'NetworkSummary':
+        """Create a NetworkSummary from a Docker network object.
+        
+        Args:
+            network: A Docker SDK network object
+            
+        Returns:
+            A NetworkSummary instance populated from the Docker network
+            
+        Raises:
+            ValueError: If the network object is None or invalid
+        """
+        if not network:
+            raise ValueError("Network cannot be None")
+            
+        attrs = network.attrs
+        return cls(
+            id=network.id,
+            name=network.name,
+            driver=attrs.get('Driver', ''),
+            scope=attrs.get('Scope', ''),
+            created=attrs.get('Created'),
+            internal=attrs.get('Internal', False),
+            enable_ipv6=attrs.get('EnableIPv6', False),
+            ipam=attrs.get('IPAM', {}),
+            options=attrs.get('Options', {}),
+            labels=attrs.get('Labels', {}),
+            containers=attrs.get('Containers', {})
+        )
+        
+    def model_dump(self, **kwargs) -> Dict[str, Any]:
+        """Generate a dictionary representation of the model.
+        
+        Overrides the default to ensure proper serialization of custom types.
+        """
+        data = super().model_dump(exclude_none=True, **kwargs)
+        
+        # Ensure datetime is properly formatted
+        if 'created' in data and data['created']:
+            if isinstance(data['created'], datetime):
+                data['created'] = data['created'].isoformat()
+                
+        return data
 
 
 @mcp.tool(
@@ -901,7 +1761,10 @@ async def list_networks(params: NetworkListRequest) -> NetworkListResponse:
         ... ))
     """
     try:
+        # Initialize Docker client
         client = docker.from_env()
+        
+        # Get all networks
         networks = client.networks.list()
         
         # Apply filters
@@ -928,37 +1791,36 @@ async def list_networks(params: NetworkListRequest) -> NetworkListResponse:
                       for k, v in params.labels.items())
             ]
         
-        # Format the response
+        # Convert to NetworkSummary objects
         network_summaries = []
         for net in networks:
-            attrs = net.attrs
-            network_summaries.append(NetworkSummary(
-                id=net.id,
-                name=net.name,
-                driver=attrs.get('Driver', ''),
-                scope=attrs.get('Scope', ''),
-                created=datetime.fromisoformat(attrs['Created'][:-4]) if 'Created' in attrs else None,
-                internal=attrs.get('Internal', False),
-                enable_ipv6=attrs.get('EnableIPv6', False),
-                labels=attrs.get('Labels', {}),
-                containers=attrs.get('Containers', {}),
-                ipam=attrs.get('IPAM', {}),
-                options=attrs.get('Options', {})
-            ))
+            try:
+                network_summaries.append(NetworkSummary.from_docker_network(net))
+            except Exception as e:
+                logger.warning(f"Error processing network {net.id}: {str(e)}")
+                continue
         
+        # Return success response with network summaries
         return NetworkListResponse.success(
             data=network_summaries,
             message=f"Found {len(network_summaries)} networks"
         )
         
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
-        logger.error(error_msg)
-        return {"status": "error", "error": "Docker daemon not available"}
+        error_msg = f"Docker API error: {str(e)}"
+        logger.error(error_msg, exc_info=True)
+        return NetworkListResponse.error(
+            error=error_msg,
+            message="Failed to list networks due to Docker API error"
+        )
         
     except Exception as e:
-        error_msg = f"Unexpected error listing networks: {str(e)}"
+        error_msg = f"Unexpected error: {str(e)}"
         logger.error(error_msg, exc_info=True)
+        return NetworkListResponse.error(
+            error=error_msg,
+            message="An unexpected error occurred while listing networks"
+        )
         return {"status": "error", "error": error_msg}
 
 @mcp.tool(

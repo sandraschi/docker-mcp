@@ -7,7 +7,7 @@ container connections to networks.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Union, cast
+from typing import Any, Dict, List, Optional, Union
 
 import docker
 from docker.models.networks import Network
@@ -16,142 +16,138 @@ from fastmcp.exceptions import ToolError as ToolError
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
 
+from .models import (
+    NetworkCreateRequest,
+    NetworkSummary,
+    NetworkListResponse,
+    NetworkInspectResponse,
+    NetworkOperationResponse,
+    NetworkIPAMConfig
+)
 
-def prune_networks() -> Dict[str, Any]:
+
+def prune_networks() -> NetworkOperationResponse:
     """
     Remove all unused networks.
     
     Returns:
-        Dict containing the number of networks deleted and the list of network IDs that were removed.
+        NetworkOperationResponse containing the result of the operation.
     """
     try:
         client = mcp.docker_client
         result = client.networks.prune()
         
+        deleted_count = len(result.get('NetworksDeleted', []))
+        space_reclaimed = result.get('SpaceReclaimed', 0)
+        
         logger.info(
             "Successfully pruned networks",
-            networks_deleted=len(result.get('NetworksDeleted', [])),
-            space_reclaimed=result.get('SpaceReclaimed', 0)
+            networks_deleted=deleted_count,
+            space_reclaimed=space_reclaimed
         )
         
-        return {
-            'status': 'success',
-            'message': f"Successfully pruned {len(result.get('NetworksDeleted', []))} networks",
-            'networks_deleted': result.get('NetworksDeleted', []),
-            'space_reclaimed': result.get('SpaceReclaimed', 0)
-        }
+        return NetworkOperationResponse(
+            status="success",
+            message=f"Successfully pruned {deleted_count} networks",
+            network_id=None,
+            data={
+                'networks_deleted': result.get('NetworksDeleted', []),
+                'space_reclaimed': space_reclaimed
+            }
+        )
+        
     except docker.errors.APIError as e:
         error_msg = f"Failed to prune networks: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        return NetworkOperationResponse.error(
+            error=error_msg,
+            message="Failed to prune networks"
+        )
 
 
-def list_networks() -> List[Dict[str, Any]]:
+def list_networks() -> NetworkListResponse:
     """
     List all Docker networks.
     
     Returns:
-        List of dictionaries containing network information.
+        NetworkListResponse containing the list of networks and status information.
     """
     try:
         client = mcp.docker_client
         networks = client.networks.list()
         
-        result = []
-        for net in networks:
-            net_info = {
-                'id': net.id,
-                'name': net.name,
-                'driver': net.attrs.get('Driver', ''),
-                'scope': net.attrs.get('Scope', ''),
-                'labels': net.attrs.get('Labels', {}),
-                'created': net.attrs.get('Created', ''),
-                'internal': net.attrs.get('Internal', False),
-                'ipam': net.attrs.get('IPAM', {})
-            }
-            result.append(net_info)
-            
-        logger.info(f"Listed {len(networks)} networks")
-        return result
+        network_summaries = [
+            NetworkSummary.from_docker_network(net)
+            for net in networks
+        ]
+        
+        logger.info(
+            "Listed networks",
+            network_count=len(network_summaries)
+        )
+        
+        return NetworkListResponse.success(
+            data=network_summaries,
+            message=f"Found {len(network_summaries)} networks"
+        )
         
     except docker.errors.APIError as e:
         error_msg = f"Failed to list networks: {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        return NetworkListResponse.error(
+            error=error_msg,
+            message="Failed to list networks"
+        )
 
 
 def create_network(
-    name: str,
-    driver: str = 'bridge',
-    check_duplicate: bool = True,
-    internal: bool = False,
-    labels: Optional[Dict[str, str]] = None,
-    enable_ipv6: bool = False,
-    attachable: bool = False,
-    scope: Optional[str] = None,
-    ipam: Optional[Dict[str, Any]] = None
-) -> Dict[str, Any]:
+    params: NetworkCreateRequest
+) -> NetworkOperationResponse:
     """
     Create a new Docker network.
     
     Args:
-        name: Name of the network
-        driver: Network driver (default: bridge)
-        check_duplicate: Check for networks with duplicate names (default: True)
-        internal: Restrict external access to the network (default: False)
-        labels: Dictionary of labels to apply to the network
-        enable_ipv6: Enable IPv6 on the network (default: False)
-        attachable: Enable manual container attachment (default: False)
-        scope: Network scope (swarm, global, local)
-        ipam: IPAM configuration
+        params: NetworkCreateRequest containing network configuration
         
     Returns:
-        Dictionary containing the created network information
+        NetworkOperationResponse containing the result of the operation
     """
     try:
         client = mcp.docker_client
         
-        # Set default IPAM if not provided
-        if ipam is None:
-            ipam = {
-                'Driver': 'default',
-                'Config': [{'Subnet': '172.28.0.0/16'}]
-            }
-            
-        network = client.networks.create(
-            name=name,
-            driver=driver,
-            check_duplicate=check_duplicate,
-            internal=internal,
-            labels=labels or {},
-            enable_ipv6=enable_ipv6,
-            attachable=attachable,
-            scope=scope,
-            ipam=ipam
-        )
+        # Convert Pydantic model to dict for docker-py
+        network_data = params.model_dump(exclude_none=True)
+        
+        # Create the network
+        network = client.networks.create(**network_data)
         
         logger.info(
-            f"Created network '{name}' with ID {network.id}",
+            f"Created network '{params.name}' with ID {network.id}",
             network_id=network.id,
-            driver=driver,
-            internal=internal
+            driver=params.driver,
+            internal=params.internal
         )
         
-        return {
-            'status': 'success',
-            'message': f"Successfully created network '{name}'",
-            'network_id': network.id,
-            'name': name,
-            'driver': driver
-        }
+        return NetworkOperationResponse.success(
+            network_id=network.id,
+            message=f"Successfully created network '{params.name}'",
+            data={
+                'name': params.name,
+                'driver': params.driver,
+                'internal': params.internal
+            }
+        )
         
     except docker.errors.APIError as e:
-        error_msg = f"Failed to create network '{name}': {str(e)}"
+        error_msg = f"Failed to create network '{params.name}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        return NetworkOperationResponse.error(
+            error=error_msg,
+            message=f"Failed to create network '{params.name}'"
+        )
 
 
-def remove_network(network_id: str) -> Dict[str, Any]:
+def remove_network(network_id: str) -> NetworkOperationResponse:
     """
     Remove a Docker network.
     
@@ -159,7 +155,7 @@ def remove_network(network_id: str) -> Dict[str, Any]:
         network_id: ID or name of the network to remove
         
     Returns:
-        Dictionary with status and message
+        NetworkOperationResponse with the result of the operation
     """
     try:
         client = mcp.docker_client
@@ -167,21 +163,37 @@ def remove_network(network_id: str) -> Dict[str, Any]:
         network_name = network.name
         network.remove()
         
-        logger.info(f"Removed network '{network_name}' with ID {network_id}")
+        logger.info(
+            "Removed network",
+            network_id=network_id,
+            network_name=network_name
+        )
         
-        return {
-            'status': 'success',
-            'message': f"Successfully removed network '{network_name}'"
-        }
+        return NetworkOperationResponse.success(
+            network_id=network_id,
+            message=f"Successfully removed network '{network_name}'",
+            data={
+                'name': network_name
+            }
+        )
         
-    except docker.errors.NotFound:
-        error_msg = f"Network '{network_id}' not found"
+    except docker.errors.NotFound as e:
+        error_msg = f"Network '{network_id}' not found: {str(e)}"
         logger.warning(error_msg)
-        raise ToolError(error_msg) from None
+        return NetworkOperationResponse.error(
+            error=error_msg,
+            network_id=network_id,
+            message=f"Network '{network_id}' not found"
+        )
+        
     except docker.errors.APIError as e:
         error_msg = f"Failed to remove network '{network_id}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        return NetworkOperationResponse.error(
+            error=error_msg,
+            network_id=network_id,
+            message=f"Failed to remove network"
+        )
 
 
 def connect_container_to_network(
@@ -324,7 +336,7 @@ def get_network_stats(network_id: str) -> Dict[str, Any]:
         raise ToolError(error_msg) from e
 
 
-def inspect_network(network_id: str) -> Dict[str, Any]:
+def inspect_network(network_id: str) -> NetworkInspectResponse:
     """
     Get detailed information about a specific network.
     
@@ -332,7 +344,7 @@ def inspect_network(network_id: str) -> Dict[str, Any]:
         network_id: ID or name of the network
         
     Returns:
-        Dictionary containing detailed network information
+        NetworkInspectResponse containing detailed network information
     """
     try:
         client = mcp.docker_client
@@ -371,10 +383,29 @@ def inspect_network(network_id: str) -> Dict[str, Any]:
                     'ipv6_address': container_info.get('IPv6Address', '')
                 }
         
-        logger.debug(f"Inspected network '{network.name}'", network_id=network_id)
-        return result
+        logger.debug(
+            "Inspected network",
+            network_id=network_id,
+            network_name=network.name
+        )
         
-    except (docker.errors.NotFound, docker.errors.APIError) as e:
+        return NetworkInspectResponse.success(
+            data=result,
+            message=f"Successfully inspected network '{network.name}'"
+        )
+        
+    except docker.errors.NotFound as e:
+        error_msg = f"Network '{network_id}' not found: {str(e)}"
+        logger.warning(error_msg)
+        return NetworkInspectResponse.error(
+            error=error_msg,
+            message=f"Network '{network_id}' not found"
+        )
+        
+    except docker.errors.APIError as e:
         error_msg = f"Failed to inspect network '{network_id}': {str(e)}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg) from e
+        return NetworkInspectResponse.error(
+            error=error_msg,
+            message=f"Failed to inspect network"
+        )

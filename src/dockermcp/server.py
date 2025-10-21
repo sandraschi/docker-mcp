@@ -49,7 +49,7 @@ logger.info("Using singleton FastMCP instance from mcp_instance.py")
 try:
     # Import tool modules - these will be registered via @mcp.tool decorators
     from dockermcp.tools.containers import list_containers
-    from dockermcp.tools.workflows import workflow_management
+    # from dockermcp.tools.workflows import workflow_management  # TEMPORARILY DISABLED - SYNTAX ERROR
     from dockermcp.tools.networks import network_management
     from dockermcp.tools.volumes import volume_management
     from dockermcp.tools.system import system_management
