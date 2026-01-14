@@ -59,10 +59,7 @@ class LogEntry(BaseModel):
     stream: str
     line: str
 
-@mcp.tool(
-    name="get_container_logs",
-    description="Retrieve logs from a Docker container with filtering options"
-)
+@mcp.tool
 async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsResponse:
     """
     Retrieve logs from a Docker container with various filtering options.

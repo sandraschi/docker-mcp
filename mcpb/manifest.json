@@ -1,0 +1,125 @@
+{
+  "manifest_version": "0.2",
+  "name": "dockermcp",
+  "version": "0.1.0",
+  "description": "FastMCP server for Docker operations with Austrian efficiency - comprehensive container, image, network, and volume management",
+  "author": {
+    "name": "Sandra Schimanovich",
+    "email": "sandra@sandraschi.dev",
+    "url": "https://github.com/sandraschi"
+  },
+  "license": "MIT",
+  "homepage": "https://github.com/sandraschi/dockermcp",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sandraschi/dockermcp"
+  },
+  "server": {
+    "type": "python",
+    "entry_point": "src/dockermcp/server.py",
+    "mcp_config": {
+      "command": "python",
+      "args": ["-m", "dockermcp.server"],
+      "env": {
+        "PYTHONPATH": "${PWD}/src",
+        "PYTHONUNBUFFERED": "1",
+        "DOCKER_SOCKET": "${user_config.docker_socket}"
+      }
+    }
+  },
+  "user_config": {
+    "docker_socket": {
+      "type": "string",
+      "title": "Docker Socket Path",
+      "description": "Path to the Docker socket",
+      "default": "//./pipe/docker_engine"
+    },
+    "default_workspace": {
+      "type": "directory",
+      "title": "Default Workspace Directory",
+      "description": "Default directory for Docker-related files",
+      "default": "${HOME}/docker-workspace"
+    },
+    "log_level": {
+      "type": "string",
+      "title": "Log Level",
+      "description": "Logging level (debug, info, warning, error, critical)",
+      "default": "info"
+    }
+  },
+  "tools": [
+    {
+      "name": "docker_container_list",
+      "description": "List Docker containers with filtering and status information"
+    },
+    {
+      "name": "docker_container_start",
+      "description": "Start one or more Docker containers"
+    },
+    {
+      "name": "docker_container_stop",
+      "description": "Stop one or more Docker containers"
+    },
+    {
+      "name": "docker_container_restart",
+      "description": "Restart Docker containers"
+    },
+    {
+      "name": "docker_container_logs",
+      "description": "Get logs from Docker containers"
+    },
+    {
+      "name": "docker_container_exec",
+      "description": "Execute commands inside running containers"
+    },
+    {
+      "name": "docker_image_list",
+      "description": "List Docker images with detailed information"
+    },
+    {
+      "name": "docker_image_build",
+      "description": "Build Docker images from Dockerfiles"
+    },
+    {
+      "name": "docker_image_pull",
+      "description": "Pull Docker images from registries"
+    },
+    {
+      "name": "docker_compose_up",
+      "description": "Start Docker Compose services"
+    },
+    {
+      "name": "docker_compose_down",
+      "description": "Stop and remove Docker Compose services"
+    },
+    {
+      "name": "docker_system_info",
+      "description": "Get Docker system information and stats"
+    },
+    {
+      "name": "docker_volume_list",
+      "description": "List Docker volumes"
+    },
+    {
+      "name": "docker_network_list",
+      "description": "List Docker networks"
+    }
+  ],
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"],
+    "python": ">=3.8"
+  },
+  "keywords": [
+    "docker",
+    "containers",
+    "devops",
+    "automation",
+    "infrastructure",
+    "mcp",
+    "fastmcp"
+  ]
+}
+
+
+
+

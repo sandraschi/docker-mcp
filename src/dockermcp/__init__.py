@@ -1,11 +1,11 @@
 """
-DockerMCP - FastMCP 2.12 Server for Docker Operations
+DockerMCP - FastMCP 2.13+ Server for Docker Operations
 
-This package implements a FastMCP 2.12 compatible server with STDIO connection
+This package implements a FastMCP 2.13+ compatible server with STDIO connection
 for managing Docker containers, images, networks, and volumes.
 
 Key Features:
-- FastMCP 2.12 protocol implementation
+- FastMCP 2.13+ protocol implementation
 - STDIO-based client communication
 - Comprehensive Docker management
 - Asynchronous I/O operations
@@ -19,13 +19,14 @@ Package Structure:
     - utils/     # Utility functions
 """
 
-__version__ = "2.12.0"
+__version__ = "2.13.0"
 
 import logging
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar, Callable, Type
+from typing import Any, Dict, List, Optional, TypeVar, Callable, Type, cast
+from functools import wraps
 
 # Add the src directory to the Python path
 src_dir = str(Path(__file__).parent.parent)

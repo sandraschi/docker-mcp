@@ -296,10 +296,7 @@ async def create_volume(
             'name': name
         }
 
-@mcp.tool(
-    name="inspect_volume",
-    description="Inspect a Docker volume",
-)
+@mcp.tool
 async def inspect_volume(
     name: Annotated[str, Field(
         description="Name of the volume"

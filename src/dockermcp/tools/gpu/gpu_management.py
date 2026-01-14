@@ -300,10 +300,7 @@ class GPUManager:
 # Global GPU manager instance
 gpu_manager = GPUManager()
 
-@mcp.tool(
-    name="list_gpus",
-    description="List available NVIDIA GPUs and their status"
-)
+@mcp.tool
 async def list_gpus(request: ListGPUsRequest) -> ListGPUsResponse:
     """
     List all available NVIDIA GPUs and their current status.
@@ -386,10 +383,7 @@ async def list_gpus(request: ListGPUsRequest) -> ListGPUsResponse:
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
-@mcp.tool(
-    name="get_gpu_info",
-    description="Get detailed information about a specific GPU"
-)
+@mcp.tool
 async def get_gpu_info(request: GetGPUInfoRequest) -> GPUInfoResponse:
     """
     Get detailed information about a specific GPU.
@@ -471,10 +465,7 @@ class MonitorGPUUsageResponse(BaseModel):
     samples: List[MonitoringSample] = Field(..., description="List of monitoring samples")
     sample_count: int = Field(..., description="Total number of samples collected")
 
-@mcp.tool(
-    name="monitor_gpu_usage",
-    description="Monitor GPU usage in real-time"
-)
+@mcp.tool
 async def monitor_gpu_usage(request: MonitorGPUUsageRequest) -> MonitorGPUUsageResponse:
     """
     Monitor GPU usage in real-time for a specified duration.

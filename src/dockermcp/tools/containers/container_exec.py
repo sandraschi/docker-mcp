@@ -32,10 +32,7 @@ class ExecUser(str, Enum):
     ROOT = "root"
     CONTAINER_DEFAULT = ""
 
-@mcp.tool(
-    name="execute_in_container",
-    description="Execute a command in a running Docker container"
-)
+@mcp.tool
 async def execute_in_container(
     container_id: Annotated[str, Field(description="ID or name of the container")],
     command: Annotated[Union[str, list[str]], Field(description="Command to execute (string or list of arguments)")],

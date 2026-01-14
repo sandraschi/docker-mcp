@@ -197,10 +197,7 @@ class GPUContainerManager:
 gpu_container_manager = GPUContainerManager()
 
 
-@mcp.tool(
-    name="create_gpu_container",
-    description="Create a GPU-accelerated Docker container"
-)
+@mcp.tool
 async def create_gpu_container(
     image: str,
     command: Optional[str] = None,
@@ -341,10 +338,7 @@ async def create_gpu_container(
         }
 
 
-@mcp.tool(
-    name="get_container_gpu_info",
-    description="Get GPU information for a running container"
-)
+@mcp.tool
 async def get_container_gpu_info(container_id: str) -> Dict[str, Any]:
     """
     Get GPU information for a running container.

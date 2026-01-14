@@ -205,10 +205,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg)
 
-@mcp.tool(
-    name="manage_container_lifecycle",
-    description="Manage the lifecycle of a Docker container (start, stop, restart, remove, pause, unpause)"
-)
+@mcp.tool
 async def manage_container_lifecycle(params: ContainerLifecycleParams) -> Dict[str, Any]:
     """
     Execute container lifecycle operations with comprehensive error handling.

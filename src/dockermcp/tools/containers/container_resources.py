@@ -146,10 +146,7 @@ class ContainerResourcesResponse(BaseModel):
         description="Current resource usage statistics"
     )
 
-@mcp.tool(
-    name="get_container_resources",
-    description="Get detailed resource allocation and usage information for a container"
-)
+@mcp.tool
 async def get_container_resources(params: GetContainerResourcesParams) -> ToolResponse[ContainerResourcesResponse]:
     """
     Get detailed resource allocation and usage information for a container.
@@ -309,13 +306,7 @@ class ResetContainerResourcesResponse(BaseModel):
         description="List of resource types that were reset"
     )
 
-@mcp.tool(
-    name="reset_container_resources",
-    description=(
-        "Reset all resource limits for a container to their default values. "
-        "This will remove any custom CPU, memory, I/O, or other resource constraints."
-    )
-)
+@mcp.tool
 async def reset_container_resources(
     params: ResetContainerResourcesParams
 ) -> ToolResponse[ResetContainerResourcesResponse]:

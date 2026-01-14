@@ -209,10 +209,7 @@ class CreateWorkflowParams(CreateWorkflowRequest):
         }
     )
 
-@mcp.tool(
-    name="create_workflow",
-    description="Create a new workflow with the given definition"
-)
+@mcp.tool
 async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowResponse:
     """
     Create a new workflow with the given definition.
@@ -288,10 +285,7 @@ class StartWorkflowParams(StartWorkflowRequest):
         }
     )
 
-@mcp.tool(
-    name="start_workflow",
-    description="Start a workflow with the given ID"
-)
+@mcp.tool
 async def start_workflow(params: StartWorkflowParams) -> StartWorkflowResponse:
     """
     Start a workflow with the given ID.
@@ -347,10 +341,7 @@ class StopWorkflowParams(StopWorkflowRequest):
         }
     )
 
-@mcp.tool(
-    name="stop_workflow",
-    description="Stop a running workflow"
-)
+@mcp.tool
 async def stop_workflow(
     params: StopWorkflowParams
 ) -> StopWorkflowResponse:
@@ -424,10 +415,7 @@ class GetWorkflowStatusParams(BaseModel):
         }
     )
 
-@mcp.tool(
-    name="get_workflow_status",
-    description="Get the status of a workflow"
-)
+@mcp.tool
 async def get_workflow_status(params: GetWorkflowStatusParams) -> WorkflowStatusResponse:
     """
     Get the status of a workflow.
@@ -494,10 +482,7 @@ class ListWorkflowsParams(ListWorkflowsRequest):
         }
     )
 
-@mcp.tool(
-    name="list_workflows",
-    description="List all workflows with optional filtering and pagination"
-)
+@mcp.tool
 async def list_workflows(
     params: ListWorkflowsParams
 ) -> ListWorkflowsResponse:

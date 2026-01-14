@@ -177,10 +177,7 @@ class StartMonitoringParams(BaseModel):
         description="Whether to rebuild the container images"
     )] = False
 
-@mcp.tool(
-    name="start_monitoring",
-    description="Start the monitoring stack (Prometheus, Grafana, Loki, etc.)"
-)
+@mcp.tool
 async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
     """
     Start the monitoring stack including Prometheus, Grafana, Loki, and other services.
@@ -248,10 +245,7 @@ class StopMonitoringParams(BaseModel):
         description="Timeout in seconds before killing containers"
     )] = 10
 
-@mcp.tool(
-    name="stop_monitoring",
-    description="Stop the monitoring stack"
-)
+@mcp.tool
 async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
     """
     Stop the monitoring stack.
@@ -320,10 +314,7 @@ class MonitoringStatusParams(BaseModel):
         description="Whether to include stopped containers"
     )] = True
 
-@mcp.tool(
-    name="monitoring_status",
-    description="Get the status of the monitoring stack"
-)
+@mcp.tool
 async def monitoring_status(params: MonitoringStatusParams) -> MonitoringResponse:
     """
     Get the status of monitoring stack services.
@@ -450,10 +441,7 @@ class MonitoringLogsParams(BaseModel):
         description="Whether to include timestamps in logs"
     )] = False
 
-@mcp.tool(
-    name="monitoring_logs",
-    description="Get logs from monitoring services"
-)
+@mcp.tool
 async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
     """
     Get logs from monitoring services.

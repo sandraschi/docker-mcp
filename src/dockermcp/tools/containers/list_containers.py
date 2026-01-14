@@ -56,10 +56,7 @@ class ListContainersParams(BaseModel):
         description="Dictionary of filter key-value pairs"
     )
 
-@mcp.tool(
-    name="list_containers",
-    description="List Docker containers with optional filtering"
-)
+@mcp.tool
 async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
     """
     List Docker containers with optional filtering.

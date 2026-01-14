@@ -1,0 +1,38 @@
+{
+  "$schema": "https://glama.ai/mcp/schemas/server.json",
+  "maintainers": ["sandraschi"],
+  "name": "docker-mcp",
+  "description": "FastMCP 2.13+ server for Docker operations with monitoring stack (Prometheus, Grafana, Loki). Container lifecycle, networking, volumes, and image management. Beta status.",
+  "type": "mcp_server",
+  "status": "beta",
+  "framework": "FastMCP 2.13+",
+  "tools": 12,
+  "transport": ["stdio"],
+  "keywords": [
+    "docker",
+    "containers",
+    "virtualization",
+    "devops",
+    "monitoring",
+    "prometheus",
+    "grafana",
+    "mcp-server",
+    "fastmcp"
+  ],
+  "features": {
+    "container_management": {
+      "enabled": true
+    },
+    "monitoring_stack": {
+      "enabled": true,
+      "components": ["Prometheus", "Grafana", "Loki"]
+    },
+    "networking": {
+      "enabled": true
+    },
+    "volume_management": {
+      "enabled": true
+    }
+  }
+}
+

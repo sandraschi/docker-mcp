@@ -195,10 +195,7 @@ class ListDirectoryParams(BaseModel):
         return path if path.startswith('/') else f'/{path}'
 
 
-@mcp.tool(
-    name="list_container_directory",
-    description="List contents of a directory in a container"
-)
+@mcp.tool
 async def list_container_directory(params: ListDirectoryParams) -> Dict[str, Any]:
     """
     List contents of a directory in a container.
@@ -455,10 +452,7 @@ def _create_tar_archive(file_obj: BinaryIO, filename: str) -> BytesIO:
     tar_data.seek(0)
     return tar_data
 
-@mcp.tool(
-    name="read_container_file",
-    description="Read the contents of a file from a container"
-)
+@mcp.tool
 async def read_container_file(
     params: ReadFileParams
 ) -> Dict[str, Any]:
@@ -675,10 +669,7 @@ async def read_container_file(
             "error": error_msg
         }
 
-@mcp.tool(
-    name="write_container_file",
-    description="Write content to a file in a container"
-)
+@mcp.tool
 async def write_container_file(params: WriteFileParams) -> Dict[str, Any]:
     """
     Write content to a file in a container.

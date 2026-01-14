@@ -53,10 +53,11 @@ try:
     from dockermcp.tools.networks import network_management
     from dockermcp.tools.volumes import volume_management
     from dockermcp.tools.system import system_management
-    
+    from dockermcp.tools import agentic_container_workflow  # SEP-1577 agentic workflows
+
     # Log successful imports
-    logger.info("Successfully imported all tool modules")
-    
+    logger.info("Successfully imported all tool modules including SEP-1577 agentic workflows")
+
 except ImportError as e:
     logger.error(f"Failed to import tool modules: {e}", exc_info=True)
     sys.exit(1)

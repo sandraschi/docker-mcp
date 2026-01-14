@@ -180,11 +180,7 @@ def parse_duration_string(duration_str: str) -> int:
 # Tool Implementations
 # ============================================================================
 
-@mcp.tool(
-    name="get_system_info",
-    description="Get detailed information about the Docker system including version, "
-                "resource usage, and container/image counts."
-)
+@mcp.tool
 async def get_system_info(
     request: SystemInfoRequest
 ) -> SystemInfoResponse:
@@ -275,11 +271,7 @@ async def get_system_info(
             error=error_msg
         )
 
-@mcp.tool(
-    name="get_disk_usage",
-    description="Get detailed disk usage information about Docker resources "
-                "including containers, images, volumes, and build cache."
-)
+@mcp.tool
 async def get_disk_usage(
     request: DiskUsageRequest
 ) -> DiskUsageResponse:
@@ -403,12 +395,7 @@ async def get_disk_usage(
             error=error_msg
         )
 
-@mcp.tool(
-    name="prune_system",
-    description="Remove unused Docker data (system prune). This will free up disk space by "
-                "removing stopped containers, unused networks, dangling images, and "
-                "optionally unused volumes and build cache."
-)
+@mcp.tool
 async def prune_system(
     request: PruneSystemRequest
 ) -> PruneSystemResponse:
@@ -511,11 +498,7 @@ async def prune_system(
             error=error_msg
         )
 
-@mcp.tool(
-    name="parse_duration",
-    description="Parse a human-readable duration string into seconds. "
-                "Supports units: s (seconds), m (minutes), h (hours), d (days), w (weeks)"
-)
+@mcp.tool
 async def parse_duration(
     request: ParseDurationRequest
 ) -> ParseDurationResponse:

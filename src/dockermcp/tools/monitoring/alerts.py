@@ -59,10 +59,7 @@ class ListAlertRulesParams(BaseModel):
         description="Output format for the alert rules"
     )
 
-@mcp.tool(
-    name="list_alert_rules",
-    description="List all configured alert rules"
-)
+@mcp.tool
 async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
     """
     List all configured alert rules.
@@ -176,10 +173,7 @@ class AddAlertRuleParams(AlertRule):
         }
     )
 
-@mcp.tool(
-    name="add_alert_rule",
-    description="Add a new alert rule"
-)
+@mcp.tool
 async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
     """
     Add a new alert rule to the monitoring stack.
@@ -306,10 +300,7 @@ class RemoveAlertRuleParams(BaseModel):
     """Parameters for removing an alert rule."""
     name: str = Field(..., description="Name of the alert rule to remove")
 
-@mcp.tool(
-    name="remove_alert_rule",
-    description="Remove an alert rule by name"
-)
+@mcp.tool
 async def remove_alert_rule(params: RemoveAlertRuleParams) -> Dict[str, Any]:
     """
     Remove an alert rule by name.

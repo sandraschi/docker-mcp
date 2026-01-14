@@ -3,7 +3,7 @@ Container Management for Docker MCP.
 
 This module provides a unified interface for managing Docker containers,
 including lifecycle operations, inspection, logs, execution, and more.
-It follows FastMCP 2.12+ standards for tool registration and error handling.
+It follows FastMCP 2.13+ standards for tool registration and error handling.
 """
 from __future__ import annotations
 
@@ -140,10 +140,7 @@ class ContainerRequest(BaseModel):
             )
         return self
 
-@mcp.tool(
-    name="manage_container",
-    description="Manage Docker containers and related resources with Pydantic v2 models"
-)
+@mcp.tool
 async def manage_container(params: ContainerRequest) -> Union[
     ContainerOperationResponse,
     ContainerListResponse,

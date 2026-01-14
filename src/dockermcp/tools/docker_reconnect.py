@@ -34,10 +34,7 @@ class ReconnectDockerResponse(BaseModel):
     message: str = Field(..., description="Status message")
     docker_available: bool = Field(..., description="Whether Docker is now available")
 
-@mcp.tool(
-    name="reconnect_docker",
-    description="Attempt to reconnect to the Docker daemon"
-)
+@mcp.tool
 async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[ReconnectDockerResponse]:
     """
     Attempt to reconnect to the Docker daemon.

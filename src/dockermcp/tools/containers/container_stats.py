@@ -176,10 +176,7 @@ class ContainerStatsResponse(BaseModel):
     pids: int = Field(..., description="Number of processes")
     error: Optional[str] = Field(None, description="Error message if stats collection failed")
 
-@mcp.tool(
-    name="get_container_stats",
-    description="Get container statistics including CPU, memory, network, and I/O metrics"
-)
+@mcp.tool
 async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
     """Get container statistics including CPU, memory, network, and I/O metrics.
     

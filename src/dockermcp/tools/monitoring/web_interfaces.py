@@ -35,10 +35,7 @@ class OpenGrafanaParams(BaseModel):
         }
     )
 
-@mcp.tool(
-    name="open_grafana",
-    description="Open the Grafana web interface in the default browser"
-)
+@mcp.tool
 async def open_grafana(params: OpenGrafanaParams) -> Dict[str, Any]:
     """
     Open the Grafana web interface in the default browser.
@@ -97,10 +94,7 @@ class OpenPrometheusParams(BaseModel):
         }
     )
 
-@mcp.tool(
-    name="open_prometheus",
-    description="Open the Prometheus web interface in the default browser"
-)
+@mcp.tool
 async def open_prometheus(params: OpenPrometheusParams) -> Dict[str, Any]:
     """
     Open the Prometheus web interface in the default browser.
@@ -151,10 +145,7 @@ class OpenLokiParams(BaseModel):
         }
     )
 
-@mcp.tool(
-    name="open_loki",
-    description="Open the Loki web interface in the default browser"
-)
+@mcp.tool
 async def open_loki(params: OpenLokiParams) -> Dict[str, Any]:
     """
     Open the Loki web interface in the default browser.
@@ -210,10 +201,7 @@ class OpenMonitoringDashboardParams(BaseModel):
         }
     )
 
-@mcp.tool(
-    name="open_monitoring_dashboard",
-    description="Open a specific monitoring dashboard in the default browser"
-)
+@mcp.tool
 async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Dict[str, Any]:
     """
     Open a monitoring dashboard in the default browser.

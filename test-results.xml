@@ -1,144 +1,37 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="9" time="1.992" timestamp="2025-09-14T11:18:54.807263+02:00" hostname="Goliath"><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_stop_container" time="0.045"><failure message="AssertionError: Expected 'stop' to not have been called. Called 1 times.&#10;Calls: [call(timeout=10)].&#10;&#10;pytest introspection follows:&#10;&#10;Kwargs:&#10;assert {'timeout': 10} == {}&#10;  &#10;  Left contains 1 more item:&#10;  #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mtimeout#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[94m10#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m&#10;  &#10;  Full diff:&#10;  #x1B[0m#x1B[91m- {}#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ {#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+     'timeout': 10,#x1B[39;49;00m#x1B[90m#x1B[39;49;00m&#10;  #x1B[92m+ }#x1B[39;49;00m#x1B[90m#x1B[39;49;00m">self = &lt;MagicMock name='mock.containers.get().stop' id='2519158857008'&gt;
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="8" time="14.284" timestamp="2025-12-10T02:59:19.250958+01:00" hostname="Goliath"><testcase classname="tests.unit.core.test_hello_world" name="test_hello_world" time="0.020" /><testcase classname="tests.unit.core.test_mock_server" name="test_mock_server_basic" time="4.594" /><testcase classname="tests.unit.core.test_mock_server" name="test_container_lifecycle" time="1.018"><failure message="AttributeError: 'NoneType' object has no attribute 'RequestHandlerClass'">def test_container_lifecycle():
+        """Test container lifecycle operations."""
+        with MockMCPServer(port=8001) as server:
+            # Add a test container
+            container_id = "test-container-1"
+&gt;           server.server.RequestHandlerClass.containers[container_id] = {
+                "Id": container_id,
+                "Name": "/test-container",
+                "Image": "alpine:latest",
+                "State": {"Status": "created", "Running": False}
+            }
+E           AttributeError: 'NoneType' object has no attribute 'RequestHandlerClass'
 
-    def assert_not_called(self):
-        """assert that the mock was never called.
-        """
-        if self.call_count != 0:
-            msg = ("Expected '%s' to not have been called. Called %s times.%s"
-                   % (self._mock_name or 'mock',
-                      self.call_count,
-                      self._calls_repr()))
-&gt;           raise AssertionError(msg)
-E           AssertionError: Expected 'stop' to not have been called. Called 1 times.
-E           Calls: [call(timeout=10)].
+tests\unit\core\test_mock_server.py:25: AttributeError</failure></testcase><testcase classname="tests.unit.core.test_mock_server" name="test_image_operations" time="6.563"><failure message="AssertionError: assert 2 == (2 + 1)&#10; +  where 2 = len([{'Id': 'sha256:abc123', 'RepoTags': ['alpine:latest'], 'Size': 12345678}, {'Id': 'sha256:def456', 'RepoTags': ['ubuntu:20.04'], 'Size': 98765432}])&#10; +    where [{'Id': 'sha256:abc123', 'RepoTags': ['alpine:latest'], 'Size': 12345678}, {'Id': 'sha256:def456', 'RepoTags': ['ubuntu:20.04'], 'Size': 98765432}] = json()&#10; +      where json = &lt;Response [200]&gt;.json">def test_image_operations():
+        """Test image operations."""
+        with MockMCPServer(port=8001) as server:
+            # Test listing images
+            response = requests.get("http://localhost:8001/images")
+            assert response.status_code == 200
+            initial_image_count = len(response.json())
+    
+            # Test pulling an image
+            response = requests.post(
+                "http://localhost:8001/images/pull",
+                json={"fromImage": "nginx:latest"}
+            )
+            assert response.status_code == 200
+    
+            # Verify the image was added
+            response = requests.get("http://localhost:8001/images")
+&gt;           assert len(response.json()) == initial_image_count + 1
+E           AssertionError: assert 2 == (2 + 1)
+E            +  where 2 = len([{'Id': 'sha256:abc123', 'RepoTags': ['alpine:latest'], 'Size': 12345678}, {'Id': 'sha256:def456', 'RepoTags': ['ubuntu:20.04'], 'Size': 98765432}])
+E            +    where [{'Id': 'sha256:abc123', 'RepoTags': ['alpine:latest'], 'Size': 12345678}, {'Id': 'sha256:def456', 'RepoTags': ['ubuntu:20.04'], 'Size': 98765432}] = json()
+E            +      where json = &lt;Response [200]&gt;.json
 
-C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:940: AssertionError
-
-During handling of the above exception, another exception occurred:
-
-self = &lt;test_container_lifecycle.TestContainerLifecycle testMethod=test_stop_container&gt;
-
-    async def test_stop_container(self):
-        """Test stopping a container."""
-        # Set initial state: container is running
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'running'
-    
-        # Create the request with a custom timeout
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.STOP,
-            timeout=10
-        )
-    
-        # Execute - use the implementation directly for testing
-        response = await container_lifecycle._manage_container_lifecycle_impl(request)
-    
-        # Verify the response
-        self.assertIsInstance(response, dict)
-        self.assertEqual(response["action"], "stop")
-        self.assertTrue(response["success"])
-    
-        # Verify the container was stopped with the correct timeout
-        self.mock_container.stop.assert_called_once_with(timeout=10)
-    
-        # Test stopping an already stopped container
-        self.mock_container.stop.reset_mock()
-        self.mock_container.attrs['State']['Running'] = False
-    
-        response = await container_lifecycle._manage_container_lifecycle_impl(request)
-        self.assertTrue(response["success"])
-&gt;       self.mock_container.stop.assert_not_called()
-E       AssertionError: Expected 'stop' to not have been called. Called 1 times.
-E       Calls: [call(timeout=10)].
-E       
-E       pytest introspection follows:
-E       
-E       Kwargs:
-E       assert {'timeout': 10} == {}
-E         
-E         Left contains 1 more item:
-E         #x1B[0m{#x1B[33m'#x1B[39;49;00m#x1B[33mtimeout#x1B[39;49;00m#x1B[33m'#x1B[39;49;00m: #x1B[94m10#x1B[39;49;00m}#x1B[90m#x1B[39;49;00m
-E         
-E         Full diff:
-E         #x1B[0m#x1B[91m- {}#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
-E         #x1B[92m+ {#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
-E         #x1B[92m+     'timeout': 10,#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
-E         #x1B[92m+ }#x1B[39;49;00m#x1B[90m#x1B[39;49;00m
-
-tests\unit\tools\test_container_lifecycle.py:264: AssertionError</failure></testcase><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_invalid_parameters" time="0.012" /><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_concurrent_operations" time="0.022" /><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_container_in_abnormal_state" time="0.011"><failure message="AssertionError: Expected 'unpause' to have been called once. Called 0 times.">self = &lt;MagicMock name='mock.containers.get().unpause' id='2519164211552'&gt;
-
-    def assert_called_once(self):
-        """assert that the mock was called only once.
-        """
-        if not self.call_count == 1:
-            msg = ("Expected '%s' to have been called once. Called %s times.%s"
-                   % (self._mock_name or 'mock',
-                      self.call_count,
-                      self._calls_repr()))
-&gt;           raise AssertionError(msg)
-E           AssertionError: Expected 'unpause' to have been called once. Called 0 times.
-
-C:\Users\sandr\AppData\Local\Programs\Python\Python313\Lib\unittest\mock.py:958: AssertionError
-
-During handling of the above exception, another exception occurred:
-
-self = &lt;test_container_lifecycle.TestContainerLifecycle testMethod=test_container_in_abnormal_state&gt;
-
-    async def test_container_in_abnormal_state(self):
-        """Test handling of containers in various abnormal states."""
-        # Test with paused container
-        self.mock_container.paused = True
-        self.mock_container.attrs['State']['Paused'] = True
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'paused'
-    
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.START
-        )
-    
-        response = await container_lifecycle._manage_container_lifecycle_impl(request)
-        self.assertTrue(response["success"])
-&gt;       self.mock_container.unpause.assert_called_once()
-E       AssertionError: Expected 'unpause' to have been called once. Called 0 times.
-
-tests\unit\tools\test_container_lifecycle.py:338: AssertionError</failure></testcase><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_remove_container" time="0.012" /><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_start_container" time="0.011"><failure message="TypeError: 'FunctionTool' object is not callable">self = &lt;test_container_lifecycle.TestContainerLifecycle testMethod=test_start_container&gt;
-
-    async def test_start_container(self):
-        """Test starting a container."""
-        # Set initial state: container is stopped
-        self.mock_container.attrs['State']['Running'] = False
-        self.mock_container.status = 'exited'
-    
-        # Create the request
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.START
-        )
-    
-        # Call the implementation directly for testing
-        response = await container_lifecycle._manage_container_lifecycle_impl(request)
-    
-        # Verify the response
-        self.assertIsInstance(response, dict)
-        self.assertEqual(response["action"], "start")
-        self.assertEqual(response["container_id"], TEST_CONTAINER_ID)
-        self.assertTrue(response["success"])
-    
-        # Verify the container was started
-        self.mock_container.start.assert_called_once()
-    
-        # Verify the container state was updated
-        self.assertTrue(self.mock_container.attrs['State']['Running'])
-        self.docker_client.containers.get.assert_called_once_with(TEST_CONTAINER_ID)
-    
-        # Test 2: Start already running container
-        self.mock_container.start.reset_mock()
-        self.mock_container.attrs['State']['Running'] = True
-    
-&gt;       response = await manage_container_lifecycle(request)
-                         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-E       TypeError: 'FunctionTool' object is not callable
-
-tests\unit\tools\test_container_lifecycle.py:217: TypeError</failure></testcase><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_force_remove_container" time="0.012" /><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_restart_policies" time="0.012" /><testcase classname="tests.unit.tools.test_container_lifecycle.TestContainerLifecycle" name="test_restart_container" time="0.012" /></testsuite></testsuites>
+tests\unit\core\test_mock_server.py:65: AssertionError</failure></testcase><testcase classname="tests.unit.core.test_startup" name="test_imports" time="1.733" /><testcase classname="tests.unit.core.test_startup" name="test_tool_discovery" time="0.020" /><testcase classname="tests.unit.core.test_startup" name="test_server_creation" time="0.018" /><testcase classname="tests.unit.test_logging" name="test_json_logging" time="0.005" /></testsuite></testsuites>

@@ -145,10 +145,7 @@ class NetworkResponse(BaseModel):
     attachable: bool = Field(..., description="Manual attachment allowed")
     ingress: bool = Field(..., description="Ingress network")
 
-@mcp.tool(
-    name="list_networks",
-    description="List Docker networks with filtering options"
-)
+@mcp.tool
 async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
     """
     List Docker networks with filtering options.

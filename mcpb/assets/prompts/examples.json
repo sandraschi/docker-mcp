@@ -1,0 +1,145 @@
+{
+  "examples": [
+    {
+      "title": "Development Environment Setup",
+      "description": "Set up a complete development environment with multiple services",
+      "tools": ["docker_compose_up", "docker_container_list", "docker_container_logs"],
+      "steps": [
+        "Start all services with docker-compose",
+        "Verify containers are running",
+        "Check service logs for startup issues"
+      ]
+    },
+    {
+      "title": "Application Deployment",
+      "description": "Build and deploy an application container",
+      "tools": ["docker_image_build", "docker_container_start", "docker_container_exec"],
+      "steps": [
+        "Build application image from Dockerfile",
+        "Start container with proper configuration",
+        "Execute health checks and verification commands"
+      ]
+    },
+    {
+      "title": "Database Management",
+      "description": "Set up and manage database containers",
+      "tools": ["docker_container_start", "docker_container_exec", "docker_volume_list"],
+      "steps": [
+        "Start database container with volume mounts",
+        "Execute database initialization scripts",
+        "Verify data persistence and backup volumes"
+      ]
+    },
+    {
+      "title": "Microservices Orchestration",
+      "description": "Manage complex multi-service applications",
+      "tools": ["docker_compose_up", "docker_network_list", "docker_container_list"],
+      "steps": [
+        "Deploy microservices stack with compose",
+        "Verify inter-service networking",
+        "Monitor service dependencies and health"
+      ]
+    },
+    {
+      "title": "CI/CD Pipeline Integration",
+      "description": "Automate build and deployment pipelines",
+      "tools": ["docker_image_build", "docker_image_pull", "docker_container_start"],
+      "steps": [
+        "Pull base images for build optimization",
+        "Build application images with proper tagging",
+        "Deploy to staging environment for testing"
+      ]
+    }
+  ],
+  "quick_commands": [
+    {
+      "command": "Check all running containers",
+      "tools": ["docker_container_list"],
+      "description": "Get overview of all active containers"
+    },
+    {
+      "command": "Start development environment",
+      "tools": ["docker_compose_up"],
+      "description": "Launch local development stack"
+    },
+    {
+      "command": "Build application image",
+      "tools": ["docker_image_build"],
+      "description": "Create container image from source"
+    },
+    {
+      "command": "Check Docker system status",
+      "tools": ["docker_system_info"],
+      "description": "Get comprehensive Docker daemon information"
+    },
+    {
+      "command": "View container logs",
+      "tools": ["docker_container_logs"],
+      "description": "Access application logs for debugging"
+    }
+  ],
+  "workflows": {
+    "development": [
+      "Set up local development environment",
+      "Build and test application containers",
+      "Debug with live logging and execution",
+      "Iterate with fast rebuild cycles"
+    ],
+    "deployment": [
+      "Build optimized production images",
+      "Configure production environment variables",
+      "Deploy with proper resource limits",
+      "Set up monitoring and health checks"
+    ],
+    "maintenance": [
+      "Monitor container resource usage",
+      "Manage image and volume cleanup",
+      "Update base images and security patches",
+      "Backup persistent data volumes"
+    ],
+    "troubleshooting": [
+      "Check container logs for errors",
+      "Inspect container configuration",
+      "Test network connectivity",
+      "Analyze resource utilization"
+    ]
+  },
+  "container_patterns": {
+    "web_servers": ["nginx", "apache", "caddy", "traefik"],
+    "databases": ["postgres", "mysql", "mongodb", "redis"],
+    "development": ["node", "python", "golang", "rust"],
+    "infrastructure": ["jenkins", "gitlab", "grafana", "prometheus"],
+    "message_queues": ["rabbitmq", "kafka", "nats"],
+    "caching": ["redis", "memcached", "varnish"]
+  },
+  "compose_templates": {
+    "fullstack": ["frontend", "backend", "database", "cache", "proxy"],
+    "microservices": ["api-gateway", "auth-service", "user-service", "notification-service"],
+    "data_processing": ["spark-master", "spark-worker", "kafka", "zookeeper"],
+    "monitoring": ["prometheus", "grafana", "loki", "promtail"]
+  },
+  "best_practices": {
+    "security": [
+      "Run containers as non-root users",
+      "Use minimal base images (Alpine)",
+      "Implement proper secrets management",
+      "Regular security scanning"
+    ],
+    "performance": [
+      "Set appropriate resource limits",
+      "Use multi-stage builds for smaller images",
+      "Optimize layer caching",
+      "Monitor and tune resource usage"
+    ],
+    "reliability": [
+      "Implement health checks",
+      "Use restart policies",
+      "Configure logging properly",
+      "Plan backup and recovery strategies"
+    ]
+  }
+}
+
+
+
+

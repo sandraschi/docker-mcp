@@ -147,10 +147,7 @@ class ImagePruneResult(BaseModel):
         json_schema={"description": "Disk space reclaimed in bytes"}
     )
 
-@mcp.tool(
-    name="list_images",
-    description="List Docker images with filtering options"
-)
+@mcp.tool
 async def list_images(
     name: Optional[str] = Field(default=None, json_schema={"description": "Filter by image name or name:tag"}),
     all: bool = Field(default=False, json_schema={"description": "Show all images (default hides intermediate images)"}),
@@ -350,10 +347,7 @@ async def get_image_history(image_id: str) -> Dict[str, Any]:
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
-@mcp.tool(
-    name="tag_image",
-    description="Tag a Docker image"
-)
+@mcp.tool
 async def tag_image(
     image_id: str = Field(..., json_schema={"description": "Source image ID or name (optionally with tag)"}),
     repository: str = Field(..., json_schema={"description": "Repository to tag the image with"}),
@@ -453,10 +447,7 @@ async def tag_image(
             'error': error_msg
         }
 
-@mcp.tool(
-    name="search_images",
-    description="Search Docker Hub for images"
-)
+@mcp.tool
 async def search_images(
     term: str = Field(..., json_schema={"description": "Search term"}),
     limit: int = Field(default=25, json_schema={"description": "Maximum number of results to return (1-100)", "minimum": 1, "maximum": 100}),
@@ -549,10 +540,7 @@ async def search_images(
             'term': term
         }
 
-@mcp.tool(
-    name="prune_images",
-    description="Remove unused Docker images"
-)
+@mcp.tool
 async def prune_images(
     filters: Dict[str, str] = Field(default_factory=dict, json_schema={"description": "Filters to process on the prune (e.g., {'dangling': ['true']}"}),
     dry_run: bool = Field(default=False, json_schema={"description": "If true, only show what would be deleted"})

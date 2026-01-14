@@ -115,10 +115,7 @@ class ImageRemoveRequest(BaseModel):
     force: bool = Field(False, description="Force removal of the image even if it is being used")
     noprune: bool = Field(False, description="Do not delete untagged parent images")
 
-@mcp.tool(
-    name="list_images",
-    description="List Docker images with filtering options"
-)
+@mcp.tool
 async def list_images(params: ImageListRequest) -> ContainerImageResponse:
     """
     List Docker images with filtering options.
@@ -200,10 +197,7 @@ async def list_images(params: ImageListRequest) -> ContainerImageResponse:
             message="An unexpected error occurred"
         )
 
-@mcp.tool(
-    name="pull_image",
-    description="Pull a Docker image from a registry"
-)
+@mcp.tool
 async def pull_image(params: ImagePullRequest) -> ContainerImageResponse:
     """
     Pull a Docker image from a registry.
@@ -278,10 +272,7 @@ async def pull_image(params: ImagePullRequest) -> ContainerImageResponse:
             message="An unexpected error occurred"
         )
 
-@mcp.tool(
-    name="build_image",
-    description="Build a Docker image from a Dockerfile"
-)
+@mcp.tool
 async def build_image(params: ImageBuildRequest) -> ContainerImageResponse:
     """
     Build a Docker image from a Dockerfile.
@@ -367,10 +358,7 @@ async def build_image(params: ImageBuildRequest) -> ContainerImageResponse:
             message="An unexpected error occurred during build"
         )
 
-@mcp.tool(
-    name="remove_image",
-    description="Remove a Docker image"
-)
+@mcp.tool
 async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse:
     """
     Remove a Docker image.

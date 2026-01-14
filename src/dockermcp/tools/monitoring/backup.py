@@ -201,10 +201,7 @@ class ListBackupsParams(BaseModel):
 # Create a default instance
 backup_manager = MonitoringBackup()
 
-@mcp.tool(
-    name="create_monitoring_backup",
-    description="Create a backup of the monitoring stack's data"
-)
+@mcp.tool
 async def create_monitoring_backup(params: CreateBackupParams) -> Dict[str, Any]:
     """
     Create a backup of the monitoring stack's data.
@@ -235,10 +232,7 @@ async def create_monitoring_backup(params: CreateBackupParams) -> Dict[str, Any]
             "error": error_msg
         }
 
-@mcp.tool(
-    name="restore_monitoring_backup",
-    description="Restore the monitoring stack's data from a backup"
-)
+@mcp.tool
 async def restore_monitoring_backup(params: RestoreBackupParams) -> Dict[str, Any]:
     """
     Restore the monitoring stack's data from a backup.
@@ -270,10 +264,7 @@ async def restore_monitoring_backup(params: RestoreBackupParams) -> Dict[str, An
             "error": error_msg
         }
 
-@mcp.tool(
-    name="list_monitoring_backups",
-    description="List available monitoring backups"
-)
+@mcp.tool
 async def list_monitoring_backups(params: ListBackupsParams) -> Dict[str, Any]:
     """
     List available monitoring backups.

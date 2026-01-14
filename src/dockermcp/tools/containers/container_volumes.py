@@ -122,10 +122,7 @@ class PruneVolumesParams(BaseModel):
                    "label! (label!=<key>=<value>), all (true/false)"
     )
 
-@mcp.tool(
-    name="list_volumes",
-    description="List Docker volumes with filtering options"
-)
+@mcp.tool
 async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
     """
     List Docker volumes with filtering options.
@@ -238,10 +235,7 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
             "error": "UNEXPECTED_ERROR"
         }
 
-@mcp.tool(
-    name="create_volume",
-    description="Create a new Docker volume"
-)
+@mcp.tool
 async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
     """
     Create a new Docker volume.
@@ -341,10 +335,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             "error": "UNEXPECTED_ERROR"
         }
 
-@mcp.tool(
-    name="inspect_volume",
-    description="Inspect a Docker volume"
-)
+@mcp.tool
 async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
     """
     Inspect a Docker volume.
@@ -449,10 +440,7 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
             "error": "UNEXPECTED_ERROR"
         }
 
-@mcp.tool(
-    name="remove_volume",
-    description="Remove a Docker volume"
-)
+@mcp.tool
 async def remove_volume(params: RemoveVolumeParams) -> Dict[str, Any]:
     """
     Remove a Docker volume.
@@ -522,10 +510,7 @@ async def remove_volume(params: RemoveVolumeParams) -> Dict[str, Any]:
             "error": "REMOVAL_FAILED"
         }
 
-@mcp.tool(
-    name="prune_volumes",
-    description="Remove unused Docker volumes"
-)
+@mcp.tool
 async def prune_volumes(params: PruneVolumesParams) -> Dict[str, Any]:
     """
     Remove unused Docker volumes.

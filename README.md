@@ -1,8 +1,8 @@
 # DockerMCP
 
-## FastMCP 2.11.3 server for comprehensive Docker operations with Austrian efficiency
+## FastMCP 2.13+ server for comprehensive Docker operations with Austrian efficiency
 
-[![FastMCP](https://img.shields.io/badge/FastMCP-2.11.3-blue)](https://github.com/jlowin/fastmcp)
+[![FastMCP](https://img.shields.io/badge/FastMCP-2.13+-blue)](https://github.com/jlowin/fastmcp)
 [![Python](https://img.shields.io/badge/Python-3.8+-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
@@ -11,7 +11,7 @@
 [![codecov](https://codecov.io/gh/sandraschi/dockermcp/branch/main/graph/badge.svg?token=YOUR-TOKEN)](https://codecov.io/gh/sandraschi/dockermcp)
 [![Austrian Efficiency](https://img.shields.io/badge/Austrian-Efficiency-red)](https://en.wikipedia.org/wiki/Austrian_school)
 
-*Vienna-style Docker management with FastMCP 2.11.3 - \
+*Vienna-style Docker management with FastMCP 2.13+ - \
 because your containers deserve Sachertorte-level precision.*
 
 ## 🚀 Features
@@ -238,7 +238,7 @@ docker-compose up -d
 
 - Python 3.8+
 - Docker Engine 20.10.0+
-- FastMCP 2.11.3+ (handles all state management internally)
+- FastMCP 2.13+ (handles all state management internally)
 
 ### From Source
 

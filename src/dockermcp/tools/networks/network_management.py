@@ -39,7 +39,7 @@ from pydantic_core import PydanticUndefined, field_validator
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
 
-@mcp.tool("remove_network")
+@mcp.tool
 async def remove_network(network_id: str, force: bool = False) -> Dict[str, Any]:
     """
     Remove a Docker network by ID or name.
@@ -1717,10 +1717,7 @@ class NetworkSummary(BaseModel):
         return data
 
 
-@mcp.tool(
-    name="list_networks",
-    description="List Docker networks with optional filtering"
-)
+@mcp.tool
 async def list_networks(params: NetworkListRequest) -> NetworkListResponse:
     """
     List Docker networks with optional filtering.
@@ -1823,10 +1820,7 @@ async def list_networks(params: NetworkListRequest) -> NetworkListResponse:
         )
         return {"status": "error", "error": error_msg}
 
-@mcp.tool(
-    name="create_network",
-    description="Create a new Docker network"
-)
+@mcp.tool
 async def create_network(params: NetworkCreateRequest) -> NetworkCreateResponse:
     """
     Create a new Docker network.
@@ -1925,10 +1919,7 @@ async def create_network(params: NetworkCreateRequest) -> NetworkCreateResponse:
         )
 
 
-@mcp.tool(
-    name="connect_container_to_network",
-    description="Connect a container to a network"
-)
+@mcp.tool
 async def connect_container_to_network(
     params: NetworkConnectRequest
 ) -> NetworkConnectResponse:
@@ -2059,10 +2050,7 @@ async def connect_container_to_network(
             network_id=params.network
         )
 
-@mcp.tool(
-    name="disconnect_container_from_network",
-    description="Disconnect a container from a network"
-)
+@mcp.tool
 async def disconnect_container_from_network(
     params: NetworkDisconnectRequest
 ) -> NetworkDisconnectResponse:
@@ -2149,10 +2137,7 @@ async def disconnect_container_from_network(
             network_id=params.network
         )
 
-@mcp.tool(
-    name="inspect_network",
-    description="Inspect a Docker network"
-)
+@mcp.tool
 async def inspect_network(
     params: NetworkInspectRequest
 ) -> NetworkInspectResponse:
