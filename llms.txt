@@ -72,10 +72,11 @@ docker-mcp/
 
 ### Install & Run
 ```bash
-# Install dependencies
-uv sync
+# One-liner via uvx (no installation)
+uvx docker-mcp
 
-# Run MCP server + webapp
+# Or install locally via uv
+uv sync
 uv run docker-mcp
 
 # Or use just
@@ -192,7 +193,9 @@ just lint
 
 ## Technologies
 
-- **FastMCP**: 3.1+ (MCP server framework)
+- **FastMCP**: 3.1.1+ (MCP server framework)
+- **uv**: Fast Python package manager
+- **mcpb**: MCP Bundle packaging format (replaces DXT)
 - **Python**: 3.12+
 - **FastAPI**: Web framework
 - **docker-py**: Docker client

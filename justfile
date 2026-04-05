@@ -82,7 +82,7 @@ docker-monitoring:
 
 # Package with mcpb
 package:
-    mcpb pack
+    mcpb build
 
 # Clean build artifacts
 clean:

@@ -148,18 +148,43 @@ for all its stateful operations. This provides several key benefits:
 - FastMCP 3.1.1+
 
 ### 📦 Quick Start
-Run immediately via `uvx`:
+
+Run immediately via `uvx` (no installation needed):
 ```bash
 uvx docker-mcp
 ```
 
-### 🎯 Claude Desktop Integration
-Add to your `claude_desktop_config.json`:
+Or install and run locally via `uv`:
+```bash
+git clone https://github.com/sandraschi/docker-mcp.git
+cd docker-mcp
+uv sync
+uv run docker-mcp
+```
+
+### 🎯 Installation Methods
+
+#### Option 1: One-liner via `uvx` (No installation)
+```bash
+uvx docker-mcp
+```
+Runs immediately with automatic dependency management.
+
+#### Option 2: Local install via `uv`
+```bash
+git clone https://github.com/sandraschi/docker-mcp.git
+cd docker-mcp
+uv sync          # Install dependencies
+uv run docker-mcp  # Start server
+```
+
+#### Option 3: Claude Desktop Integration
+Add to `claude_desktop_config.json`:
 ```json
 "mcpServers": {
   "docker-mcp": {
-    "command": "uv",
-    "args": ["--directory", "D:/Dev/repos/docker-mcp", "run", "docker-mcp"]
+    "command": "uvx",
+    "args": ["docker-mcp"]
   }
 }
 ```
@@ -268,7 +293,7 @@ cd docker-mcp
 docker-compose up -d
 ```
 
-### From Source
+### From Source (Local Development)
 
 ```bash
 git clone https://github.com/sandraschi/docker-mcp.git
@@ -281,11 +306,19 @@ uv run docker-mcp
 
 ### Starting the Server
 
+**Via `uvx` (one-liner):**
 ```bash
-# Using Python
-python -m dockermcp
+uvx docker-mcp
+```
 
-# Using Docker
+**Via `uv` (local):**
+```bash
+cd docker-mcp
+uv run docker-mcp
+```
+
+**Via Docker:**
+```bash
 docker run -d \
   -p 8000:8000 \
   -v /var/run/docker.sock:/var/run/docker.sock \
