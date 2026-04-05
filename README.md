@@ -1,18 +1,15 @@
-# DockerMCP
+# docker-mcp
 
-## FastMCP 3.1+ server for comprehensive Docker operations with Austrian efficiency
+## FastMCP 3.1.1+ server for comprehensive Docker operations
 
-[![FastMCP](https://img.shields.io/badge/FastMCP-3.1+-blue)](https://github.com/jlowin/fastmcp)
+[![FastMCP](https://img.shields.io/badge/FastMCP-3.1.1+-blue)](https://github.com/jlowin/fastmcp)
 [![Python](https://img.shields.io/badge/Python-3.12+-green)](https://python.org)
 [![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI/CD](https://github.com/sandraschi/dockermcp/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sandraschi/dockermcp/actions)
 [![Docker Image](https://img.shields.io/docker/pulls/sandraschi/dockermcp)](https://hub.docker.com/r/sandraschi/dockermcp)
 [![codecov](https://codecov.io/gh/sandraschi/dockermcp/branch/main/graph/badge.svg?token=YOUR-TOKEN)](https://codecov.io/gh/sandraschi/dockermcp)
-[![Austrian Efficiency](https://img.shields.io/badge/Austrian-Efficiency-red)](https://en.wikipedia.org/wiki/Austrian_school)
 
-*Vienna-style Docker management with FastMCP 3.1+ - \
-because your containers deserve Sachertorte-level precision.*
 
 ## 🚀 Features
 
@@ -97,7 +94,7 @@ DockerMCP uses structured JSON logging for better observability:
 - Configurable log levels and output formats
 - Automatic log rotation for file output
 
-### State Management (Powered by FastMCP 3.1+)
+### State Management (Powered by FastMCP 3.1.1+)
 
 DockerMCP leverages FastMCP 3.1+'s built-in state management system \
 for all its stateful operations. This provides several key benefits:
@@ -123,14 +120,14 @@ for all its stateful operations. This provides several key benefits:
 - **Volume Management**: Handle Docker volumes and storage
 - **System Monitoring**: Get Docker system info, version, and disk usage
 
-### Austrian Efficiency Add-ons
+### Management & Recovery Features
 
 - **Docker Desktop Management**: Native tools for daemon health, recovery, and updates
-- **Docker Watchdog**: Automatic monitoring and recovery of Docker daemon
+- **Hang Detection**: Automatic timeout-based detection of unresponsive daemon
+- **Auto-Recovery**: Graceful process termination and restart
 - **Stack Health Checks**: One-command status of all your stacks
-- **Problem Detection**: Find and diagnose issues before they become problems
+- **Problem Detection**: Diagnose issues before they cause downtime
 - **Intelligent Recovery**: Automated fixes for common Docker issues
-- **Maintenance Tips**: Proactive suggestions for keeping your Docker environment clean
 - **Cross-Platform Support**: Works on both Windows and Linux systems
 
 ## 🚨 Docker Watchdog
@@ -148,7 +145,7 @@ for all its stateful operations. This provides several key benefits:
 ### Prerequisites
 - [uv](https://docs.astral.sh/uv/) installed (RECOMMENDED)
 - Python 3.12+
-- FastMCP 3.1+
+- FastMCP 3.1.1+
 
 ### 📦 Quick Start
 Run immediately via `uvx`:
@@ -344,4 +341,4 @@ see the [LICENSE](LICENSE) file for details.
 
 ---
 
-*"In Vienna, even the containers run on time."* - Probably not Gustav Mahler
+*Docker MCP Server - Comprehensive Docker operations with FastMCP 3.1.1+*

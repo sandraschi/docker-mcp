@@ -1,6 +1,6 @@
 # llms.txt for docker-mcp
 # Last Updated: January 2026
-# FastMCP 3.1+ Server for comprehensive Docker operations
+# FastMCP 3.1.1+ Server for comprehensive Docker operations
 
 ## Project Overview
 
@@ -224,5 +224,5 @@ MIT License - See LICENSE file
 ---
 
 **Last Updated**: January 2026
-**Version**: FastMCP 3.1+
+**Version**: FastMCP 3.1.1+
 **Status**: Production Ready
