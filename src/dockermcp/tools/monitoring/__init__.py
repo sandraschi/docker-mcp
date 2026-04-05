@@ -278,7 +278,7 @@ async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
                 status="success",
                 message="Monitoring services stopped successfully",
                 details={
-                    "volumes_removed": remove_volumes,
+                    "volumes_removed": params.remove_volumes,
                     "output": result.stdout
                 }
             ).model_dump()
@@ -405,7 +405,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
             message=f"Found {len(services)} monitoring services",
             details={
                 "services": services or [{"error": "No monitoring services found or not running"}],
-                "raw_output": result.stdout if detailed else None
+                "raw_output": result.stdout if params.detailed else None
             }
         ).model_dump()
         

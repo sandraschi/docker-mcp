@@ -6,20 +6,13 @@ It follows FastMCP 2.12+ standards for tool registration.
 """
 from __future__ import annotations
 
-import logging
-from typing import Any, Dict, List, Optional, Annotated, Union
-from datetime import datetime
-
-import docker
+from typing import Any, Dict, Optional
 from docker.errors import DockerException
 from pydantic import BaseModel, Field, ConfigDict
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
 
 from dockermcp.logging_config import logger
-
-# Initialize MCP instance
-mcp = FastMCP("Docker MCP")
+from dockermcp.mcp_instance import mcp
+from dockermcp import docker_client, check_docker_available
 
 class ContainerInfo(BaseModel):
     """Information about a Docker container."""
@@ -57,6 +50,7 @@ class ListContainersParams(BaseModel):
     )
 
 @mcp.tool
+@check_docker_available
 async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
     """
     List Docker containers with optional filtering.
@@ -85,7 +79,8 @@ async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
         }
     """
     try:
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Convert empty dict to None for Docker SDK
         filters = params.filters or {}

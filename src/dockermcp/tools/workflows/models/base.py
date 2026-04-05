@@ -6,6 +6,9 @@ from typing import Any, Dict, Optional
 from pydantic import BaseModel as PydanticBaseModel, ConfigDict, Field
 from uuid import UUID, uuid4
 
+# Alias for code that expects BaseModelConfig (e.g. model_config type hints)
+BaseModelConfig = ConfigDict
+
 
 class BaseModel(PydanticBaseModel):
     """Base model with common fields and methods."""

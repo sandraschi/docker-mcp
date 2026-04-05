@@ -520,3 +520,31 @@ class ContainerExecResponse(BaseModel):
             container_id=container_id,
             exec_id=exec_id
         )
+
+
+class ContainerFileResponse(BaseModel):
+    """Response model for container file operations."""
+    status: Literal['success', 'error'] = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message about the result")
+    container_id: Optional[str] = Field(None, description="ID of the container")
+    path: Optional[str] = Field(None, description="File path in the container")
+    data: Dict[str, Any] = Field(default_factory=dict, description="File content or listing data")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+
+
+class ContainerVolumeResponse(BaseModel):
+    """Response model for container volume operations."""
+    status: Literal['success', 'error'] = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message about the result")
+    container_id: Optional[str] = Field(None, description="ID of the container")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Volume or mount data")
+    error: Optional[str] = Field(None, description="Error message if operation failed")
+
+
+class ContainerImageResponse(BaseModel):
+    """Response model for container image operations."""
+    status: Literal['success', 'error'] = Field(..., description="Status of the operation")
+    message: str = Field(..., description="Human-readable message about the result")
+    container_id: Optional[str] = Field(None, description="ID of the container")
+    data: Dict[str, Any] = Field(default_factory=dict, description="Image or commit data")
+    error: Optional[str] = Field(None, description="Error message if operation failed")

@@ -41,8 +41,7 @@ class FastMCPSingleton:
                 # Initialize FastMCP with minimal settings
                 self.mcp = FastMCP(
                     name="docker-mcp",
-                    version=__version__,
-                    include_fastmcp_meta=False
+                    version=__version__
                 )
                 
                 # Patch the message handler to handle custom protocol versions

@@ -79,8 +79,19 @@ class GPUContainerManager:
     
     def __init__(self, docker_client: Optional[docker.DockerClient] = None):
         """Initialize the GPU container manager."""
-        self.docker_client = docker_client or docker.from_env()
-        self.gpu_manager = GPUManager()
+        try:
+            if docker_client:
+                self.docker_client = docker_client
+            else:
+                from ....dockermcp import docker_client as global_client, docker_available
+                if docker_available:
+                    self.docker_client = global_client
+                else:
+                    self.docker_client = docker.from_env()
+        except Exception:
+            self.docker_client = None
+            
+        self.gpu_manager = GPUManager(docker_client=self.docker_client)
     
     def _create_device_request(
         self,

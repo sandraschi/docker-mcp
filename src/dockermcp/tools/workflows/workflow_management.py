@@ -42,13 +42,26 @@ from .models import (
 class WorkflowManager:
     """Manages Docker workflows."""
     
-    def __init__(self):
-        self.client = docker.from_env()
+    def __init__(self, docker_client: Optional[docker.DockerClient] = None):
+        """Initialize the WorkflowManager."""
+        try:
+            if docker_client:
+                self.client = docker_client
+            else:
+                from ....dockermcp import docker_client as global_client, docker_available
+                if docker_available:
+                    self.client = global_client
+                else:
+                    self.client = docker.from_env()
+        except Exception:
+            self.client = None
+            
         self.workflows: Dict[str, WorkflowState] = {}
         
     def create_workflow(
         self,
-        request: CreateWorkflowRequest
+        workflow_definition: WorkflowDefinition,
+        workflow_id: Optional[str] = None
     ) -> WorkflowState:
         """Create a new workflow.
         

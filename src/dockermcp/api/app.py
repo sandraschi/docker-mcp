@@ -1,0 +1,173 @@
+"""
+FastAPI routes for Docker MCP webapp
+"""
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+import docker
+import logging
+
+logger = logging.getLogger(__name__)
+
+def create_app() -> FastAPI:
+    """Create and configure FastAPI app with Docker endpoints"""
+    
+    app = FastAPI(title="Docker MCP API", version="0.1.0")
+    
+    # Add CORS middleware
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    
+    # Initialize Docker client
+    try:
+        client = docker.from_env()
+    except Exception as e:
+        logger.error(f"Failed to connect to Docker: {e}")
+        client = None
+    
+    # Health check
+    @app.get("/health")
+    async def health():
+        return {"status": "ok"}
+    
+    # Dashboard endpoint
+    @app.get("/api/dashboard")
+    async def get_dashboard():
+        """Get dashboard overview with system info and container status"""
+        if not client:
+            raise HTTPException(status_code=503, detail="Docker not available")
+        
+        try:
+            # Get system info
+            info = client.info()
+            version = client.version()
+            
+            # Get containers
+            containers = client.containers.list(all=True)
+            running = len([c for c in containers if c.status == "running"])
+            
+            # Get images
+            images = client.images.list()
+            
+            # Calculate disk usage
+            disk_info = client.df()
+            total_size = sum(i.get("Size", 0) for i in disk_info.get("Images", []))
+            
+            return {
+                "system_info": {
+                    "docker_version": version.get("Version"),
+                    "containers": {
+                        "total": len(containers),
+                        "running": running,
+                        "paused": len([c for c in containers if c.status == "paused"]),
+                        "stopped": len(containers) - running,
+                    },
+                    "images": {
+                        "total": len(images),
+                    },
+                    "memory": {
+                        "total": info.get("MemTotal", 0),
+                        "total_formatted": f"{info.get('MemTotal', 0) / (1024**3):.1f}GB",
+                    },
+                    "cpu": {
+                        "cores": info.get("NCPU", 0),
+                    },
+                },
+                "containers": [
+                    {
+                        "id": c.id[:12],
+                        "name": c.name,
+                        "status": c.status,
+                        "image": c.image.tags[0] if c.image.tags else c.image.id[:12],
+                        "state": "running" if c.status == "running" else "stopped",
+                    }
+                    for c in containers[:10]
+                ],
+                "containers_status": "success",
+                "containers_message": f"Total: {len(containers)} containers",
+                "disk_summary": {
+                    "total_containers_size": sum(c.get("SizeRw", 0) for c in disk_info.get("Containers", [])),
+                    "total_images_size": sum(i.get("Size", 0) for i in disk_info.get("Images", [])),
+                    "total_volumes_size": sum(v.get("UsageData", {}).get("Size", 0) for v in disk_info.get("Volumes", [])),
+                    "total_size": total_size,
+                },
+                "images": [
+                    {
+                        "id": img.id[:12],
+                        "repo_tags": img.tags or ["<none>"],
+                        "size": img.attrs.get("Size", 0),
+                        "created": img.attrs.get("Created"),
+                    }
+                    for img in images[:10]
+                ],
+                "images_count": len(images),
+                "images_status": "success",
+                "system_status": "success",
+            }
+        except Exception as e:
+            logger.error(f"Error getting dashboard: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # Containers endpoint
+    @app.get("/api/containers")
+    async def get_containers():
+        """Get list of all containers"""
+        if not client:
+            raise HTTPException(status_code=503, detail="Docker not available")
+        
+        try:
+            containers = client.containers.list(all=True)
+            return {
+                "containers": [
+                    {
+                        "id": c.id,
+                        "name": c.name,
+                        "status": c.status,
+                        "image": c.image.tags[0] if c.image.tags else c.image.id[:12],
+                        "state": "running" if c.status == "running" else "stopped",
+                        "created": c.attrs.get("Created"),
+                    }
+                    for c in containers
+                ],
+                "status": "success",
+            }
+        except Exception as e:
+            logger.error(f"Error getting containers: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # Tools endpoint
+    @app.get("/api/tools")
+    async def get_tools():
+        """Get list of available MCP tools"""
+        docker_desktop_tools = [
+            "docker_desktop_status",
+            "docker_daemon_recover",
+            "docker_daemon_restart",
+            "docker_desktop_update",
+        ]
+        
+        container_tools = [
+            "list_containers",
+            "start_container",
+            "stop_container",
+            "restart_container",
+            "remove_container",
+            "get_container_logs",
+        ]
+        
+        return {
+            "tools": docker_desktop_tools + container_tools,
+            "docker_desktop_tools": docker_desktop_tools,
+            "container_tools": container_tools,
+        }
+    
+    return app
+
+if __name__ == "__main__":
+    import uvicorn
+    app = create_app()
+    uvicorn.run(app, host="0.0.0.0", port=10807)

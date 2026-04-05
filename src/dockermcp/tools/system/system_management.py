@@ -6,20 +6,14 @@ including system information, disk usage analysis, and system cleanup operations
 """
 from __future__ import annotations
 
-import asyncio
-import json
-import logging
 import re
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Annotated
+from typing import Any, Dict, Optional
 
-import docker
-from docker.errors import DockerException, APIError
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
+from docker.errors import DockerException
+
 from pydantic import BaseModel, Field, ConfigDict
 
+from dockermcp import docker_client, check_docker_available
 from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
 
@@ -181,6 +175,7 @@ def parse_duration_string(duration_str: str) -> int:
 # ============================================================================
 
 @mcp.tool
+@check_docker_available
 async def get_system_info(
     request: SystemInfoRequest
 ) -> SystemInfoResponse:
@@ -195,7 +190,7 @@ async def get_system_info(
     """
     try:
         logger.info("Getting Docker system information")
-        client = docker.from_env()
+        client = docker_client
         
         # Get basic system info
         info = client.info()
@@ -249,7 +244,7 @@ async def get_system_info(
                 logger.warning(f"Could not get swarm info: {e}")
                 system_data["swarm"] = {"error": str(e)}
         
-        client.close()
+
         
         return SystemInfoResponse(
             status="success",
@@ -272,6 +267,7 @@ async def get_system_info(
         )
 
 @mcp.tool
+@check_docker_available
 async def get_disk_usage(
     request: DiskUsageRequest
 ) -> DiskUsageResponse:
@@ -286,7 +282,7 @@ async def get_disk_usage(
     """
     try:
         logger.info("Getting Docker disk usage information")
-        client = docker.from_env()
+        client = docker_client
         
         # Get disk usage data
         df_info = client.df()
@@ -373,7 +369,7 @@ async def get_disk_usage(
         summary["total_build_cache_size_formatted"] = format_bytes(summary["total_build_cache_size"])
         summary["total_size_formatted"] = format_bytes(summary["total_size"])
         
-        client.close()
+
         
         return DiskUsageResponse(
             status="success",
@@ -396,6 +392,7 @@ async def get_disk_usage(
         )
 
 @mcp.tool
+@check_docker_available
 async def prune_system(
     request: PruneSystemRequest
 ) -> PruneSystemResponse:
@@ -410,7 +407,7 @@ async def prune_system(
     """
     try:
         logger.info("Starting Docker system prune operation")
-        client = docker.from_env()
+        client = docker_client
         
         pruned_data = {
             "containers_pruned": [],
@@ -467,7 +464,7 @@ async def prune_system(
                 result = client.api.prune_builds()
                 pruned_data["build_cache_pruned"] = result.get("CachesDeleted", [])
                 pruned_data["total_space_reclaimed"] += result.get("SpaceReclaimed", 0)
-                logger.info(f"Pruned build cache")
+                logger.info("Pruned build cache")
             except Exception as e:
                 logger.warning(f"Failed to prune build cache: {e}")
         
@@ -476,7 +473,7 @@ async def prune_system(
             pruned_data["total_space_reclaimed"]
         )
         
-        client.close()
+
         
         return PruneSystemResponse(
             status="success",

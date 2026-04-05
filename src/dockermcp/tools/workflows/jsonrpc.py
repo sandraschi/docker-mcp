@@ -12,7 +12,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
-from .models.base import BaseModelConfig
 from .models.responses import ErrorResponse
 
 T = TypeVar('T')
@@ -41,9 +40,7 @@ class JSONRPCRequest(BaseModel, Generic[T]):
         default_factory=lambda: str(uuid4()),
         description="An identifier established by the client"
     )
-    
-    model_config = BaseModelConfig
-    
+
     @classmethod
     def create(
         cls,
@@ -117,9 +114,7 @@ class JSONRPCResponse(BaseModel, Generic[T]):
         None,
         description="The request identifier that this response corresponds to"
     )
-    
-    model_config = BaseModelConfig
-    
+
     @classmethod
     def success(
         cls,

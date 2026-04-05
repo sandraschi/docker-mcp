@@ -12,6 +12,12 @@ class ToolError(DockerMCPError):
     """Raised when a tool encounters an error during execution."""
     pass
 
+
+class DockerOperationError(DockerMCPError):
+    """Raised when a Docker operation fails."""
+    pass
+
+
 class ContainerError(DockerMCPError):
     """Raised when a container operation fails."""
     pass

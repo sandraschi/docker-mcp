@@ -15,6 +15,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Union
+from .transport import run_server, run_server_async
 
 
 class ContainerManager:
@@ -39,12 +40,7 @@ class ContainerManager:
         """
         try:
             cmd = self.docker_cmd + args
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=timeout
-            )
+            result = run_server(subprocess, server_name="docker-mcp")
             
             return {
                 "success": result.returncode == 0,

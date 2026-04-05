@@ -22,10 +22,9 @@ import httpx
 from pydantic import BaseModel, Field, field_validator, model_validator, HttpUrl, AnyUrl
 
 from .models import (
-    ServiceHealth, 
-    ServiceDefinition, 
-    BaseModelConfig,
-    BaseModel
+    ServiceHealth,
+    ServiceDefinition,
+    BaseModel,
 )
 
 T = TypeVar('T')
@@ -62,9 +61,7 @@ class HealthCheckResult(BaseModel):
         0.0,
         description="How long the health check took in milliseconds"
     )
-    
-    model_config = BaseModelConfig
-    
+
     @classmethod
     def healthy(cls, **kwargs: Any) -> 'HealthCheckResult':
         """Create a healthy result."""
@@ -119,9 +116,7 @@ class BaseHealthCheck(BaseModel, Generic[T]):
         ge=0,
         description="Initial delay before starting health checks in seconds"
     )
-    
-    model_config = BaseModelConfig
-    
+
     async def execute(self) -> HealthCheckResult:
         """Execute the health check and return the result.
         

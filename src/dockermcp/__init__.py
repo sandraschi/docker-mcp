@@ -24,6 +24,8 @@ __version__ = "2.13.0"
 import logging
 import os
 import sys
+import asyncio
+import subprocess
 from pathlib import Path
 from typing import Any, Dict, List, Optional, TypeVar, Callable, Type, cast
 from functools import wraps
@@ -70,19 +72,28 @@ logger = logger
 def check_docker_available(func: F) -> F:
     """Decorator to check Docker availability before tool execution."""
     @wraps(func)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         if not docker_available:
-            return (
-                f"❌ Docker daemon not available: {docker_error}\n\n"
-                f"💡 Troubleshooting:\n"
-                f"1. Start Docker Desktop\n"
-                f"2. Run 'docker version' to test\n"
-                f"3. Use docker_status tool for diagnostics"
-            )
+            return {
+                "status": "error",
+                "message": f"❌ Docker daemon not available: {docker_error}",
+                "troubleshooting": [
+                    "Start Docker Desktop",
+                    "Run 'docker version' to test",
+                    "Use docker_status tool for diagnostics"
+                ]
+            }
         try:
-            return func(*args, **kwargs)
+            if asyncio.iscoroutinefunction(func):
+                return await func(*args, **kwargs)
+            else:
+                return func(*args, **kwargs)
         except docker.errors.DockerException as e:
-            return f"❌ Docker operation failed: {str(e)}"
+            return {
+                "status": "error",
+                "message": f"❌ Docker operation failed: {str(e)}",
+                "error_type": type(e).__name__
+            }
     return cast(F, wrapper)
 
 def initialize_docker_connection() -> bool:

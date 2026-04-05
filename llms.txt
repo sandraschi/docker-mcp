@@ -1,100 +1,36 @@
-# Language Models and AI Components
+# docker-mcp
+> > **Purpose**: Comprehensive GitHub configuration guide to avoid hours of trial-and-error setup. > > **Copy this to new MCP repos** to get everything right the first time! --- 1. [Quick Setup Checklis...
 
-This file documents the language models and AI components used in the DockerMCP project.
+This project includes automated llms.txt generation for AI accessibility.
 
-## Core AI Components
+## Docs
+- [Readme](docs\github\README.md): > **Purpose**: Comprehensive GitHub configuration guide to avoid hours of trial-and-error setup.
+- [Readme](README.md): [![FastMCP](https://img.shields.io/badge/FastMCP-2.13+-blue)](https://github.com/jlowin/fastmcp)
+- [Readme](docs\glama\README.md): This directory contains documentation related to achieving GLAMA AI Gold standard status for the Adv...
+- [Readme](docs\mcpb-packaging\README.md): **Complete guide to packaging and distributing MCP servers with MCPB**
+- [Complete Setup Guide](docs\github\COMPLETE_SETUP_GUIDE.md): > **6 hours of pain distilled into 30 minutes of setup**
+- [Megatest Location And Cleanup](docs\testing\MEGATEST_LOCATION_AND_CLEANUP.md): Megatest supports **flexible test location** and **configurable cleanup** strategies to balance:
+- [Serena Install And Test](docs\serena\SERENA_INSTALL_AND_TEST.md): **Date:** 2025-10-09
+- [Complete Type Fix Guide](docs\github\COMPLETE_TYPE_FIX_GUIDE.md): > **From 130+ type errors to 0** - The systematic approach that actually works!
+- [Changelog](CHANGELOG.md): All notable changes to this project will be documented in this file.
+- [Mcpjam Guide](docs\MCPJAM-GUIDE.md): This guide explains how to set up and use MCPJam with the Docker MCP server for development and test...
 
-### 1. FastMCP 2.10.1 Integration
-- **Purpose**: Standardized tool interface and communication protocol
-- **Version**: 2.10.1 (strict requirement)
-- **Features**:
-  - Tool registration and discovery
-  - Request/response handling
-  - Error management
-  - Input/output validation
+## Api
+- [  Init  ](src\dockermcp\api\__init__.py): Api definitions and implementations
+- [Containers](src\dockermcp\api\containers.py): Api definitions and implementations
+- [Service](src\dockermcp\tools\workflows\models\service.py): Models definitions and implementations
+- [  Init  ](src\dockermcp\tools\workflows\models\__init__.py): Models definitions and implementations
+- [  Init  ](src\dockermcp\models\__init__.py): Models definitions and implementations
 
-### 2. Pydantic Models
-- **Purpose**: Data validation and settings management
-- **Version**: 2.0+
-- **Features**:
-  - Request/response validation
-  - Type hints
-  - Automatic documentation generation
+## Examples
+- [Examples](examples/): Example code and implementations
 
-## Optional AI/ML Components
+## Configuration
+- [Pyproject](pyproject.toml): Python project configuration and dependencies
+- [Package](web_sota\package.json): Node.js project configuration and dependencies
+- [Cargo](Cargo.toml): Rust project configuration and dependencies
+- [](.env): Environment variables and configuration
+- [Config](.git\config): Application configuration files
 
-### 1. Stack Health Analyzer
-- **Purpose**: Predictive analysis of Docker stack health
-- **Type**: Custom implementation
-- **Features**:
-  - Anomaly detection
-  - Performance prediction
-  - Resource optimization suggestions
-
-### 2. Problem Detection Engine
-- **Purpose**: Automated issue identification
-- **Type**: Rule-based with ML enhancements
-- **Features**:
-  - Log pattern recognition
-  - Performance bottleneck detection
-  - Security vulnerability scanning
-
-## Integration Guidelines
-
-1. **Version Control**
-   - Pin all AI/ML dependencies to specific versions
-   - Document any model training data or configurations
-
-2. **Performance Considerations**
-   - Cache model predictions when possible
-   - Implement rate limiting for resource-intensive operations
-   - Monitor memory usage of AI components
-
-3. **Security**
-   - Validate all inputs to AI components
-   - Sanitize outputs before processing
-   - Keep AI components updated with security patches
-
-## Model Training (If Applicable)
-
-For any custom models used in the project, document:
-- Training data sources
-- Model architecture
-- Training parameters
-- Evaluation metrics
-- Version information
-
-## Dependencies
-
-List all AI/ML libraries and their versions in `requirements-ai.txt`:
-```
-fastmcp==2.10.1
-pydantic>=2.0.0
-# Add other AI/ML dependencies here
-```
-
-## Usage Examples
-
-```python
-# Example of using FastMCP with AI components
-from fastmcp import FastMCP
-from pydantic import BaseModel
-
-# Initialize FastMCP
-mcp = FastMCP("docker-ai")
-
-# Define your AI-powered tool
-@mcp.tool("analyze_container")
-async def analyze_container(container_id: str) -> dict:
-    """Analyze container performance and health."""
-    # AI-powered analysis logic here
-    return {"status": "healthy", "recommendations": []}
-```
-
-## Maintenance
-
-Regularly update this file when:
-- Adding new AI/ML components
-- Upgrading model versions
-- Changing model architectures
-- Modifying training data
+## Optional
+- [Changelog](CHANGELOG.md): Project changelog information

@@ -131,7 +131,18 @@ class GPUManager:
     
     def __init__(self, docker_client: Optional[docker.DockerClient] = None):
         """Initialize the GPU manager."""
-        self.docker_client = docker_client or docker.from_env()
+        try:
+            if docker_client:
+                self.docker_client = docker_client
+            else:
+                from ....dockermcp import docker_client as global_client, docker_available
+                if docker_available:
+                    self.docker_client = global_client
+                else:
+                    self.docker_client = docker.from_env()
+        except Exception:
+            self.docker_client = None
+            
         self._gpu_info: Optional[Dict[str, Any]] = None
         self._nvidia_smi_available = self._check_nvidia_smi()
     

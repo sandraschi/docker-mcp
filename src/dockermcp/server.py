@@ -2,8 +2,8 @@
 """
 Docker MCP Server - Main Entry Point
 
-This module initializes and runs the Docker MCP server with FastMCP 2.12.0 compatibility.
-All tool implementations have been moved to their respective modules in the tools/ directory.
+This module initializes and runs the Docker MCP server with FastMCP 3.1+ compatibility.
+Includes both MCP stdio transport and FastAPI HTTP server for the webapp.
 """
 import asyncio
 import logging
@@ -11,6 +11,7 @@ import sys
 import warnings
 from pathlib import Path
 from typing import List, Tuple, Callable
+import threading
 
 # Suppress Pydantic deprecation warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic")
@@ -36,6 +37,7 @@ logger = logging.getLogger('dockermcp.server')
 warnings.showwarning = warn_with_log
 
 # Get the singleton FastMCP instance
+from .transport import run_server, run_server_async
 from .mcp_instance import get_mcp
 mcp = get_mcp()
 
@@ -54,19 +56,46 @@ try:
     from dockermcp.tools.volumes import volume_management
     from dockermcp.tools.system import system_management
     from dockermcp.tools import agentic_container_workflow  # SEP-1577 agentic workflows
+    
+    # Import desktop tools
+    from dockermcp.tools.desktop import (
+        docker_desktop_status,
+        docker_daemon_recover,
+        docker_daemon_restart,
+        docker_desktop_update,
+    )
 
     # Log successful imports
-    logger.info("Successfully imported all tool modules including SEP-1577 agentic workflows")
+    logger.info("Successfully imported all tool modules including Docker Desktop tools and SEP-1577 agentic workflows")
 
 except ImportError as e:
     logger.error(f"Failed to import tool modules: {e}", exc_info=True)
     sys.exit(1)
 
+def run_fastapi_server():
+    """Run FastAPI server in a separate thread"""
+    import uvicorn
+    from dockermcp.api.app import create_app
+    
+    app = create_app()
+    logger.info("Starting FastAPI server on port 10807...")
+    uvicorn.run(app, host="127.0.0.1", port=10807, log_level="warning")
+
 def main() -> None:
-    """Initialize and run the Docker MCP server with stdio transport."""
+    """Initialize and run the Docker MCP server with stdio transport and FastAPI HTTP."""
     try:
+        # Start FastAPI server in a background thread
+        fastapi_thread = threading.Thread(target=run_fastapi_server, daemon=True)
+        fastapi_thread.start()
+        logger.info("FastAPI server started in background thread")
+        
+        # Give FastAPI time to start
+        import time
+        time.sleep(2)
+        
+        # Start MCP stdio server
         logger.info("Starting Docker MCP server with stdio transport...")
-        asyncio.run(mcp.run_stdio_async())
+        asyncio.run(run_server(mcp, server_name="docker-mcp"))
     except KeyboardInterrupt:
         logger.info("Shutting down Docker MCP server...")
     except Exception as e:

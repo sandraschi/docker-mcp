@@ -9,23 +9,18 @@ This module provides comprehensive tools for managing Docker volumes including:
 """
 from __future__ import annotations
 
-import json
-import logging
 import os
-import shutil
-import tempfile
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Union, Literal, Annotated
+from typing import Any, Dict, List, Optional, Annotated
 
 import docker
 from docker.errors import (
-    DockerException, APIError, NotFound, 
-    ImageNotFound, ContainerError, InvalidArgument
+    DockerException, APIError, NotFound
 )
+from dockermcp import check_docker_available, docker_client
 from dockermcp.mcp_instance import mcp
-from pydantic import BaseModel, Field, Field, validator, HttpUrl, AnyUrl
+from pydantic import BaseModel, Field
 
 from dockermcp.logging_config import logger
 
@@ -67,10 +62,11 @@ class VolumeInspectResult(BaseModel):
     usage_data: Optional[Dict[str, Any]] = Field(None, description="Usage statistics about the volume")
 
 @mcp.tool()
+@check_docker_available
 async def list_volumes(
-    names: Annotated[List[str], Field(default_factory=list, description="Filter by volume names")] = [],
-    drivers: Annotated[List[str], Field(default_factory=list, description="Filter by volume drivers")] = [],
-    labels: Annotated[Dict[str, str], Field(default_factory=dict, description="Filter by labels (e.g., {'environment': 'production'})")] = {},
+    names: Annotated[List[str], Field(default_factory=list, description="Filter by volume names")],
+    drivers: Annotated[List[str], Field(default_factory=list, description="Filter by volume drivers")],
+    labels: Annotated[Dict[str, str], Field(default_factory=dict, description="Filter by labels (e.g., {'environment': 'production'})")],
     dangling: Annotated[Optional[bool], Field(None, description="Filter for dangling volumes (true/false)")] = None,
     driver: Annotated[Optional[str], Field(None, description="Filter by driver name (alias for drivers)")] = None,
     name: Annotated[Optional[str], Field(None, description="Filter by volume name (alias for names)")] = None
@@ -116,7 +112,7 @@ async def list_volumes(
     """
     try:
         # Initialize Docker client
-        client = docker.from_env()
+        client = docker_client
         
         # Handle aliases
         if driver and driver not in drivers:
@@ -190,7 +186,16 @@ async def list_volumes(
         return {"status": "error", "error": error_msg}
 
 @mcp.tool()
+@check_docker_available
 async def create_volume(
+    driver_opts: Annotated[Dict[str, str], Field(
+        default_factory=dict,
+        description="Key-value mapping of driver options and values."
+    )],
+    labels: Annotated[Dict[str, str], Field(
+        default_factory=dict,
+        description="Labels to set on the volume, as a key-value mapping."
+    )],
     name: Annotated[Optional[str], Field(
         None,
         description="Name of the volume. If not specified, Docker generates a name."
@@ -199,14 +204,6 @@ async def create_volume(
         "local",
         description="Name of the volume driver to use. Defaults to 'local'."
     )] = "local",
-    driver_opts: Annotated[Dict[str, str], Field(
-        default_factory=dict,
-        description="Key-value mapping of driver options and values."
-    )] = {},
-    labels: Annotated[Dict[str, str], Field(
-        default_factory=dict,
-        description="Labels to set on the volume, as a key-value mapping."
-    )] = {}
 ) -> Dict[str, Any]:
     """
     Create a new Docker volume.
@@ -243,7 +240,7 @@ async def create_volume(
     """
     try:
         # Initialize Docker client
-        client = docker.from_env()
+        client = docker_client
         
         # Create the volume
         volume = client.volumes.create(
@@ -297,6 +294,7 @@ async def create_volume(
         }
 
 @mcp.tool
+@check_docker_available
 async def inspect_volume(
     name: Annotated[str, Field(
         description="Name of the volume"
@@ -337,7 +335,7 @@ async def inspect_volume(
     """
     try:
         # Initialize Docker client
-        client = docker.from_env()
+        client = docker_client
         
         # Get the volume
         try:
@@ -419,6 +417,7 @@ async def inspect_volume(
         }
 
 @mcp.tool()
+@check_docker_available
 async def remove_volume(
     name: Annotated[str, Field(
         ...,
@@ -452,7 +451,7 @@ async def remove_volume(
     """
     try:
         # Initialize Docker client
-        client = docker.from_env()
+        client = docker_client
         
         # Get the volume
         try:
@@ -500,11 +499,12 @@ async def remove_volume(
         }
 
 @mcp.tool()
+@check_docker_available
 async def prune_volumes(
     filters: Annotated[Dict[str, str], Field(
         default_factory=dict,
         description="Filters to process on the prune (e.g., {'label': ['maintainer=admin']})"
-    )] = {},
+    )],
     dry_run: Annotated[bool, Field(
         False,
         description="If true, only show what would be deleted"
@@ -541,7 +541,7 @@ async def prune_volumes(
     try:
         if dry_run:
             # For dry run, we'll just list the volumes that would be removed
-            client = docker.from_env()
+            client = docker_client
             
             # Get all volumes
             volumes = client.volumes.list(filters=filters)
@@ -582,7 +582,7 @@ async def prune_volumes(
             }
         
         # Initialize Docker client
-        client = docker.from_env()
+        client = docker_client
         
         # Prune volumes
         result = client.volumes.prune(filters=filters)

@@ -168,6 +168,28 @@ from .workflows.workflow_management import (
     get_workflow_status
 )
 
+# Import desktop management functions (Docker Desktop daemon, updates, recovery)
+try:
+    from .desktop import (
+        docker_desktop_status,
+        docker_daemon_recover,
+        docker_daemon_restart,
+        docker_desktop_update
+    )
+    desktop_tools = [
+        docker_desktop_status,
+        docker_daemon_recover,
+        docker_daemon_restart,
+        docker_desktop_update
+    ]
+except ImportError as e:
+    import logging
+    logging.getLogger(__name__).warning(
+        f"Desktop tools not available: {str(e)}. "
+        "Desktop tools require Windows with Docker Desktop."
+    )
+    desktop_tools = []
+
 # GPU tools are conditionally imported to avoid import errors on systems without NVIDIA GPUs
 gpu_tools = []
 try:
@@ -237,6 +259,12 @@ __all__ = [
     'system_info',
     'disk_usage',
     'prune_system',
+    
+    # Desktop management tools
+    'docker_desktop_status',
+    'docker_daemon_recover',
+    'docker_daemon_restart',
+    'docker_desktop_update',
     
     # Workflow tools
     'create_workflow',

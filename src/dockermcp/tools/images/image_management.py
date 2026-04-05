@@ -11,28 +11,17 @@ This module provides comprehensive tools for managing Docker images including:
 """
 from __future__ import annotations
 
-import base64
-import hashlib
-import json
-import logging
-import os
-import re
-import tarfile
-import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum
-from io import BytesIO, StringIO
-from pathlib import Path
-from typing import Any, Optional, Union, BinaryIO, Tuple, Generator, Annotated
+from typing import Any, Optional, Dict, List
 
-import docker
 from docker.errors import (
     DockerException, APIError, ImageNotFound, BuildError, 
     ContainerError, NotFound, InvalidRepository, InvalidVersion
 )
+from dockermcp import docker_client, check_docker_available
 from dockermcp.mcp_instance import mcp
-from pydantic import BaseModel, Field, validator, HttpUrl, AnyUrl, ConfigDict
-from typing import Dict, List, Any, Optional, Union, ClassVar
+from pydantic import BaseModel, Field, ConfigDict
 
 from dockermcp.logging_config import logger
 
@@ -56,14 +45,14 @@ class ImagePullProgress(BaseModel):
         "progress": "[=====>              ] 45%"
     }})
     
-    id: Optional[str] = Field(default=None, json_schema={"description": "Image or layer ID"})
-    status: Optional[str] = Field(default=None, json_schema={"description": "Status message"})
-    progress: Optional[str] = Field(default=None, json_schema={"description": "Progress bar"})
+    id: Optional[str] = Field(default=None, description="Image or layer ID")
+    status: Optional[str] = Field(default=None, description="Status message")
+    progress: Optional[str] = Field(default=None, description="Progress bar")
     progress_detail: Dict[str, Any] = Field(
         default_factory=dict,
-        json_schema={"description": "Detailed progress information"}
+        description="Detailed progress information"
     )
-    error: Optional[str] = Field(default=None, json_schema={"description": "Error message if any"})
+    error: Optional[str] = Field(default=None, description="Error message if any")
 
 class ImageBuildResult(BaseModel):
     """Result of an image build operation."""
@@ -73,16 +62,16 @@ class ImageBuildResult(BaseModel):
         "logs": [{"stream": "Successfully built abc123"}]
     }})
     
-    image_id: Optional[str] = Field(default=None, json_schema={"description": "ID of the built image"})
+    image_id: Optional[str] = Field(default=None, description="ID of the built image")
     logs: List[Dict[str, Any]] = Field(
         default_factory=list,
-        json_schema={"description": "Build output logs"}
+        description="Build output logs"
     )
     status: ImageBuildStatus = Field(
         default=ImageBuildStatus.SUCCESS,
-        json_schema={"description": "Build status"}
+        description="Build status"
     )
-    error: Optional[str] = Field(default=None, json_schema={"description": "Error message if build failed"})
+    error: Optional[str] = Field(default=None, description="Error message if build failed")
 
 class ImageLayer(BaseModel):
     """Represents a layer in a Docker image."""
@@ -92,12 +81,12 @@ class ImageLayer(BaseModel):
         "empty_layer": False
     }})
     
-    id: str = Field(..., json_schema={"description": "Layer ID"})
-    created: Optional[datetime] = Field(default=None, json_schema={"description": "Creation timestamp"})
-    created_by: Optional[str] = Field(default=None, json_schema={"description": "Command that created the layer"})
-    size: int = Field(default=0, json_schema={"description": "Size of the layer in bytes"})
-    comment: Optional[str] = Field(default=None, json_schema={"description": "Optional comment"})
-    empty_layer: bool = Field(default=False, json_schema={"description": "Whether this is an empty layer"})
+    id: str = Field(..., description="Layer ID")
+    created: Optional[datetime] = Field(default=None, description="Creation timestamp")
+    created_by: Optional[str] = Field(default=None, description="Command that created the layer")
+    size: int = Field(default=0, description="Size of the layer in bytes")
+    comment: Optional[str] = Field(default=None, description="Optional comment")
+    empty_layer: bool = Field(default=False, description="Whether this is an empty layer")
 
 class ImageHistoryItem(BaseModel):
     """Represents an entry in the image history."""
@@ -108,12 +97,12 @@ class ImageHistoryItem(BaseModel):
         "size": 12345678
     }})
     
-    id: str = Field(..., json_schema={"description": "Layer ID"})
-    created: datetime = Field(..., json_schema={"description": "Creation timestamp"})
-    created_by: str = Field(..., json_schema={"description": "Command that created this layer"})
-    size: int = Field(default=0, json_schema={"description": "Size of this layer in bytes"})
-    comment: str = Field(default="", json_schema={"description": "Comment for this layer"})
-    tags: List[str] = Field(default_factory=list, json_schema={"description": "Tags for this layer"})
+    id: str = Field(..., description="Layer ID")
+    created: datetime = Field(..., description="Creation timestamp")
+    created_by: str = Field(..., description="Command that created this layer")
+    size: int = Field(default=0, description="Size of this layer in bytes")
+    comment: str = Field(default="", description="Comment for this layer")
+    tags: List[str] = Field(default_factory=list, description="Tags for this layer")
 
 class ImageSearchResult(BaseModel):
     """Result of an image search operation."""
@@ -124,12 +113,12 @@ class ImageSearchResult(BaseModel):
         "star_count": 15000
     }})
     
-    name: str = Field(..., json_schema={"description": "Image name"})
-    description: str = Field(default="", json_schema={"description": "Image description"})
-    is_official: bool = Field(default=False, json_schema={"description": "Whether this is an official image"})
-    is_automated: bool = Field(default=False, json_schema={"description": "Whether this is an automated build"})
-    star_count: int = Field(default=0, json_schema={"description": "Number of stars"})
-    pull_count: int = Field(default=0, json_schema={"description": "Number of pulls"})
+    name: str = Field(..., description="Image name")
+    description: str = Field(default="", description="Image description")
+    is_official: bool = Field(default=False, description="Whether this is an official image")
+    is_automated: bool = Field(default=False, description="Whether this is an automated build")
+    star_count: int = Field(default=0, description="Number of stars")
+    pull_count: int = Field(default=0, description="Number of pulls")
 
 class ImagePruneResult(BaseModel):
     """Result of an image prune operation."""
@@ -140,19 +129,20 @@ class ImagePruneResult(BaseModel):
     
     images_deleted: List[str] = Field(
         default_factory=list,
-        json_schema={"description": "List of deleted image IDs"}
+        description="List of deleted image IDs"
     )
     space_reclaimed: int = Field(
         default=0,
-        json_schema={"description": "Disk space reclaimed in bytes"}
+        description="Disk space reclaimed in bytes"
     )
 
 @mcp.tool
+@check_docker_available
 async def list_images(
-    name: Optional[str] = Field(default=None, json_schema={"description": "Filter by image name or name:tag"}),
-    all: bool = Field(default=False, json_schema={"description": "Show all images (default hides intermediate images)"}),
-    filters: Dict[str, str] = Field(default_factory=dict, json_schema={"description": "Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"}),
-    digests: bool = Field(default=False, json_schema={"description": "Show image digests"})
+    name: Optional[str] = Field(default=None, description="Filter by image name or name:tag"),
+    all: bool = Field(default=False, description="Show all images (default hides intermediate images)"),
+    filters: Dict[str, str] = Field(default_factory=dict, description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"),
+    digests: bool = Field(default=False, description="Show image digests")
 ) -> Dict[str, Any]:
     """
     List Docker images with filtering options.
@@ -195,8 +185,8 @@ async def list_images(
         }
     """
     try:
-        # Initialize Docker client
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Apply name filter if provided
         if name:
@@ -217,7 +207,7 @@ async def list_images(
                     'repo_digests': image.attrs.get('RepoDigests', []),
                     'created': datetime.fromtimestamp(
                         image.attrs['Created'],
-                        tz=datetime.timezone.utc
+                        tz=timezone.utc
                     ).isoformat(),
                     'size': image.attrs['Size'],
                     'virtual_size': image.attrs.get('VirtualSize', image.attrs['Size']),
@@ -259,6 +249,7 @@ async def list_images(
         return {"status": "error", "error": error_msg}
 
 @mcp.tool()
+@check_docker_available
 async def get_image_history(image_id: str) -> Dict[str, Any]:
     """
     Get the history of a Docker image.
@@ -293,8 +284,8 @@ async def get_image_history(image_id: str) -> Dict[str, Any]:
         }
     """
     try:
-        # Initialize Docker client
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Get the image
         try:
@@ -348,11 +339,12 @@ async def get_image_history(image_id: str) -> Dict[str, Any]:
         return {"status": "error", "error": error_msg}
 
 @mcp.tool
+@check_docker_available
 async def tag_image(
-    image_id: str = Field(..., json_schema={"description": "Source image ID or name (optionally with tag)"}),
-    repository: str = Field(..., json_schema={"description": "Repository to tag the image with"}),
-    tag: str = Field(default="latest", json_schema={"description": "Tag to apply to the image"}),
-    force: bool = Field(default=False, json_schema={"description": "Force tagging even if the tag already exists"})
+    image_id: str = Field(..., description="Source image ID or name (optionally with tag)"),
+    repository: str = Field(..., description="Repository to tag the image with"),
+    tag: str = Field(default="latest", description="Tag to apply to the image"),
+    force: bool = Field(default=False, description="Force tagging even if the tag already exists")
 ) -> Dict[str, Any]:
     """
     Tag a Docker image.
@@ -377,8 +369,8 @@ async def tag_image(
         }
     """
     try:
-        # Initialize Docker client
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Get the source image
         try:
@@ -448,10 +440,11 @@ async def tag_image(
         }
 
 @mcp.tool
+@check_docker_available
 async def search_images(
-    term: str = Field(..., json_schema={"description": "Search term"}),
-    limit: int = Field(default=25, json_schema={"description": "Maximum number of results to return (1-100)", "minimum": 1, "maximum": 100}),
-    filters: Dict[str, str] = Field(default_factory=dict, json_schema={"description": "Additional filters (e.g., {'is-official': 'true'}"})
+    term: str = Field(..., description="Search term"),
+    limit: int = Field(default=25, ge=1, le=100, description="Maximum number of results to return (1-100)"),
+    filters: Dict[str, str] = Field(default_factory=dict, description="Additional filters (e.g., {'is-official': 'true'}")
 ) -> Dict[str, Any]:
     """
     Search Docker Hub for images.
@@ -468,7 +461,7 @@ async def search_images(
         Dictionary with search results
         
     Example:
-        >>> await search_images("nginx", limit=3, filters={"is-official": "true"})
+        >>> await search_images("nginx", limit=3, filters={"is-official": "true")
         {
             "status": "success",
             "results": [
@@ -486,8 +479,8 @@ async def search_images(
         }
     """
     try:
-        # Initialize Docker client
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Validate limit
         limit = max(1, min(100, limit))  # Ensure limit is between 1 and 100
@@ -541,9 +534,10 @@ async def search_images(
         }
 
 @mcp.tool
+@check_docker_available
 async def prune_images(
-    filters: Dict[str, str] = Field(default_factory=dict, json_schema={"description": "Filters to process on the prune (e.g., {'dangling': ['true']}"}),
-    dry_run: bool = Field(default=False, json_schema={"description": "If true, only show what would be deleted"})
+    filters: Dict[str, str] = Field(default_factory=dict, description="Filters to process on the prune (e.g., {'dangling': ['true']}"),
+    dry_run: bool = Field(default=False, description="If true, only show what would be deleted")
 ) -> Dict[str, Any]:
     """
     Remove unused Docker images.
@@ -576,7 +570,7 @@ async def prune_images(
     try:
         if dry_run:
             # For dry run, we'll just list the images that would be removed
-            client = docker.from_env()
+            client = docker_client
             dangling_images = client.images.list(filters={'dangling': True})
             
             # Calculate total size
@@ -591,8 +585,8 @@ async def prune_images(
                 'message': f'Would remove {len(dangling_images)} images ({total_size/1024/1024:.1f} MB)'
             }
         
-        # Initialize Docker client
-        client = docker.from_env()
+        # Use shared client
+        client = docker_client
         
         # Prune images
         result = client.images.prune(filters=filters)

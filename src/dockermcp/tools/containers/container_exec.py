@@ -148,40 +148,38 @@ async def execute_in_container(
             )
         else:
             # For non-streaming execution, get the output directly
-            try:
-                if detach:
-                    container.client.api.exec_start(exec_id, stream=False, detach=True)
-                    return ContainerExecResponse.success(
-                        exec_id=exec_id['Id'],
-                        container_id=container_id,
-                        output="",  # No output for detached mode
-                        message="Command started in detached mode"
-                    )
-                
-                # Get the output and exit code
-                result = container.client.api.exec_start(exec_id['Id'], stream=False, demux=True)
-                stdout_data = result[0].decode('utf-8') if result[0] else ""
-                stderr_data = result[1].decode('utf-8') if result[1] else ""
-                
-                # Get the exit code
-                inspect_data = container.client.api.exec_inspect(exec_id['Id'])
-                exit_code = inspect_data.get('ExitCode', -1)
-                
-                if exit_code == 0:
-                    return ContainerExecResponse.success(
-                        exec_id=exec_id['Id'],
-                        container_id=container_id,
-                        output=stdout_data + (f"\n{stderr_data}" if stderr_data else ""),
-                        exit_code=exit_code,
-                        message="Command executed successfully"
-                    )
-                else:
-                    return ContainerExecResponse.error(
-                        error=f"Command failed with exit code {exit_code}",
-                        container_id=container_id,
-                        exec_id=exec_id['Id'],
-                        message=stderr_data or "Command execution failed"
-                    )
+            if detach:
+                container.client.api.exec_start(exec_id, stream=False, detach=True)
+                return ContainerExecResponse.success(
+                    exec_id=exec_id['Id'],
+                    container_id=container_id,
+                    output="",  # No output for detached mode
+                    message="Command started in detached mode"
+                )
+            
+            # Get the output and exit code
+            result = container.client.api.exec_start(exec_id['Id'], stream=False, demux=True)
+            stdout_data = result[0].decode('utf-8') if result[0] else ""
+            stderr_data = result[1].decode('utf-8') if result[1] else ""
+            
+            # Get the exit code
+            inspect_data = container.client.api.exec_inspect(exec_id['Id'])
+            exit_code = inspect_data.get('ExitCode', -1)
+            
+            if exit_code == 0:
+                return ContainerExecResponse.success(
+                    exec_id=exec_id['Id'],
+                    container_id=container_id,
+                    output=stdout_data + (f"\n{stderr_data}" if stderr_data else ""),
+                    exit_code=exit_code,
+                    message="Command executed successfully"
+                )
+            return ContainerExecResponse.error(
+                error=f"Command failed with exit code {exit_code}",
+                container_id=container_id,
+                exec_id=exec_id['Id'],
+                message=stderr_data or "Command execution failed"
+            )
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)

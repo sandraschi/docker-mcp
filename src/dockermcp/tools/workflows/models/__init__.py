@@ -19,8 +19,13 @@ from .responses import (
     StartWorkflowResponse,
     StopWorkflowResponse,
     WorkflowListResponse,
-    ErrorResponse
+    WorkflowSummary,
+    ErrorResponse,
 )
+
+# Aliases for workflow_management imports
+WorkflowStatusResponse = WorkflowResponse
+ListWorkflowsResponse = WorkflowListResponse
 
 __all__ = [
     'BaseModel',
@@ -40,5 +45,8 @@ __all__ = [
     'StartWorkflowResponse',
     'StopWorkflowResponse',
     'WorkflowListResponse',
-    'ErrorResponse'
+    'WorkflowSummary',
+    'WorkflowStatusResponse',
+    'ListWorkflowsResponse',
+    'ErrorResponse',
 ]
