@@ -1,34 +1,21 @@
 """
-DockerMCP - FastMCP 2.13+ Server for Docker Operations
+DockerMCP - FastMCP 3.2+ Server for Docker Operations
 
-This package implements a FastMCP 2.13+ compatible server with STDIO connection
+This package implements a FastMCP 3.2+ compatible server with STDIO connection
 for managing Docker containers, images, networks, and volumes.
-
-Key Features:
-- FastMCP 2.13+ protocol implementation
-- STDIO-based client communication
-- Comprehensive Docker management
-- Asynchronous I/O operations
-- Graceful Docker daemon connection handling
-
-Package Structure:
-    - api/       # MCP protocol endpoints
-    - core/      # Core Docker operations
-    - models/    # Data models and schemas
-    - tools/     # MCP tool implementations
-    - utils/     # Utility functions
 """
 
-__version__ = "2.13.0"
+__version__ = "3.2.0"
 
+import asyncio
 import logging
 import os
-import sys
-import asyncio
 import subprocess
-from pathlib import Path
-from typing import Any, Dict, List, Optional, TypeVar, Callable, Type, cast
+import sys
+from collections.abc import Callable
 from functools import wraps
+from pathlib import Path
+from typing import Any, Dict, Optional, TypeVar, cast
 
 # Add the src directory to the Python path
 src_dir = str(Path(__file__).parent.parent)
@@ -47,29 +34,27 @@ for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'as
 
 # Import core components after logging is configured
 import docker
-from .mcp_instance import get_mcp
+
 from .core.containers import ContainerManager
 from .core.images import ImageManager
 from .core.networks import NetworkManager
-from .core.volumes import VolumeManager
 from .core.system import SystemManager
+from .core.volumes import VolumeManager
+from .mcp_instance import get_mcp
 
 # Get the shared FastMCP instance
 mcp = get_mcp()
 
 # GRACEFUL DOCKER CONNECTION HANDLING
-docker_client: Optional[docker.DockerClient] = None
+docker_client: docker.DockerClient | None = None
 docker_available: bool = False
-docker_error: Optional[str] = None
+docker_error: str | None = None
 
 # Type variable for decorator
 F = TypeVar('F', bound=Callable[..., Any])
 
-# Use the configured logger from logging_config
-logger = logger
-
 # Decorator for Docker availability check
-def check_docker_available(func: F) -> F:
+def check_docker_available[F: Callable[..., Any]](func: F) -> F:
     """Decorator to check Docker availability before tool execution."""
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -97,33 +82,26 @@ def check_docker_available(func: F) -> F:
     return cast(F, wrapper)
 
 def initialize_docker_connection() -> bool:
-    """
-    Initialize Docker connection with graceful error handling.
-    
-    Returns:
-        bool: True if Docker is available, False otherwise
-    """
+    """Initialize Docker connection with graceful error handling."""
     global docker_client, docker_available, docker_error
-    
+
     try:
         logger.info("Attempting to connect to Docker daemon...")
         docker_client = docker.from_env()
-        
-        # Test the connection with a simple operation
         docker_client.ping()
-        
+
         docker_available = True
         docker_error = None
         logger.info("Successfully connected to Docker daemon")
         return True
-        
+
     except docker.errors.DockerException as e:
         docker_client = None
         docker_available = False
         docker_error = str(e)
         logger.warning(f"Docker not available: {docker_error}")
         return False
-        
+
     except Exception as e:
         docker_client = None
         docker_available = False
@@ -135,8 +113,8 @@ def check_docker_service_windows() -> str:
     """Check Docker service status on Windows."""
     try:
         result = subprocess.run(
-            ['sc', 'query', 'Docker Desktop Service'], 
-            capture_output=True, 
+            ['sc', 'query', 'Docker Desktop Service'],
+            capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW
         )
@@ -149,13 +127,8 @@ def check_docker_service_windows() -> str:
         logger.warning(f"Failed to check Docker service status: {e}")
         return "check_failed"
 
-def get_docker_status() -> Dict[str, Any]:
-    """
-    Get comprehensive Docker connection status.
-    
-    Returns:
-        Dict containing Docker status information
-    """
+def get_docker_status() -> dict[str, Any]:
+    """Get comprehensive Docker connection status."""
     status = {
         "docker_available": docker_available,
         "error": docker_error if not docker_available else None,
@@ -165,12 +138,12 @@ def get_docker_status() -> Dict[str, Any]:
         "platform": sys.platform,
         "service_status": None
     }
-    
+
     if docker_available and docker_client:
         try:
             info = docker_client.info()
             version_info = docker_client.version()
-            
+
             status.update({
                 "version": version_info.get("Version"),
                 "api_version": version_info.get("ApiVersion"),
@@ -183,16 +156,11 @@ def get_docker_status() -> Dict[str, Any]:
             })
         except Exception as e:
             status["error"] = f"Error getting Docker info: {str(e)}"
-            
+
     return status
 
 def retry_docker_connection() -> bool:
-    """
-    Attempt to reconnect to Docker daemon.
-    
-    Returns:
-        bool: True if reconnection successful, False otherwise
-    """
+    """Attempt to reconnect to Docker daemon."""
     logger.info("Attempting to reconnect to Docker daemon...")
     return initialize_docker_connection()
 
@@ -206,58 +174,44 @@ network_mgr = NetworkManager(docker_client) if docker_available else None
 volume_mgr = VolumeManager(docker_client) if docker_available else None
 system_mgr = SystemManager(docker_client) if docker_available else None
 
-# Register core tools
 def register_tools():
-    """Import all tool modules to register them with the FastMCP instance via decorators."""
+    """Import all tool modules to register them with the FastMCP instance."""
     # Import tools here to ensure they're registered via @mcp.tool decorators
-    from .tools import containers, images, networks, volumes, system
-    from .tools.docker_status import register_tool as register_status_tool
+    from .tools import containers, images, networks, system, volumes
+    from .tools.desktop import desktop_recovery, desktop_status, desktop_update
     from .tools.docker_reconnect import register_tool as register_reconnect_tool
-    
-    # These imports will register their tools via decorators
-    _ = [containers, images, networks, volumes, system]
-    
-    # Register any additional tools that need dynamic registration
-    _ = [register_status_tool(), register_reconnect_tool()]
+    from .tools.docker_status import register_tool as register_status_tool
+    from .tools.gpu import gpu_management
+
+    # These imports register tools via decorators; we assign to _ to satisfy linters
+    _ = [
+        containers, images, networks, volumes, system,
+        desktop_status, desktop_recovery, desktop_update,
+        gpu_management,
+        register_status_tool(), register_reconnect_tool()
+    ]
 
 # Initialize tools on import
 register_tools()
 
 # Export public API
 __all__ = [
-    # Core components
     'mcp',
     'container_mgr',
     'image_mgr',
     'network_mgr',
     'volume_mgr',
     'system_mgr',
-    
-    # Manager classes
     'ContainerManager',
     'ImageManager',
     'NetworkManager',
     'VolumeManager',
     'SystemManager',
-    
-    # Docker connection management
     'docker_client',
     'docker_available',
     'initialize_docker_connection',
     'retry_docker_connection',
     'get_docker_status',
-    
-    # Version
     '__version__',
-    
-    # Functions
     'register_tools'
 ]
-
-# Add the src directory to the Python path
-import sys
-from pathlib import Path
-sys.path.append(str(Path(__file__).parent.parent))
-
-# Import server components
-from .server import main  # noqa: F401

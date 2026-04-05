@@ -1,10 +1,12 @@
 """
 Base models and configurations for workflow system.
 """
-from datetime import datetime, timezone
-from typing import Any, Dict, Optional
-from pydantic import BaseModel as PydanticBaseModel, ConfigDict, Field
+from datetime import UTC, datetime
+from typing import Any
 from uuid import UUID, uuid4
+
+from pydantic import BaseModel as PydanticBaseModel
+from pydantic import ConfigDict, Field
 
 # Alias for code that expects BaseModelConfig (e.g. model_config type hints)
 BaseModelConfig = ConfigDict
@@ -14,14 +16,14 @@ class BaseModel(PydanticBaseModel):
     """Base model with common fields and methods."""
     id: UUID = Field(default_factory=uuid4, description="Unique identifier")
     created_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
         description="When the record was created"
     )
     updated_at: str = Field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat(),
+        default_factory=lambda: datetime.now(UTC).isoformat(),
         description="When the record was last updated"
     )
-    
+
     model_config = ConfigDict(
         from_attributes=True,
         populate_by_name=True,
@@ -38,8 +40,8 @@ class BaseModel(PydanticBaseModel):
             }
         }
     )
-    
-    def model_dump_with_metadata(self, **kwargs) -> Dict[str, Any]:
+
+    def model_dump_with_metadata(self, **kwargs) -> dict[str, Any]:
         """Dump model with additional metadata."""
         data = self.model_dump(**kwargs)
         data["__metadata__"] = {

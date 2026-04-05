@@ -6,19 +6,19 @@ into other modules.
 """
 import json
 import logging
-from typing import Any, Dict, Optional, Type, TypeVar, Union, List, Tuple, TextIO
+from typing import Any, TextIO
 
 from fastmcp import FastMCP
 
 # Define a type alias for JSON-RPC response
-JSONRPCResponse = Dict[str, Any]
+JSONRPCResponse = dict[str, Any]
 
 # Configure logger
 logger = logging.getLogger(__name__)
 
 class SafeJSONEncoder(json.JSONEncoder):
     """A JSON encoder that safely handles non-serializable types."""
-    
+
     def default(self, obj: Any) -> Any:
         """Convert non-serializable objects to a serializable format."""
         try:
@@ -29,12 +29,12 @@ class SafeJSONEncoder(json.JSONEncoder):
 
 class SafeFastMCP(FastMCP):
     """A safer version of FastMCP with enhanced error handling."""
-    
+
     async def _handle_request(
-        self, 
-        method: str, 
-        params: Optional[Union[Dict, list]] = None, 
-        request_id: Optional[Union[int, str]] = None
+        self,
+        method: str,
+        params: dict | list | None = None,
+        request_id: int | str | None = None
     ) -> JSONRPCResponse:
         """Handle JSON-RPC requests with enhanced error handling."""
         try:
@@ -48,19 +48,19 @@ class SafeFastMCP(FastMCP):
             )
 
 def warn_with_log(
-    message: Union[str, Warning], 
-    category: Type[Warning] = UserWarning, 
-    filename: str = "", 
-    lineno: int = 0, 
-    file: Optional[TextIO] = None, 
-    line: Optional[str] = None
+    message: str | Warning,
+    category: type[Warning] = UserWarning,
+    filename: str = "",
+    lineno: int = 0,
+    file: TextIO | None = None,
+    line: str | None = None
 ) -> None:
     """
     Log a warning message and emit a warning.
-    
+
     This function is compatible with warnings.showwarning signature and can be used
     as a replacement for the built-in showwarning function.
-    
+
     Args:
         message: The warning message (str or Warning object)
         category: The warning category (default: UserWarning)
@@ -74,7 +74,7 @@ def warn_with_log(
         msg_str = str(message)
     else:
         msg_str = str(message)
-    
+
     # Log the warning with location info if available
     if filename and lineno:
         logger.warning(f"{category.__name__}: {msg_str} (at {filename}:{lineno})")

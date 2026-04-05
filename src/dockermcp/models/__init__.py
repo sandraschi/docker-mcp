@@ -3,15 +3,17 @@ Pydantic models for request/response validation.
 
 This package contains all data models used for API request/response validation.
 """
-from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, field_validator
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field, field_validator
+
 
 class BaseResponse(BaseModel):
     """Base response model with common fields."""
     success: bool
     message: str
-    error: Optional[str] = None
+    error: str | None = None
 
 class ContainerInfo(BaseModel):
     """Container information model."""
@@ -20,13 +22,13 @@ class ContainerInfo(BaseModel):
     status: str
     image: str
     created: str
-    ports: Optional[Dict[str, Any]] = None
-    labels: Optional[Dict[str, str]] = None
+    ports: dict[str, Any] | None = None
+    labels: dict[str, str] | None = None
 
 class ImageInfo(BaseModel):
     """Image information model."""
     id: str
-    tags: List[str]
+    tags: list[str]
     created: str
     size: int
     virtual_size: int
@@ -37,21 +39,21 @@ class NetworkInfo(BaseModel):
     name: str
     driver: str
     scope: str
-    ipam: Dict[str, Any]
-    containers: Optional[List[Dict[str, str]]] = None
-    created: Optional[str] = None
-    labels: Optional[Dict[str, str]] = None
+    ipam: dict[str, Any]
+    containers: list[dict[str, str]] | None = None
+    created: str | None = None
+    labels: dict[str, str] | None = None
 
 class VolumeInfo(BaseModel):
     """Volume information model."""
     name: str
     driver: str
     mountpoint: str
-    created: Optional[str] = None
-    scope: Optional[str] = None
-    labels: Optional[Dict[str, str]] = None
-    options: Optional[Dict[str, str]] = None
-    usage_data: Optional[Dict[str, Any]] = None
+    created: str | None = None
+    scope: str | None = None
+    labels: dict[str, str] | None = None
+    options: dict[str, str] | None = None
+    usage_data: dict[str, Any] | None = None
 
 class SystemInfo(BaseModel):
     """System information model."""

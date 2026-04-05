@@ -8,16 +8,15 @@ for tool registration and error handling.
 from __future__ import annotations
 
 import asyncio
-import logging
 import time
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional, AsyncGenerator, Union, Annotated
+from collections.abc import AsyncGenerator
+from datetime import UTC, datetime
+from typing import Annotated, Any
 
 import docker
-from docker.errors import DockerException, APIError, NotFound
-from pydantic import BaseModel, Field, ConfigDict, HttpUrl, AnyUrl, field_validator
+from docker.errors import APIError, DockerException, NotFound
 from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, ConfigDict, Field
 
 from dockermcp.logging_config import logger
 
@@ -106,10 +105,10 @@ class ContainerStats(BaseModel):
     timestamp: str = Field(..., description="ISO 8601 timestamp of the stats snapshot")
     cpu: CPUStats = Field(..., description="CPU usage statistics")
     memory: MemoryStats = Field(..., description="Memory usage statistics")
-    network: Dict[str, NetworkStats] = Field(..., description="Network statistics by interface")
+    network: dict[str, NetworkStats] = Field(..., description="Network statistics by interface")
     block_io: BlockIOStats = Field(..., description="Block I/O statistics")
     pids: int = Field(..., description="Number of processes")
-    error: Optional[str] = Field(None, description="Error message if stats collection failed")
+    error: str | None = Field(None, description="Error message if stats collection failed")
 
 
 class ContainerStatsResponse(BaseModel):
@@ -165,36 +164,36 @@ class ContainerStatsResponse(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(..., description="ID of the container")
     name: str = Field(..., description="Name of the container")
     timestamp: str = Field(..., description="ISO 8601 timestamp of the stats snapshot")
-    cpu: Dict[str, Any] = Field(..., description="CPU usage statistics")
-    memory: Dict[str, Any] = Field(..., description="Memory usage statistics")
-    network: Dict[str, Any] = Field(..., description="Network statistics by interface")
-    block_io: Dict[str, Any] = Field(..., description="Block I/O statistics")
+    cpu: dict[str, Any] = Field(..., description="CPU usage statistics")
+    memory: dict[str, Any] = Field(..., description="Memory usage statistics")
+    network: dict[str, Any] = Field(..., description="Network statistics by interface")
+    block_io: dict[str, Any] = Field(..., description="Block I/O statistics")
     pids: int = Field(..., description="Number of processes")
-    error: Optional[str] = Field(None, description="Error message if stats collection failed")
+    error: str | None = Field(None, description="Error message if stats collection failed")
 
 @mcp.tool
-async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, Any], AsyncGenerator[Dict[str, Any], None]]:
+async def get_container_stats(params: ContainerStatsParams) -> dict[str, Any] | AsyncGenerator[dict[str, Any], None]:
     """Get container statistics including CPU, memory, network, and I/O metrics.
-    
+
     This tool provides detailed resource usage metrics for a container, similar to
     the 'docker stats' command. It can return either a single snapshot of statistics
     or stream them in real-time.
-    
+
     Example:
         ```python
         # Get a single stats snapshot
         from dockermcp.tools.containers.container_stats import ContainerStatsParams
-        
+
         params = ContainerStatsParams(
             container_id="my-container",
             one_shot=True
         )
         result = await get_container_stats(params)
-        
+
         # Stream stats in real-time
         stream_params = ContainerStatsParams(
             container_id="my-container",
@@ -205,7 +204,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
         async for stats in await get_container_stats(stream_params):
             print(stats)
         ```
-    
+
     Args:
         params: ContainerStatsParams object containing all parameters for the stats request
             - container_id: ID or name of the container
@@ -213,7 +212,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
             - interval: Seconds between stats updates (when streaming)
             - timeout: Maximum seconds to collect stats (when streaming)
             - one_shot: If True, get a single stats snapshot (overrides stream if both are True)
-    
+
     Returns:
         Union[ToolResponse[Dict[str, Any]], AsyncGenerator[ContainerStatsResponse, None]]:
             - If one_shot=True: ToolResponse with stats data
@@ -222,7 +221,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Get the container
         try:
             container = client.containers.get(params.container_id)
@@ -234,7 +233,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
                 "message": error_msg,
                 "error": str(e)
             }
-        
+
         # Handle one-shot request
         if params.one_shot or not params.stream:
             # Get a single stats snapshot
@@ -246,7 +245,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
                 "message": "Container stats retrieved successfully",
                 "data": parsed_stats.model_dump()
             }
-        
+
         # Handle streaming request
         try:
             return _stream_stats(container, params.interval, params.timeout)
@@ -259,7 +258,7 @@ async def get_container_stats(params: ContainerStatsParams) -> Union[Dict[str, A
                 "error": error_msg,
                 "data": {"container_id": container.id}
             }
-            
+
     except Exception as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -273,18 +272,18 @@ async def _stream_stats(
     container: docker.models.containers.Container,
     interval: float,
     timeout: int
-) -> AsyncGenerator[Dict[str, Any], None]:
+) -> AsyncGenerator[dict[str, Any], None]:
     """
     Stream container statistics in real-time.
-    
+
     Args:
         container: Docker container object
         interval: Time in seconds between stats updates
         timeout: Maximum time in seconds to stream stats
-        
+
     Yields:
         ContainerStatsResponse with container statistics
-        
+
     Example:
         >>> container = docker.from_env().containers.get("my-container")
         >>> async for stats in _stream_stats(container, interval=1.0, timeout=30):
@@ -293,35 +292,35 @@ async def _stream_stats(
     start_time = time.time()
     previous_cpu = None
     previous_system = None
-    
+
     try:
         # Get initial stats
         stats = container.stats(stream=False, decode=True)
         parsed_stats = _parse_stats(container, stats, previous_cpu, previous_system)
         previous_cpu = stats['cpu_stats']['cpu_usage']['total_usage']
         previous_system = stats['cpu_stats']['system_cpu_usage']
-        
+
         yield ContainerStatsResponse(**parsed_stats.model_dump())
-        
+
         # Continue streaming until timeout
         while (time.time() - start_time) < timeout:
             await asyncio.sleep(interval)
-            
+
             try:
                 stats = container.stats(stream=False, decode=True)
                 parsed_stats = _parse_stats(container, stats, previous_cpu, previous_system)
                 previous_cpu = stats['cpu_stats']['cpu_usage']['total_usage']
                 previous_system = stats['cpu_stats']['system_cpu_usage']
-                
+
                 yield ContainerStatsResponse(**parsed_stats.model_dump())
-                
+
             except (DockerException, APIError) as e:
                 error_msg = f"Failed to get container stats: {str(e)}"
                 logger.error(error_msg, exc_info=True)
                 yield ContainerStatsResponse(
                     container_id=container.id,
                     name=container.name,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                     cpu={},
                     memory={},
                     network={},
@@ -330,14 +329,14 @@ async def _stream_stats(
                     error=error_msg
                 )
                 break
-                
+
     except Exception as e:
         error_msg = f"Unexpected error in stats stream: {str(e)}"
         logger.error(error_msg, exc_info=True)
         yield ContainerStatsResponse(
             container_id=container.id,
             name=container.name,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             cpu={},
             memory={},
             network={},
@@ -348,22 +347,22 @@ async def _stream_stats(
 
 def _parse_stats(
     container: docker.models.containers.Container,
-    stats: Dict[str, Any],
-    previous_cpu: Optional[int] = None,
-    previous_system: Optional[int] = None
+    stats: dict[str, Any],
+    previous_cpu: int | None = None,
+    previous_system: int | None = None
 ) -> ContainerStats:
     """
     Parse raw Docker stats into a structured model.
-    
+
     Args:
         container: Docker container object
         stats: Raw stats dictionary from Docker API
         previous_cpu: Previous CPU usage for delta calculation
         previous_system: Previous system CPU usage for delta calculation
-        
+
     Returns:
         Structured ContainerStats model
-        
+
     Example:
         >>> container = docker.from_env().containers.get("my-container")
         >>> stats = container.stats(stream=False, decode=True)
@@ -375,29 +374,29 @@ def _parse_stats(
         precpu_stats = stats.get('precpu_stats', {}) or {}
         cpu_usage = cpu_stats.get('cpu_usage', {}) or {}
         precpu_usage = precpu_stats.get('cpu_usage', {}) or {}
-        
+
         # Calculate CPU usage percentage with safety checks
         cpu_delta = (cpu_usage.get('total_usage') or 0) - (precpu_usage.get('total_usage') or 0)
         system_delta = (cpu_stats.get('system_cpu_usage') or 0) - (precpu_stats.get('system_cpu_usage') or 0)
-        
+
         online_cpus = cpu_stats.get('online_cpus', 0) or 1  # Default to 1 to avoid division by zero
         cpu_percent = 0.0
-        
+
         if system_delta > 0 and cpu_delta > 0:
             cpu_percent = (cpu_delta / system_delta) * online_cpus * 100.0
-        
+
         # Extract memory stats with safe access
         memory_stats = stats.get('memory_stats', {}) or {}
         memory_stats_stats = memory_stats.get('stats', {}) or {}
-        
+
         memory_usage = memory_stats.get('usage', 0) or 0
         memory_limit = memory_stats.get('limit', 1)  # Avoid division by zero
         memory_percent = (memory_usage / memory_limit * 100.0) if memory_limit > 0 else 0.0
-        
+
         # Extract network stats with safe access
         network_stats = {}
         networks = stats.get('networks', {}) or {}
-        
+
         for if_name, if_stats in networks.items():
             if if_stats:  # Only process non-None interface stats
                 network_stats[if_name] = NetworkStats(
@@ -410,35 +409,35 @@ def _parse_stats(
                     tx_errors=if_stats.get('tx_errors', 0) or 0,
                     tx_dropped=if_stats.get('tx_dropped', 0) or 0
                 )
-        
+
         # Extract block I/O stats with safe access
         blkio_stats = stats.get('blkio_stats', {}) or {}
         io_service_bytes = blkio_stats.get('io_service_bytes_recursive', []) or []
         io_serviced = blkio_stats.get('io_serviced_recursive', []) or []
-        
+
         read_bytes = sum(
-            io.get('value', 0) for io in io_service_bytes 
+            io.get('value', 0) for io in io_service_bytes
             if isinstance(io, dict) and io.get('op') == 'Read'
         )
-        
+
         write_bytes = sum(
-            io.get('value', 0) for io in io_service_bytes 
+            io.get('value', 0) for io in io_service_bytes
             if isinstance(io, dict) and io.get('op') == 'Write'
         )
-        
+
         read_ops = sum(
             io.get('value', 0) for io in io_serviced
             if isinstance(io, dict) and io.get('op') == 'Read'
         )
-        
+
         write_ops = sum(
             io.get('value', 0) for io in io_serviced
             if isinstance(io, dict) and io.get('op') == 'Write'
         )
-        
+
         # Get throttling data with safe access
         throttling_data = cpu_stats.get('throttling_data', {}) or {}
-        
+
         # Create and return the structured model
         return ContainerStats(
             container_id=container.id,
@@ -472,14 +471,14 @@ def _parse_stats(
             ),
             pids=stats.get('pids_stats', {}).get('current', 0) or 0
         )
-        
+
     except Exception as e:
         logger.error(f"Error parsing container stats: {str(e)}", exc_info=True)
         # Return a minimal error response that matches the ContainerStats model
         return ContainerStats(
             container_id=container.id,
             name=container.name,
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             cpu=CPUStats(
                 total_usage=0,
                 system_cpu_usage=0,

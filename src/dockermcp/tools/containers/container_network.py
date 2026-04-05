@@ -8,24 +8,20 @@ It follows FastMCP 2.12+ standards for tool registration and error handling.
 from __future__ import annotations
 
 import ipaddress
-import logging
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Annotated
+from enum import StrEnum
+from typing import Any
 
 import docker
-from docker.errors import DockerException, APIError, NotFound
+from docker.errors import DockerException
 from fastmcp import FastMCP
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
-from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyUrl
+from pydantic import BaseModel, Field, field_validator
 
 from dockermcp.logging_config import logger
 
 # Initialize MCP instance
 mcp = FastMCP("Docker Network MCP")
 
-class NetworkDriver(str, Enum):
+class NetworkDriver(StrEnum):
     """Supported Docker network drivers."""
     BRIDGE = "bridge"
     HOST = "host"
@@ -35,19 +31,19 @@ class NetworkDriver(str, Enum):
 
 class IPAMConfig(BaseModel):
     """IP Address Management configuration for Docker networks."""
-    subnet: Optional[str] = Field(
+    subnet: str | None = Field(
         None,
         description="Subnet in CIDR format that represents a network segment"
     )
-    ip_range: Optional[str] = Field(
+    ip_range: str | None = Field(
         None,
         description="Range of IPs from which to allocate container IPs"
     )
-    gateway: Optional[str] = Field(
+    gateway: str | None = Field(
         None,
         description="IPv4 or IPv6 gateway for the master subnet"
     )
-    aux_addresses: Optional[Dict[str, str]] = Field(
+    aux_addresses: dict[str, str] | None = Field(
         None,
         description="Auxiliary IPv4 or IPv6 addresses used by the network driver"
     )
@@ -93,34 +89,34 @@ class NetworkCreateRequest(BaseModel):
         default=False,
         description="Enable IPv6 on the network"
     )
-    ipam: Optional[IPAMConfig] = Field(
+    ipam: IPAMConfig | None = Field(
         None,
         description="Optional custom IPAM config"
     )
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description="Map of labels to set on the network"
     )
 
 class ListNetworksParams(BaseModel):
     """Parameters for listing Docker networks."""
-    names: List[str] = Field(
+    names: list[str] = Field(
         default_factory=list,
         description="Filter by network names"
     )
-    ids: List[str] = Field(
+    ids: list[str] = Field(
         default_factory=list,
         description="Filter by network IDs"
     )
-    driver: Optional[str] = Field(
+    driver: str | None = Field(
         None,
         description="Filter by network driver"
     )
-    scope: Optional[str] = Field(
+    scope: str | None = Field(
         None,
         description="Filter by network scope (local, swarm, global)"
     )
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description="Filter by labels (key=value)"
     )
@@ -135,10 +131,10 @@ class NetworkResponse(BaseModel):
     name: str = Field(..., description="Network name")
     driver: str = Field(..., description="Network driver")
     scope: str = Field(..., description="Network scope")
-    ipam: Dict[str, Any] = Field(..., description="IPAM configuration")
-    containers: Dict[str, Any] = Field(..., description="Connected containers")
-    options: Dict[str, Any] = Field(..., description="Network options")
-    labels: Dict[str, str] = Field(..., description="Network labels")
+    ipam: dict[str, Any] = Field(..., description="IPAM configuration")
+    containers: dict[str, Any] = Field(..., description="Connected containers")
+    options: dict[str, Any] = Field(..., description="Network options")
+    labels: dict[str, str] = Field(..., description="Network labels")
     created: str = Field(..., description="Creation timestamp")
     internal: bool = Field(..., description="Whether network is internal")
     enable_ipv6: bool = Field(..., description="IPv6 enabled")
@@ -146,13 +142,13 @@ class NetworkResponse(BaseModel):
     ingress: bool = Field(..., description="Ingress network")
 
 @mcp.tool
-async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
+async def list_networks(params: ListNetworksParams) -> dict[str, Any]:
     """
     List Docker networks with filtering options.
-    
+
     This function provides a way to list all Docker networks with various filtering
     options. It can return either a summary or detailed information about each network.
-    
+
     Args:
         params: ListNetworksParams containing:
             - names: Filter by network names
@@ -161,10 +157,10 @@ async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
             - scope: Filter by network scope
             - labels: Filter by labels
             - detailed: Include detailed information
-            
+
     Returns:
         Dictionary with list of networks and metadata
-        
+
     Example:
         >>> await list_networks(
         ...     ListNetworksParams(
@@ -180,7 +176,7 @@ async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
     """
     try:
         client = docker.from_env()
-        
+
         # Build filters
         filters = {}
         if params.names:
@@ -193,10 +189,10 @@ async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
             filters['scope'] = params.scope
         if params.labels:
             filters['label'] = [f"{k}={v}" for k, v in params.labels.items()]
-        
+
         # Get networks
         networks = client.networks.list(filters=filters)
-        
+
         # Prepare response
         result = []
         for net in networks:
@@ -215,18 +211,18 @@ async def list_networks(params: ListNetworksParams) -> Dict[str, Any]:
                 'attachable': net.attrs.get('Attachable', False),
                 'ingress': net.attrs.get('Ingress', False)
             }
-            
+
             if params.detailed:
                 net_info['containers'] = net.attrs.get('Containers', {})
-            
+
             result.append(net_info)
-        
+
         return {
             'status': 'success',
             'networks': result,
             'count': len(result)
         }
-        
+
     except DockerException as e:
         logger.error(f"Docker error listing networks: {str(e)}")
         return {

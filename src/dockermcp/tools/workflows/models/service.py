@@ -1,13 +1,15 @@
 """
 Service-related models for the workflow system.
 """
-from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Union
+from enum import StrEnum
+from typing import Any
+
 from pydantic import Field
+
 from .base import BaseModel
 
 
-class ServiceHealth(str, Enum):
+class ServiceHealth(StrEnum):
     """Health status of a service."""
     HEALTHY = "healthy"
     UNHEALTHY = "unhealthy"
@@ -15,12 +17,12 @@ class ServiceHealth(str, Enum):
     STOPPED = "stopped"
     DEGRADED = "degraded"
     UNKNOWN = "unknown"
-    
+
     @classmethod
     def is_healthy(cls, health: 'ServiceHealth') -> bool:
         """Check if a health status is considered healthy."""
         return health == cls.HEALTHY
-    
+
     @classmethod
     def is_unhealthy(cls, health: 'ServiceHealth') -> bool:
         """Check if a health status is considered unhealthy."""
@@ -39,27 +41,27 @@ class ServiceDefinition(BaseModel):
     )
     image: str = Field(..., description="Container image to use for the service")
     version: str = Field("latest", description="Version of the service image")
-    command: Optional[Union[str, List[str]]] = Field(
+    command: str | list[str] | None = Field(
         None,
         description="Command to run in the container"
     )
-    args: Optional[Union[str, List[str]]] = Field(
+    args: str | list[str] | None = Field(
         None,
         description="Arguments to pass to the container command"
     )
-    env: Dict[str, str] = Field(
+    env: dict[str, str] = Field(
         default_factory=dict,
         description="Environment variables for the service"
     )
-    ports: List[Union[str, int, Dict[str, Any]]] = Field(
+    ports: list[str | int | dict[str, Any]] = Field(
         default_factory=list,
         description="Port mappings for the service"
     )
-    depends_on: List[str] = Field(
+    depends_on: list[str] = Field(
         default_factory=list,
         description="Services that this service depends on"
     )
-    
+
     model_config = {
         "json_schema_extra": {
             "example": {

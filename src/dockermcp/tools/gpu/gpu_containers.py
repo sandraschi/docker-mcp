@@ -5,24 +5,24 @@ This module provides tools for managing GPU-accelerated Docker containers.
 """
 from __future__ import annotations
 
-import json
-import logging
-from typing import Dict, List, Optional, Any, Union, Literal, Annotated, ClassVar
+from typing import Any
 
 import docker
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
-from .gpu_management import GPUManager, GPUDevice
+from dockermcp.mcp_instance import mcp
+
+from .gpu_management import GPUManager
+
 
 class GPUContainerConfig(BaseModel):
     """Configuration for GPU-accelerated containers."""
-    device_requests: List[Dict[str, Any]] = Field(
+    device_requests: list[dict[str, Any]] = Field(
         default_factory=list,
         description="List of device requests for the container"
     )
-    environment: Dict[str, str] = Field(
+    environment: dict[str, str] = Field(
         default_factory=dict,
         description="Environment variables for the container"
     )
@@ -30,15 +30,15 @@ class GPUContainerConfig(BaseModel):
         "nvidia",
         description="Container runtime to use (e.g., 'nvidia' or 'nvidia-container-runtime')"
     )
-    gpu_ids: Optional[List[Union[int, str]]] = Field(
+    gpu_ids: list[int | str] | None = Field(
         None,
         description="List of GPU IDs to use (e.g., [0, 1] or ['all'])"
     )
-    count: Optional[Union[int, str]] = Field(
+    count: int | str | None = Field(
         None,
         description="Number of GPUs to use (integer) or 'all'"
     )
-    capabilities: List[List[str]] = Field(
+    capabilities: list[list[str]] = Field(
         [['gpu']],
         description="List of GPU capabilities to enable"
     )
@@ -46,13 +46,13 @@ class GPUContainerConfig(BaseModel):
         "",
         description="Driver capabilities to use (e.g., 'nvidia')"
     )
-    
+
     model_config = ConfigDict(
         json_encoders={
             'set': list
         }
     )
-    
+
     @field_validator('gpu_ids', mode='before')
     @classmethod
     def validate_gpu_ids(cls, v):
@@ -61,7 +61,7 @@ class GPUContainerConfig(BaseModel):
         if isinstance(v, str):
             return [gpu_id.strip() for gpu_id in v.split(',')]
         return v
-    
+
     @field_validator('count', mode='before')
     @classmethod
     def validate_count(cls, v):
@@ -76,30 +76,31 @@ class GPUContainerConfig(BaseModel):
 
 class GPUContainerManager:
     """Manages GPU-accelerated Docker containers."""
-    
-    def __init__(self, docker_client: Optional[docker.DockerClient] = None):
+
+    def __init__(self, docker_client: docker.DockerClient | None = None):
         """Initialize the GPU container manager."""
         try:
             if docker_client:
                 self.docker_client = docker_client
             else:
-                from ....dockermcp import docker_client as global_client, docker_available
+                from ....dockermcp import docker_available
+                from ....dockermcp import docker_client as global_client
                 if docker_available:
                     self.docker_client = global_client
                 else:
                     self.docker_client = docker.from_env()
         except Exception:
             self.docker_client = None
-            
+
         self.gpu_manager = GPUManager(docker_client=self.docker_client)
-    
+
     def _create_device_request(
         self,
-        gpu_ids: Optional[List[Union[int, str]]] = None,
-        count: Optional[Union[int, str]] = None,
-        capabilities: Optional[List[List[str]]] = None,
+        gpu_ids: list[int | str] | None = None,
+        count: int | str | None = None,
+        capabilities: list[list[str]] | None = None,
         driver: str = ""
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Create a device request for GPU access."""
         device_request = {
             'Driver': driver or '',
@@ -107,7 +108,7 @@ class GPUContainerManager:
             'Capabilities': capabilities or [['gpu']],
             'Options': {}
         }
-        
+
         if gpu_ids == ['all'] or count == 'all':
             # Use all available GPUs
             device_request['Count'] = -1
@@ -117,17 +118,17 @@ class GPUContainerManager:
         elif gpu_ids and gpu_ids != ['all']:
             # Use specific GPU devices
             device_request['DeviceIDs'] = [str(gpu_id) for gpu_id in gpu_ids]
-        
+
         return device_request
-    
+
     def create_gpu_container_config(
         self,
-        gpu_ids: Optional[List[Union[int, str]]] = None,
-        count: Optional[Union[int, str]] = None,
-        capabilities: Optional[List[List[str]]] = None,
+        gpu_ids: list[int | str] | None = None,
+        count: int | str | None = None,
+        capabilities: list[list[str]] | None = None,
         driver: str = "",
         runtime: str = "nvidia",
-        environment: Optional[Dict[str, str]] = None
+        environment: dict[str, str] | None = None
     ) -> GPUContainerConfig:
         """Create a configuration for a GPU-accelerated container."""
         device_request = self._create_device_request(
@@ -136,12 +137,12 @@ class GPUContainerManager:
             capabilities=capabilities,
             driver=driver
         )
-        
+
         # Set NVIDIA-specific environment variables
         env = environment or {}
         if gpu_ids and gpu_ids != ['all']:
             env['NVIDIA_VISIBLE_DEVICES'] = ','.join(str(gpu_id) for gpu_id in gpu_ids)
-        
+
         return GPUContainerConfig(
             device_requests=[device_request],
             environment=env,
@@ -151,48 +152,48 @@ class GPUContainerManager:
             capabilities=capabilities or [['gpu']],
             driver=driver
         )
-    
-    def get_container_gpu_info(self, container_id: str) -> Dict[str, Any]:
+
+    def get_container_gpu_info(self, container_id: str) -> dict[str, Any]:
         """Get GPU information for a running container."""
         try:
             container = self.docker_client.containers.get(container_id)
             container.reload()  # Refresh container data
-            
+
             # Get GPU device information
             gpu_info = {}
-            
+
             # Check if container has GPU access
             if container.attrs.get('HostConfig', {}).get('Runtime') == 'nvidia':
                 # Get GPU IDs from environment
                 env_vars = {}
                 if 'Config' in container.attrs and 'Env' in container.attrs['Config']:
                     env_vars = {
-                        k: v for k, v in 
-                        (var.split('=', 1) for var in container.attrs['Config']['Env'] 
+                        k: v for k, v in
+                        (var.split('=', 1) for var in container.attrs['Config']['Env']
                          if '=' in var)
                     }
-                
+
                 gpu_ids = env_vars.get('NVIDIA_VISIBLE_DEVICES', 'all')
                 if gpu_ids.lower() == 'all':
                     gpu_ids = [gpu.id for gpu in self.gpu_manager.get_gpu_devices()]
                 else:
                     gpu_ids = [gpu_id.strip() for gpu_id in gpu_ids.split(',')]
-                
+
                 gpu_info['gpu_ids'] = gpu_ids
                 gpu_info['gpus'] = []
-                
+
                 for gpu_id in gpu_ids:
                     gpu = self.gpu_manager.get_gpu_by_id(gpu_id)
                     if gpu:
                         gpu_info['gpus'].append(gpu.dict())
-            
+
             return {
                 'status': 'success',
                 'container_id': container_id,
                 'has_gpu_access': bool(gpu_info.get('gpus')),
                 **gpu_info
             }
-            
+
         except docker.errors.NotFound:
             return {
                 'status': 'error',
@@ -211,21 +212,21 @@ gpu_container_manager = GPUContainerManager()
 @mcp.tool
 async def create_gpu_container(
     image: str,
-    command: Optional[str] = None,
-    gpu_ids: Union[List[Union[int, str]], str] = 'all',
-    count: Optional[Union[int, str]] = None,
+    command: str | None = None,
+    gpu_ids: list[int | str] | str = 'all',
+    count: int | str | None = None,
     runtime: str = 'nvidia',
-    environment: Optional[Dict[str, str]] = None,
-    name: Optional[str] = None,
+    environment: dict[str, str] | None = None,
+    name: str | None = None,
     detach: bool = True,
     auto_remove: bool = False,
     shm_size: str = '2g',
-    volumes: Optional[Dict[str, str]] = None,
-    ports: Optional[Dict[str, str]] = None
-) -> Dict[str, Any]:
+    volumes: dict[str, str] | None = None,
+    ports: dict[str, str] | None = None
+) -> dict[str, Any]:
     """
     Create and start a GPU-accelerated Docker container.
-    
+
     Args:
         image: Docker image to use
         command: Command to run in the container
@@ -239,10 +240,10 @@ async def create_gpu_container(
         shm_size: Size of /dev/shm (e.g., '2g')
         volumes: Volume mappings (host_path:container_path)
         ports: Port mappings (host_port:container_port)
-        
+
     Returns:
         Dictionary with container information
-        
+
     Example:
         >>> await create_gpu_container(
         ...     image="nvidia/cuda:11.0-base",
@@ -261,12 +262,12 @@ async def create_gpu_container(
     try:
         docker_client = docker.from_env()
         gpu_manager = GPUContainerManager(docker_client)
-        
+
         # Handle default values
         environment = environment or {}
         volumes = volumes or {}
         ports = ports or {}
-        
+
         # Create GPU container configuration
         gpu_ids_list = gpu_ids if isinstance(gpu_ids, list) else [gpu_ids]
         config = gpu_manager.create_gpu_container_config(
@@ -275,7 +276,7 @@ async def create_gpu_container(
             runtime=runtime,
             environment=environment
         )
-        
+
         # Prepare container configuration
         container_config = {
             'image': image,
@@ -287,29 +288,29 @@ async def create_gpu_container(
             'shm_size': shm_size,
             'device_requests': config.device_requests
         }
-        
+
         if name:
             container_config['name'] = name
-        
+
         if volumes:
             container_config['volumes'] = {
                 host_path: {'bind': container_path, 'mode': 'rw'}
                 for host_path, container_path in volumes.items()
             }
-        
+
         if ports:
             container_config['ports'] = {
                 container_port: host_port
                 for host_port, container_port in ports.items()
             }
-        
+
         # Create and start the container
         container = docker_client.containers.run(**container_config)
-        
+
         if detach:
             # Get container info
             container.reload()
-            
+
             return {
                 'status': 'success',
                 'container_id': container.id,
@@ -324,8 +325,8 @@ async def create_gpu_container(
                 'output': container,
                 'gpu_ids': gpu_ids if isinstance(gpu_ids, list) else [gpu_ids]
             }
-    
-    except docker.errors.ImageNotFound as e:
+
+    except docker.errors.ImageNotFound:
         error_msg = f'Docker image not found: {image}'
         logger.error(error_msg, exc_info=True)
         return {
@@ -350,16 +351,16 @@ async def create_gpu_container(
 
 
 @mcp.tool
-async def get_container_gpu_info(container_id: str) -> Dict[str, Any]:
+async def get_container_gpu_info(container_id: str) -> dict[str, Any]:
     """
     Get GPU information for a running container.
-    
+
     Args:
         container_id: Container ID or name
-        
+
     Returns:
         Dictionary with GPU information for the container
-        
+
     Example:
         >>> await get_container_gpu_info("my-gpu-container")
         {

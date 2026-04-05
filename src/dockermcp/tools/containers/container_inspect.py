@@ -1,19 +1,18 @@
 """
 Container inspection tool for Docker MCP.
 
-This module provides detailed inspection of Docker containers including 
+This module provides detailed inspection of Docker containers including
 configuration, state, and resource usage statistics with comprehensive
 error handling and logging. It follows FastMCP 2.12+ standards.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, Optional, List, TypeVar, Generic, Type
+from typing import Any, TypeVar
 
 import docker
-from docker.errors import DockerException, APIError, NotFound
-from fastmcp.tools.tool import Tool
-from pydantic import BaseModel, Field, ConfigDict, field_validator
+from docker.errors import APIError, DockerException, NotFound
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # Import logger directly to avoid circular imports
 logger = logging.getLogger(__name__)
@@ -25,15 +24,15 @@ T = TypeVar('T')
 DEFAULT_LOG_TAIL = 100
 MAX_LOG_LINES = 1000
 
-def _calculate_cpu_percent(stats: Dict[str, Any]) -> float:
+def _calculate_cpu_percent(stats: dict[str, Any]) -> float:
     """Calculate CPU usage percentage from container stats.
-    
+
     Args:
         stats: Raw container stats dictionary from Docker API
-        
+
     Returns:
         CPU usage as a percentage (0-100) of total available CPU
-        
+
     Note:
         This calculation follows the same approach as 'docker stats' command.
         It accounts for multiple CPU cores and system-wide CPU usage.
@@ -43,25 +42,25 @@ def _calculate_cpu_percent(stats: Dict[str, Any]) -> float:
         cpu_delta = stats['cpu_stats']['cpu_usage']['total_usage'] - stats['precpu_stats']['cpu_usage']['total_usage']
         # Get system CPU usage delta
         system_delta = stats['cpu_stats']['system_cpu_usage'] - stats['precpu_stats']['system_cpu_usage']
-        
+
         if system_delta > 0 and cpu_delta > 0:
             # Get number of CPU cores (or 1 if not available)
             cpu_count = len(stats['cpu_stats']['cpu_usage'].get('percpu_usage') or [1])
             # Calculate percentage (scaled by number of CPUs)
             return (cpu_delta / system_delta) * cpu_count * 100.0
-            
+
     except (KeyError, ZeroDivisionError) as e:
         logger.warning(f"Error calculating CPU percentage: {e}", exc_info=True)
-    
+
     return 0.0
 
 
-def _calculate_memory_usage(stats: Dict[str, Any]) -> Dict[str, int]:
+def _calculate_memory_usage(stats: dict[str, Any]) -> dict[str, int]:
     """Calculate memory usage from container stats.
-    
+
     Args:
         stats: Raw container stats dictionary from Docker API
-        
+
     Returns:
         Dictionary with memory usage information:
         - usage: Memory used in bytes
@@ -70,39 +69,39 @@ def _calculate_memory_usage(stats: Dict[str, Any]) -> Dict[str, int]:
     """
     try:
         memory_stats = stats.get('memory_stats', {})
-        
+
         # Get memory usage (use 'usage' or 'rss' + 'cache' if available)
         usage = memory_stats.get('usage')
         if usage is None and 'rss' in memory_stats and 'cache' in memory_stats:
             usage = memory_stats['rss'] + memory_stats['cache']
-        
+
         # Get memory limit (or 0 if unlimited)
         limit = memory_stats.get('limit', 0)
-        
+
         # Ensure we have valid values
         usage = usage or 0
         limit = limit or 0
-        
+
         # Calculate percentage (handle division by zero)
         percent = (usage / limit * 100) if limit > 0 else 0
-        
+
         return {
             'usage': usage,
             'limit': limit,
             'percent': percent
         }
-        
+
     except Exception as e:
         logger.warning(f"Error calculating memory usage: {e}", exc_info=True)
         return {'usage': 0, 'limit': 0, 'percent': 0}
 
 
-def _get_network_io(stats: Dict[str, Any]) -> Dict[str, int]:
+def _get_network_io(stats: dict[str, Any]) -> dict[str, int]:
     """Get network I/O statistics from container stats.
-    
+
     Args:
         stats: Raw container stats dictionary from Docker API
-        
+
     Returns:
         Dictionary with network I/O statistics:
         - rx_bytes: Total received bytes
@@ -111,33 +110,33 @@ def _get_network_io(stats: Dict[str, Any]) -> Dict[str, int]:
     try:
         # Try to get network stats from the new location (Docker 1.12+)
         networks = stats.get('networks', {})
-        
+
         # Fall back to the old location if not found
         if not networks and 'network' in stats:
             networks = stats['network']
-        
+
         rx_bytes = 0
         tx_bytes = 0
-        
+
         # Sum up bytes across all network interfaces
-        for if_name, if_stats in networks.items():
+        for _if_name, if_stats in networks.items():
             if isinstance(if_stats, dict):
                 rx_bytes += if_stats.get('rx_bytes', 0)
                 tx_bytes += if_stats.get('tx_bytes', 0)
-        
+
         return {
             'rx_bytes': rx_bytes,
             'tx_bytes': tx_bytes
         }
-        
+
     except Exception as e:
         logger.warning(f"Error getting network I/O: {e}", exc_info=True)
         return {'rx_bytes': 0, 'tx_bytes': 0}
 
 # Define response models first to avoid circular imports
-class BaseResponse(BaseModel, Generic[T]):
+class BaseResponse[T](BaseModel):
     """Base response model for all API responses.
-    
+
     This generic model provides a consistent response format with status, message,
     data, and error fields. It's designed to work with Pydantic v2 features.
     """
@@ -159,31 +158,31 @@ class BaseResponse(BaseModel, Generic[T]):
             }
         }
     )
-    
+
     status: str = Field(..., description="Status of the operation (success/error)")
-    message: Optional[str] = Field(default=None, description="Human-readable message")
-    data: Optional[T] = Field(default=None, description="Response data")
-    error: Optional[str] = Field(default=None, description="Error message if operation failed")
-    
+    message: str | None = Field(default=None, description="Human-readable message")
+    data: T | None = Field(default=None, description="Response data")
+    error: str | None = Field(default=None, description="Error message if operation failed")
+
     def model_dump_json(self, **kwargs) -> str:
         """Generate a JSON representation of the model.
-        
+
         Overrides the default to ensure proper serialization of custom types.
         """
         return super().model_dump_json(exclude_none=True, **kwargs)
-    
+
     @classmethod
     def success(
         cls,
-        data: Optional[T] = None,
-        message: Optional[str] = None
-    ) -> 'BaseResponse[T]':
+        data: T | None = None,
+        message: str | None = None
+    ) -> BaseResponse[T]:
         """Create a success response.
-        
+
         Args:
             data: The response data
             message: Optional success message
-            
+
         Returns:
             BaseResponse with status 'success' and the provided data/message
         """
@@ -192,21 +191,21 @@ class BaseResponse(BaseModel, Generic[T]):
             message=message or "Operation completed successfully",
             data=data
         )
-    
+
     @classmethod
     def error(
         cls,
         error: str,
-        message: Optional[str] = None,
-        data: Optional[Any] = None
-    ) -> 'BaseResponse[T]':
+        message: str | None = None,
+        data: Any | None = None
+    ) -> BaseResponse[T]:
         """Create an error response.
-        
+
         Args:
             error: Error message or code
             message: Optional human-readable message
             data: Optional error details
-            
+
         Returns:
             BaseResponse with status 'error' and the provided error details
         """
@@ -219,7 +218,7 @@ class BaseResponse(BaseModel, Generic[T]):
 
 class ContainerInspectRequest(BaseModel):
     """Request model for container inspection.
-    
+
     This model defines the parameters for inspecting a Docker container,
     including options for including resource usage statistics and logs.
     """
@@ -235,14 +234,14 @@ class ContainerInspectRequest(BaseModel):
         # Allow extra fields for forward compatibility
         extra="ignore"
     )
-    
+
     container_id: str = Field(
         ...,
         min_length=1,
         description="ID or name of the container to inspect",
         json_schema_extra={"example": "my-container"}
     )
-    
+
     show_stats: bool = Field(
         default=False,
         description=(
@@ -250,7 +249,7 @@ class ContainerInspectRequest(BaseModel):
             "Note: This may add some overhead to the request."
         )
     )
-    
+
     show_logs: bool = Field(
         default=False,
         description=(
@@ -258,7 +257,7 @@ class ContainerInspectRequest(BaseModel):
             "Logs can be large, so use with caution."
         )
     )
-    
+
     log_tail: int = Field(
         default=DEFAULT_LOG_TAIL,
         ge=1,
@@ -269,27 +268,27 @@ class ContainerInspectRequest(BaseModel):
         ),
         json_schema_extra={"example": 100}
     )
-    
+
     @field_validator('container_id')
     @classmethod
     def validate_container_id(cls, v: str) -> str:
         """Validate container ID or name."""
         # Remove any leading slashes (Docker adds these to container names)
         v = v.lstrip('/')
-        
+
         # Basic validation - container IDs and names should not be empty
         if not v:
             raise ValueError("Container ID or name cannot be empty")
-            
+
         # Additional validation could be added here if needed
         # (e.g., check for invalid characters, length limits, etc.)
-        
+
         return v
 
 
 class ContainerInspectResponse(BaseModel):
     """Response model for container inspection.
-    
+
     This model represents detailed information about a Docker container,
     including its configuration, state, and resource usage.
     """
@@ -321,7 +320,7 @@ class ContainerInspectResponse(BaseModel):
         # Allow extra fields for forward compatibility
         extra="ignore"
     )
-    
+
     # Container identification
     id: str = Field(
         ...,
@@ -329,114 +328,114 @@ class ContainerInspectResponse(BaseModel):
         min_length=1,
         json_schema_extra={"example": "a1b2c3d4e5f6"}
     )
-    
+
     name: str = Field(
         ...,
         description="Container name (without leading slash)",
         min_length=1,
         json_schema_extra={"example": "my-container"}
     )
-    
+
     # Container configuration
     image: str = Field(
         ...,
         description="Container image name and tag or digest",
         json_schema_extra={"example": "nginx:latest"}
     )
-    
+
     status: str = Field(
         ...,
         description="Container status (e.g., 'running', 'exited', 'paused', 'restarting')",
         json_schema_extra={"example": "running"}
     )
-    
-    state: Dict[str, Any] = Field(
+
+    state: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Container state details including health, exit code, etc. "
             "This is a direct mapping from the Docker API."
         )
     )
-    
+
     created: str = Field(
         ...,
         description="ISO 8601 timestamp of container creation",
         json_schema_extra={"example": "2023-01-01T12:00:00Z"}
     )
-    
-    config: Dict[str, Any] = Field(
+
+    config: dict[str, Any] = Field(
         default_factory=dict,
         description="Container configuration as provided during creation"
     )
-    
-    host_config: Dict[str, Any] = Field(
+
+    host_config: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Host-specific configuration for the container, "
             "including resource limits and security options"
         )
     )
-    
-    network_settings: Dict[str, Any] = Field(
+
+    network_settings: dict[str, Any] = Field(
         default_factory=dict,
         description=(
             "Network settings including IP addresses, ports, "
             "and network mode"
         )
     )
-    
+
     # Storage and networking
-    mounts: List[Dict[str, Any]] = Field(
+    mounts: list[dict[str, Any]] = Field(
         default_factory=list,
         description=(
             "List of volume and bind mounts attached to the container, "
             "including source, destination, and mount options"
         )
     )
-    
-    environment: Dict[str, str] = Field(
+
+    environment: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Environment variables set in the container, "
             "as key-value pairs"
         )
     )
-    
-    labels: Dict[str, str] = Field(
+
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description=(
             "Labels assigned to the container, "
             "typically used for metadata and orchestration"
         )
     )
-    
+
     # Optional fields with default values
-    command: Optional[str] = Field(
+    command: str | None = Field(
         default=None,
         description=(
             "Command run in the container. "
             "This is the command that was specified when the container was created."
         )
     )
-    
-    args: Optional[List[str]] = Field(
+
+    args: list[str] | None = Field(
         default=None,
         description=(
             "Arguments passed to the container command. "
             "These are the arguments that were specified when the container was created."
         )
     )
-    
-    working_dir: Optional[str] = Field(
+
+    working_dir: str | None = Field(
         default=None,
         description=(
             "Working directory inside the container. "
             "This is the directory where the command will be executed."
         )
     )
-    
+
     # Resource usage (populated if show_stats=True)
-    cpu_usage: Optional[float] = Field(
+    cpu_usage: float | None = Field(
         default=None,
         ge=0.0,
         le=100.0,
@@ -446,8 +445,8 @@ class ContainerInspectResponse(BaseModel):
         ),
         json_schema_extra={"example": 25.5}
     )
-    
-    memory_usage: Optional[Dict[str, int]] = Field(
+
+    memory_usage: dict[str, int] | None = Field(
         default=None,
         description=(
             "Memory usage statistics in bytes. "
@@ -455,8 +454,8 @@ class ContainerInspectResponse(BaseModel):
             "Includes 'usage', 'limit', and 'percent' keys."
         )
     )
-    
-    network_io: Optional[Dict[str, int]] = Field(
+
+    network_io: dict[str, int] | None = Field(
         default=None,
         description=(
             "Network I/O statistics in bytes. "
@@ -464,9 +463,9 @@ class ContainerInspectResponse(BaseModel):
             "Includes 'rx_bytes' and 'tx_bytes' for received and transmitted data."
         )
     )
-    
+
     # Logs (populated if show_logs=True)
-    logs: Optional[str] = Field(
+    logs: str | None = Field(
         default=None,
         description=(
             "Container logs as a string. "
@@ -474,7 +473,7 @@ class ContainerInspectResponse(BaseModel):
             "May be truncated based on the log_tail parameter."
         )
     )
-    
+
     # Validators
     @field_validator('created')
     @classmethod
@@ -486,7 +485,7 @@ class ContainerInspectResponse(BaseModel):
         if len(v) < 10:  # At least YYYY-MM-DD
             raise ValueError("Invalid timestamp format, expected ISO 8601")
         return v
-    
+
     @field_validator('status')
     @classmethod
     def validate_status(cls, v: str) -> str:
@@ -498,21 +497,21 @@ class ContainerInspectResponse(BaseModel):
         if v.lower() not in valid_statuses:
             logger.warning(f"Unexpected container status: {v}")
         return v.lower()
-    
+
     # Methods
     def model_dump_json(self, **kwargs) -> str:
         """Generate a JSON representation of the model.
-        
+
         Overrides the default to ensure proper serialization of custom types.
         """
         # Use exclude_none to skip None values in the output
         return super().model_dump_json(exclude_none=True, **kwargs)
-    
+
     def is_running(self) -> bool:
         """Check if the container is currently running."""
         return self.status.lower() == 'running'
-    
-    def get_ip_address(self) -> Optional[str]:
+
+    def get_ip_address(self) -> str | None:
         """Get the primary IP address of the container if available."""
         try:
             # Try to get the IP address from network settings
@@ -524,7 +523,7 @@ class ContainerInspectResponse(BaseModel):
         except Exception as e:
             logger.warning(f"Failed to get container IP address: {e}")
             return None
-    
+
     @classmethod
     def from_docker_container(
         cls,
@@ -532,21 +531,21 @@ class ContainerInspectResponse(BaseModel):
         show_stats: bool = False,
         show_logs: bool = False,
         log_tail: int = 100
-    ) -> 'ContainerInspectResponse':
+    ) -> ContainerInspectResponse:
         """Create a ContainerInspectResponse from a Docker container object.
-        
+
         Args:
             container: Docker container object
             show_stats: Whether to include resource usage statistics
             show_logs: Whether to include container logs
             log_tail: Number of log lines to include if show_logs is True
-            
+
         Returns:
             ContainerInspectResponse with container information
         """
         container.reload()  # Ensure we have the latest state
         container_dict = container.attrs
-        
+
         # Extract basic information
         response_data = {
             'id': container.id,
@@ -568,7 +567,7 @@ class ContainerInspectResponse(BaseModel):
             'args': container_dict.get('Args'),
             'working_dir': container_dict.get('Config', {}).get('WorkingDir')
         }
-        
+
         # Add resource usage statistics if requested
         if show_stats:
             try:
@@ -580,7 +579,7 @@ class ContainerInspectResponse(BaseModel):
                 })
             except (DockerException, APIError) as e:
                 logger.warning(f"Failed to get container stats: {e}")
-        
+
         # Add logs if requested
         if show_logs:
             try:
@@ -588,26 +587,26 @@ class ContainerInspectResponse(BaseModel):
                 response_data['logs'] = logs
             except (DockerException, APIError) as e:
                 logger.warning(f"Failed to get container logs: {e}")
-        
+
         return cls(**response_data)
 
 async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseResponse[ContainerInspectResponse]:
     """
     Inspect a Docker container and return detailed information.
-    
+
     Args:
         request: ContainerInspectRequest instance containing container ID and inspection options
-        
+
     Returns:
         BaseResponse containing ContainerInspectResponse with container details or error information
     """
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Get container by ID or name
         container = client.containers.get(request.container_id)
-        
+
         # Create response using the from_docker_container class method
         response = ContainerInspectResponse.from_docker_container(
             container=container,
@@ -615,13 +614,13 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
             show_logs=request.show_logs,
             log_tail=request.log_tail
         )
-        
+
         return BaseResponse[ContainerInspectResponse].success(
             data=response,
             message="Container inspection completed successfully"
         )
-        
-    except NotFound as e:
+
+    except NotFound:
         error_msg = f"Container not found: {request.container_id}"
         logger.error(error_msg)
         return BaseResponse[ContainerInspectResponse].error(
@@ -629,7 +628,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
             message=error_msg,
             data={"container_id": request.container_id}
         )
-        
+
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
@@ -638,7 +637,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
             message=error_msg,
             data={"container_id": request.container_id}
         )
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
@@ -647,7 +646,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
             message="Docker daemon not available or not running",
             data={"container_id": request.container_id}
         )
-        
+
     except Exception as e:
         error_msg = f"Error inspecting container {request.container_id}: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -660,10 +659,10 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
 # Public interface function
 async def inspect_container(params: ContainerInspectRequest) -> BaseResponse[ContainerInspectResponse]:
     """Public interface for container inspection.
-    
+
     Args:
         params: ContainerInspectRequest with container ID and inspection options
-        
+
     Returns:
         BaseResponse containing ContainerInspectResponse with container details or error information
     """

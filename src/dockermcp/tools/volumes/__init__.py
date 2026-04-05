@@ -12,12 +12,12 @@ __all__ = [
     # Volume management operations
     "list_volumes",
     "create_volume",
-    "remove_volume", 
+    "remove_volume",
     "prune_volumes",
-    
+
     # Response models
     "VolumeListResponse",
-    "VolumeCreateResponse", 
+    "VolumeCreateResponse",
     "VolumeRemoveResponse",
     "VolumePruneResponse"
 ]

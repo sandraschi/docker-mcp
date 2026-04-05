@@ -6,16 +6,16 @@ This module contains Pydantic models for network-related operations.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Union
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NetworkIPAMConfig(BaseModel):
     """IPAM configuration for Docker networks."""
     driver: str = "default"
-    config: List[Dict[str, str]] = Field(default_factory=list)
-    options: Dict[str, str] = Field(default_factory=dict)
+    config: list[dict[str, str]] = Field(default_factory=list)
+    options: dict[str, str] = Field(default_factory=dict)
 
 
 class NetworkCreateRequest(BaseModel):
@@ -27,10 +27,10 @@ class NetworkCreateRequest(BaseModel):
     attachable: bool = False
     ingress: bool = False
     enable_ipv6: bool = False
-    labels: Dict[str, str] = Field(default_factory=dict)
-    options: Dict[str, str] = Field(default_factory=dict)
-    ipam: Optional[NetworkIPAMConfig] = None
-    scope: Optional[str] = None
+    labels: dict[str, str] = Field(default_factory=dict)
+    options: dict[str, str] = Field(default_factory=dict)
+    ipam: NetworkIPAMConfig | None = None
+    scope: str | None = None
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -55,19 +55,19 @@ class NetworkSummary(BaseModel):
     name: str
     driver: str
     scope: str
-    created: Optional[datetime] = None
+    created: datetime | None = None
     internal: bool = False
     enable_ipv6: bool = False
-    labels: Dict[str, str] = Field(default_factory=dict)
-    ipam: Dict[str, Any] = Field(default_factory=dict)
-    options: Dict[str, str] = Field(default_factory=dict)
+    labels: dict[str, str] = Field(default_factory=dict)
+    ipam: dict[str, Any] = Field(default_factory=dict)
+    options: dict[str, str] = Field(default_factory=dict)
 
     @classmethod
-    def from_docker_network(cls, network) -> 'NetworkSummary':
+    def from_docker_network(cls, network) -> NetworkSummary:
         """Create a NetworkSummary from a Docker network object."""
         attrs = getattr(network, 'attrs', {})
         created = attrs.get('Created')
-        
+
         if created and isinstance(created, str):
             try:
                 if '.' in created:
@@ -76,7 +76,7 @@ class NetworkSummary(BaseModel):
                     created = datetime.fromisoformat(created)
             except (ValueError, TypeError):
                 created = None
-        
+
         return cls(
             id=getattr(network, 'id', ''),
             name=getattr(network, 'name', ''),
@@ -95,12 +95,12 @@ class NetworkListResponse(BaseModel):
     """Response model for listing Docker networks."""
     status: Literal['success', 'error'] = Field(..., description="Status of the operation")
     message: str = Field(..., description="Human-readable message about the result")
-    data: List[NetworkSummary] = Field(default_factory=list, description="List of network summaries")
+    data: list[NetworkSummary] = Field(default_factory=list, description="List of network summaries")
     count: int = Field(0, description="Number of networks returned")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+    error: str | None = Field(None, description="Error message if operation failed")
 
     @classmethod
-    def success(cls, data: List[NetworkSummary], message: str = "Success") -> 'NetworkListResponse':
+    def success(cls, data: list[NetworkSummary], message: str = "Success") -> NetworkListResponse:
         """Create a success response."""
         return cls(
             status="success",
@@ -110,7 +110,7 @@ class NetworkListResponse(BaseModel):
         )
 
     @classmethod
-    def error(cls, error: str, message: str = "An error occurred") -> 'NetworkListResponse':
+    def error(cls, error: str, message: str = "An error occurred") -> NetworkListResponse:
         """Create an error response."""
         return cls(
             status="error",
@@ -125,11 +125,11 @@ class NetworkInspectResponse(BaseModel):
     """Response model for network inspection."""
     status: Literal['success', 'error'] = Field(..., description="Status of the operation")
     message: str = Field(..., description="Human-readable message about the result")
-    data: Dict[str, Any] = Field(default_factory=dict, description="Detailed network information")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+    data: dict[str, Any] = Field(default_factory=dict, description="Detailed network information")
+    error: str | None = Field(None, description="Error message if operation failed")
 
     @classmethod
-    def success(cls, data: Dict[str, Any], message: str = "Success") -> 'NetworkInspectResponse':
+    def success(cls, data: dict[str, Any], message: str = "Success") -> NetworkInspectResponse:
         """Create a success response."""
         return cls(
             status="success",
@@ -138,7 +138,7 @@ class NetworkInspectResponse(BaseModel):
         )
 
     @classmethod
-    def error(cls, error: str, message: str = "An error occurred") -> 'NetworkInspectResponse':
+    def error(cls, error: str, message: str = "An error occurred") -> NetworkInspectResponse:
         """Create an error response."""
         return cls(
             status="error",
@@ -152,15 +152,15 @@ class NetworkOperationResponse(BaseModel):
     """Generic response model for network operations."""
     status: Literal['success', 'error'] = Field(..., description="Status of the operation")
     message: str = Field(..., description="Human-readable message about the result")
-    network_id: Optional[str] = Field(None, description="ID of the affected network")
-    error: Optional[str] = Field(None, description="Error message if operation failed")
+    network_id: str | None = Field(None, description="ID of the affected network")
+    error: str | None = Field(None, description="Error message if operation failed")
 
     @classmethod
     def success(
         cls,
         network_id: str,
         message: str = "Operation completed successfully"
-    ) -> 'NetworkOperationResponse':
+    ) -> NetworkOperationResponse:
         """Create a success response."""
         return cls(
             status="success",
@@ -172,9 +172,9 @@ class NetworkOperationResponse(BaseModel):
     def error(
         cls,
         error: str,
-        network_id: Optional[str] = None,
+        network_id: str | None = None,
         message: str = "An error occurred"
-    ) -> 'NetworkOperationResponse':
+    ) -> NetworkOperationResponse:
         """Create an error response."""
         return cls(
             status="error",

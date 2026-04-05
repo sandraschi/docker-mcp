@@ -6,11 +6,9 @@ This module provides helper functions used throughout the DockerMCP application.
 import json
 import logging
 import os
-import shutil
 import subprocess
-import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from docker import DockerClient
 from docker.errors import DockerException
@@ -20,10 +18,10 @@ logger = logging.getLogger(__name__)
 
 def get_docker_client() -> DockerClient:
     """Get a Docker client instance.
-    
+
     Returns:
         DockerClient: A Docker client instance.
-        
+
     Raises:
         RuntimeError: If Docker is not installed or the Docker daemon is not running.
     """
@@ -37,24 +35,24 @@ def get_docker_client() -> DockerClient:
         ) from e
 
 def run_command(
-    cmd: Union[str, List[str]],
-    cwd: Optional[Union[str, Path]] = None,
-    env: Optional[Dict[str, str]] = None,
+    cmd: str | list[str],
+    cwd: str | Path | None = None,
+    env: dict[str, str] | None = None,
     capture_output: bool = True,
     check: bool = True,
 ) -> subprocess.CompletedProcess:
     """Run a shell command and return the result.
-    
+
     Args:
         cmd: Command to run as a string or list of arguments.
         cwd: Working directory for the command.
         env: Environment variables to set for the command.
         capture_output: Whether to capture stdout and stderr.
         check: Whether to raise an exception if the command fails.
-        
+
     Returns:
         subprocess.CompletedProcess: The result of the command execution.
-        
+
     Raises:
         subprocess.CalledProcessError: If the command fails and check is True.
     """
@@ -63,7 +61,7 @@ def run_command(
     else:
         shell = False
         cmd = [str(arg) for arg in cmd]
-    
+
     try:
         return subprocess.run(
             cmd,
@@ -85,13 +83,13 @@ def run_command(
 
 def parse_json_output(output: str) -> Any:
     """Parse JSON output from a command.
-    
+
     Args:
         output: JSON string to parse.
-        
+
     Returns:
         Parsed JSON data.
-        
+
     Raises:
         ValueError: If the output is not valid JSON.
     """
@@ -101,12 +99,12 @@ def parse_json_output(output: str) -> Any:
         logger.error("Failed to parse JSON: %s", e)
         raise ValueError(f"Invalid JSON output: {e}") from e
 
-def ensure_directory(path: Union[str, Path]) -> Path:
+def ensure_directory(path: str | Path) -> Path:
     """Ensure a directory exists, creating it if necessary.
-    
+
     Args:
         path: Path to the directory.
-        
+
     Returns:
         Path: The path to the directory.
     """
@@ -116,10 +114,10 @@ def ensure_directory(path: Union[str, Path]) -> Path:
 
 def format_bytes(size: float) -> str:
     """Format a size in bytes to a human-readable string.
-    
+
     Args:
         size: Size in bytes.
-        
+
     Returns:
         Formatted string with appropriate unit (e.g., "1.5 MB").
     """
@@ -132,12 +130,12 @@ def format_bytes(size: float) -> str:
 
 def format_size(size_bytes: int) -> str:
     """Format a size in bytes to a human-readable string.
-    
+
     This is an alias for format_bytes for backward compatibility.
-    
+
     Args:
         size_bytes: Size in bytes.
-        
+
     Returns:
         Formatted string with appropriate unit (e.g., "1.5 MB").
     """
@@ -146,38 +144,38 @@ def format_size(size_bytes: int) -> str:
 
 def parse_size(size_str: str) -> int:
     """Parse a human-readable size string to bytes.
-    
+
     Args:
         size_str: Size string (e.g., '1.5MB', '500K', '2G').
-        
+
     Returns:
         Size in bytes.
-        
+
     Raises:
         ValueError: If the size string is invalid.
     """
     size_str = size_str.strip().upper()
     if not size_str:
         raise ValueError("Empty size string")
-        
+
     # Find the numeric part
     num_str = ''
     i = 0
     while i < len(size_str) and (size_str[i].isdigit() or size_str[i] == '.'):
         num_str += size_str[i]
         i += 1
-        
+
     if not num_str:
         raise ValueError(f"Invalid size format: {size_str}")
-        
+
     try:
         num = float(num_str)
-    except ValueError:
-        raise ValueError(f"Invalid number in size: {num_str}")
-        
+    except ValueError as e:
+        raise ValueError(f"Invalid number in size: {num_str}") from e
+
     # Get the unit
     unit = size_str[i:] if i < len(size_str) else 'B'
-    
+
     # Convert to bytes
     units = {
         'B': 1,
@@ -190,24 +188,24 @@ def parse_size(size_str: str) -> int:
         'T': 1024 ** 4,
         'TB': 1024 ** 4,
     }
-    
+
     if unit not in units:
         raise ValueError(f"Unknown size unit: {unit}")
-        
+
     return int(num * units[unit])
 
 
 def human_readable_to_bytes(size_str: str) -> int:
     """Convert a human-readable size string to bytes.
-    
+
     This is an alias for parse_size for backward compatibility.
-    
+
     Args:
         size_str: Human-readable size string (e.g., '1.5MB', '500K', '2G').
-        
+
     Returns:
         Size in bytes.
-        
+
     Raises:
         ValueError: If the size string is invalid.
     """
@@ -215,7 +213,7 @@ def human_readable_to_bytes(size_str: str) -> int:
 
 def is_docker_installed() -> bool:
     """Check if Docker is installed and running.
-    
+
     Returns:
         bool: True if Docker is installed and running, False otherwise.
     """
@@ -226,32 +224,32 @@ def is_docker_installed() -> bool:
     except Exception:
         return False
 
-def get_environment_vars() -> Dict[str, str]:
+def get_environment_vars() -> dict[str, str]:
     """Get environment variables with sensitive values redacted.
-    
+
     Returns:
         Dictionary of environment variables with sensitive values redacted.
     """
     sensitive_keys = {'PASSWORD', 'SECRET', 'TOKEN', 'KEY', 'CREDENTIALS'}
     env_vars = {}
-    
+
     for key, value in os.environ.items():
         if any(sensitive in key.upper() for sensitive in sensitive_keys):
             env_vars[key] = '***REDACTED***'
         else:
             env_vars[key] = value
-    
+
     return env_vars
 
-def validate_file_exists(file_path: Union[str, Path]) -> Path:
+def validate_file_exists(file_path: str | Path) -> Path:
     """Validate that a file exists and return its Path object.
-    
+
     Args:
         file_path: Path to the file.
-        
+
     Returns:
         Path: The resolved path to the file.
-        
+
     Raises:
         FileNotFoundError: If the file does not exist.
     """
@@ -262,15 +260,15 @@ def validate_file_exists(file_path: Union[str, Path]) -> Path:
         raise ValueError(f"Path is not a file: {file_path}")
     return path
 
-def validate_directory_exists(dir_path: Union[str, Path]) -> Path:
+def validate_directory_exists(dir_path: str | Path) -> Path:
     """Validate that a directory exists and return its Path object.
-    
+
     Args:
         dir_path: Path to the directory.
-        
+
     Returns:
         Path: The resolved path to the directory.
-        
+
     Raises:
         FileNotFoundError: If the directory does not exist.
     """

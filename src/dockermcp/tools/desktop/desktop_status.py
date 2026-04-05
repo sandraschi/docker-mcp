@@ -7,20 +7,18 @@ and automatic recovery from hanging daemon.
 
 import asyncio
 import json
-import subprocess
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from dockermcp.mcp_instance import mcp
-from fastmcp.mcp_server import ToolResult
 
 
 @mcp.tool()
-async def docker_desktop_status(autofix: bool = False) -> ToolResult:
+async def docker_desktop_status(autofix: bool = False) -> dict[str, Any]:
     """
     Check Docker Desktop daemon health with hang detection and auto-recovery.
-    
+
     Comprehensive status check including:
     - Daemon responsiveness (with timeout detection for hangs)
     - Last 10 built images (name, size, creation date)
@@ -29,14 +27,14 @@ async def docker_desktop_status(autofix: bool = False) -> ToolResult:
     - Disk usage breakdown (images, containers, volumes)
     - System resource configuration (memory, CPU allocation)
     - Warnings for undersized allocations (AI workloads)
-    
+
     Args:
         autofix: If True, automatically attempt recovery if daemon is hanging
-        
+
     Returns:
-        ToolResult with status report and detected issues
+        Dictionary with status report and detected issues
     """
-    
+
     result = {
         "timestamp": datetime.now().isoformat(),
         "checks": {},
@@ -45,73 +43,64 @@ async def docker_desktop_status(autofix: bool = False) -> ToolResult:
         "daemon_healthy": False,
         "daemon_hanging": False,
     }
-    
+
     # 1. Check if Docker is installed
     docker_path = Path("C:/Program Files/Docker/Docker/Docker Desktop.exe")
     if not docker_path.exists():
-        return ToolResult(
-            error=True,
-            content=[
-                {
-                    "type": "text",
-                    "text": json.dumps(
-                        {
-                            "error": "Docker Desktop not installed",
-                            "install_url": "https://hub.docker.com/",
-                        },
-                        indent=2,
-                    ),
-                }
-            ],
-        )
-    
+        return {
+            "status": "error",
+            "message": "Docker Desktop not installed",
+            "install_url": "https://hub.docker.com/"
+        }
+
     result["checks"]["docker_installed"] = True
-    
+
     # 2. Check daemon responsiveness with timeout (hang detection)
     result["checks"]["daemon_responsiveness"] = await _check_daemon_health(
         autofix=autofix, result=result
     )
-    
+
     if result["daemon_healthy"]:
         # 3. Get Docker version
         result["checks"]["docker_version"] = await _get_docker_version()
-        
+
         # 4. Get last 10 images
         result["checks"]["recent_images"] = await _get_recent_images(limit=10)
-        
+
         # 5. Get last 10 containers
         result["checks"]["recent_containers"] = await _get_recent_containers(limit=10)
-        
+
         # 6. Get container summary
         result["checks"]["container_summary"] = await _get_container_summary()
-        
+
         # 7. Get disk usage
         result["checks"]["disk_usage"] = await _get_disk_usage()
-        
+
         # 8. Get resource stats (if containers running)
         result["checks"]["resource_stats"] = await _get_resource_stats()
     else:
         result["issues"].append("Docker daemon not healthy - skipping detailed checks")
-    
+
     # 9. Get Docker Desktop configuration
     result["checks"]["docker_config"] = await _get_docker_config()
-    
+
     # Add recommendations based on findings
     _add_recommendations(result)
-    
+
     # Format output
     output = _format_status_report(result)
-    
-    return ToolResult(
-        content=[{"type": "text", "text": output}],
-        is_error=not result["daemon_healthy"],
-    )
+
+    return {
+        "status": "success" if result["daemon_healthy"] else "error",
+        "message": output,
+        "data": result
+    }
 
 
 async def _check_daemon_health(autofix: bool, result: dict) -> dict:
     """Check daemon responsiveness with timeout detection for hangs."""
     check_result = {"status": "unknown", "recovered": False}
-    
+
     try:
         # Test with 5-second timeout
         process = await asyncio.create_subprocess_exec(
@@ -119,12 +108,12 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        
+
         try:
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(), timeout=5.0
             )
-            
+
             if process.returncode == 0:
                 result["daemon_healthy"] = True
                 check_result["status"] = "responsive"
@@ -132,7 +121,7 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
                 result["daemon_hanging"] = True
                 check_result["status"] = "hanging"
                 result["issues"].append("Daemon hanging - not responding to commands")
-                
+
                 if autofix:
                     check_result["recovery_attempted"] = True
                     recovered = await _attempt_daemon_recovery()
@@ -149,13 +138,13 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
                         result["recommendations"].append(
                             "Run: .\\update-docker-desktop.ps1 -FullWipe"
                         )
-                        
-        except asyncio.TimeoutError:
+
+        except TimeoutError:
             # Command timed out = daemon is hanging
             result["daemon_hanging"] = True
             check_result["status"] = "hanging_timeout"
             result["issues"].append("Daemon hanging (timeout after 5s)")
-            
+
             if autofix:
                 check_result["recovery_attempted"] = True
                 recovered = await _attempt_daemon_recovery()
@@ -173,18 +162,18 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
                 result["recommendations"].append(
                     "Use: docker_daemon_recover to auto-fix hanging daemon"
                 )
-            
+
             process.kill()
-            
+
     except Exception as e:
         result["issues"].append(f"Error checking daemon: {str(e)}")
         check_result["status"] = "error"
         check_result["error"] = str(e)
-    
+
     return check_result
 
 
-async def _restart_docker_desktop() -> bool:
+async def _attempt_daemon_recovery() -> bool:
     """Kill hung processes and restart Docker Desktop."""
     try:
         # Kill hung processes
@@ -201,9 +190,9 @@ async def _restart_docker_desktop() -> bool:
                 )
             except Exception:
                 pass  # Process might not be running
-        
+
         await asyncio.sleep(3)
-        
+
         # Restart Docker Desktop
         docker_path = Path("C:/Program Files/Docker/Docker/Docker Desktop.exe")
         if docker_path.exists():
@@ -212,38 +201,38 @@ async def _restart_docker_desktop() -> bool:
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
-            
+
             # Wait for daemon to be responsive
             await asyncio.sleep(8)
-            
+
             # Verify responsiveness
-            for attempt in range(5):
+            for _attempt in range(5):
                 try:
                     process = await asyncio.create_subprocess_exec(
                         "docker", "version",
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                     )
-                    
+
                     try:
                         stdout, stderr = await asyncio.wait_for(
                             process.communicate(), timeout=5.0
                         )
                         if process.returncode == 0:
                             return True
-                    except asyncio.TimeoutError:
+                    except TimeoutError:
                         process.kill()
-                        
+
                 except Exception:
                     pass
-                
+
                 await asyncio.sleep(2)
-            
+
             return False
-        
+
     except Exception:
         pass
-    
+
     return False
 
 
@@ -271,7 +260,7 @@ async def _get_recent_images(limit: int = 10) -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
-        
+
         lines = stdout.decode().strip().split("\n")
         images = []
         for line in lines[:limit]:
@@ -283,7 +272,7 @@ async def _get_recent_images(limit: int = 10) -> dict:
                         "size": parts[1],
                         "created": parts[2],
                     })
-        
+
         return {
             "count": len(images),
             "images": images,
@@ -302,7 +291,7 @@ async def _get_recent_containers(limit: int = 10) -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
-        
+
         lines = stdout.decode().strip().split("\n")
         containers = []
         for line in lines[:limit]:
@@ -315,7 +304,7 @@ async def _get_recent_containers(limit: int = 10) -> dict:
                         "ports": parts[2],
                         "created": parts[3],
                     })
-        
+
         return {
             "count": len(containers),
             "containers": containers,
@@ -335,7 +324,7 @@ async def _get_container_summary() -> dict:
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
         running = len([x for x in stdout.decode().strip().split("\n") if x])
-        
+
         # All containers
         process = await asyncio.create_subprocess_exec(
             "docker", "ps", "-a", "-q",
@@ -344,9 +333,9 @@ async def _get_container_summary() -> dict:
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
         total = len([x for x in stdout.decode().strip().split("\n") if x])
-        
+
         stopped = total - running
-        
+
         return {
             "running": running,
             "stopped": stopped,
@@ -365,13 +354,13 @@ async def _get_disk_usage() -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
-        
+
         lines = stdout.decode().strip().split("\n")[1:]  # Skip header
         usage = []
         for line in lines:
             if line:
                 usage.append(line)
-        
+
         return {"usage": usage}
     except Exception as e:
         return {"error": str(e)}
@@ -387,7 +376,7 @@ async def _get_resource_stats() -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await asyncio.wait_for(process.communicate(), timeout=10.0)
-        
+
         lines = stdout.decode().strip().split("\n")
         stats = []
         for line in lines:
@@ -399,7 +388,7 @@ async def _get_resource_stats() -> dict:
                         "memory": parts[1],
                         "cpu": parts[2],
                     })
-        
+
         return {"stats": stats}
     except Exception as e:
         return {"error": str(e), "note": "No running containers or stats unavailable"}
@@ -412,11 +401,11 @@ async def _get_docker_config() -> dict:
         if settings_path.exists():
             with open(settings_path) as f:
                 settings = json.load(f)
-            
+
             memory_mb = settings.get("memoryMiB", "unknown")
             cpus = settings.get("cpus", "unknown")
             swap_mb = settings.get("memorySwapMiB", "unknown")
-            
+
             return {
                 "memory_mb": memory_mb,
                 "cpus": cpus,
@@ -431,7 +420,7 @@ async def _get_docker_config() -> dict:
 def _add_recommendations(result: dict) -> None:
     """Add recommendations based on check results."""
     config = result["checks"].get("docker_config", {})
-    
+
     # Check memory allocation
     memory = config.get("memory_mb", 0)
     if isinstance(memory, int) and memory < 8192:
@@ -439,7 +428,7 @@ def _add_recommendations(result: dict) -> None:
             f"Memory allocation is low ({memory}MB). Recommend 12GB+ for AI workloads. "
             "Go to Docker Desktop Settings > Resources > Memory"
         )
-    
+
     # Check CPU allocation
     cpus = config.get("cpus", 0)
     if isinstance(cpus, int) and cpus < 4:
@@ -447,7 +436,7 @@ def _add_recommendations(result: dict) -> None:
             f"CPU allocation is low ({cpus} cores). Recommend 4+ cores. "
             "Go to Docker Desktop Settings > Resources > CPUs"
         )
-    
+
     # Check disk usage
     disk = result["checks"].get("disk_usage", {})
     if "usage" in disk and disk["usage"]:
@@ -463,7 +452,7 @@ def _format_status_report(result: dict) -> str:
         "========== Docker Desktop Status Report ==========\n",
         f"Timestamp: {result['timestamp']}\n",
     ]
-    
+
     # Daemon health
     if result["daemon_healthy"]:
         lines.append("✅ Docker daemon: HEALTHY")
@@ -471,18 +460,18 @@ def _format_status_report(result: dict) -> str:
         lines.append("⚠️  Docker daemon: HANGING")
     else:
         lines.append("❌ Docker daemon: UNHEALTHY")
-    
+
     lines.append("")
-    
+
     # Check results
     if result["daemon_healthy"]:
         checks = result["checks"]
-        
+
         # Version
         version_info = checks.get("docker_version", {})
         if "version" in version_info:
             lines.append(f"Docker Version: {version_info['version']}")
-        
+
         # Images
         images_info = checks.get("recent_images", {})
         if "count" in images_info:
@@ -491,7 +480,7 @@ def _format_status_report(result: dict) -> str:
                 lines.append(
                     f"  {img['name']:<40} {img['size']:<15} {img['created']}"
                 )
-        
+
         # Containers
         containers_info = checks.get("recent_containers", {})
         if "count" in containers_info:
@@ -500,7 +489,7 @@ def _format_status_report(result: dict) -> str:
                 lines.append(
                     f"  {cont['name']:<20} {cont['status']:<25} {cont['ports']:<30}"
                 )
-        
+
         # Summary
         summary = checks.get("container_summary", {})
         if summary:
@@ -508,14 +497,14 @@ def _format_status_report(result: dict) -> str:
                 f"\nContainer Summary: {summary.get('running', 0)} running, "
                 f"{summary.get('stopped', 0)} stopped (total: {summary.get('total', 0)})"
             )
-        
+
         # Disk usage
         disk = checks.get("disk_usage", {})
         if "usage" in disk:
             lines.append("\nDisk Usage:")
             for usage_line in disk["usage"][:5]:  # Show first 5 lines
                 lines.append(f"  {usage_line}")
-        
+
         # Config
         config = checks.get("docker_config", {})
         if config and "error" not in config:
@@ -523,19 +512,19 @@ def _format_status_report(result: dict) -> str:
                 f"\nDocker Config: Memory={config.get('memory_mb', '?')}MB, "
                 f"CPUs={config.get('cpus', '?')}, Swap={config.get('swap_mb', '?')}MB"
             )
-    
+
     # Issues
     if result["issues"]:
         lines.append("\n⚠️  Issues Detected:")
         for issue in result["issues"]:
             lines.append(f"  - {issue}")
-    
+
     # Recommendations
     if result["recommendations"]:
         lines.append("\n💡 Recommendations:")
         for rec in result["recommendations"]:
             lines.append(f"  - {rec}")
-    
+
     lines.append("\n" + "="*50)
-    
+
     return "\n".join(lines)

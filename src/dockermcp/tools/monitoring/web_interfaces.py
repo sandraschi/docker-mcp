@@ -4,14 +4,13 @@ Web Interface Tools for Monitoring Stack
 This module provides tools to access the web interfaces of the monitoring stack.
 """
 import webbrowser
-from typing import Dict, Any, Optional, Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, ConfigDict
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, ConfigDict, Field
 
-from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
+
 
 class OpenGrafanaParams(BaseModel):
     """Parameters for opening Grafana web interface."""
@@ -36,16 +35,16 @@ class OpenGrafanaParams(BaseModel):
     )
 
 @mcp.tool
-async def open_grafana(params: OpenGrafanaParams) -> Dict[str, Any]:
+async def open_grafana(params: OpenGrafanaParams) -> dict[str, Any]:
     """
     Open the Grafana web interface in the default browser.
-    
+
     Args:
         params: OpenGrafanaParams containing connection details
-        
+
     Returns:
         Dictionary with the result of the operation
-        
+
     Example:
         >>> await open_grafana()
         {
@@ -95,13 +94,13 @@ class OpenPrometheusParams(BaseModel):
     )
 
 @mcp.tool
-async def open_prometheus(params: OpenPrometheusParams) -> Dict[str, Any]:
+async def open_prometheus(params: OpenPrometheusParams) -> dict[str, Any]:
     """
     Open the Prometheus web interface in the default browser.
-    
+
     Args:
         params: OpenPrometheusParams containing connection details
-        
+
     Returns:
         Dictionary with the result of the operation
     """
@@ -146,13 +145,13 @@ class OpenLokiParams(BaseModel):
     )
 
 @mcp.tool
-async def open_loki(params: OpenLokiParams) -> Dict[str, Any]:
+async def open_loki(params: OpenLokiParams) -> dict[str, Any]:
     """
     Open the Loki web interface in the default browser.
-    
+
     Args:
         params: OpenLokiParams containing connection details
-        
+
     Returns:
         Dictionary with the result of the operation
     """
@@ -186,7 +185,7 @@ class OpenMonitoringDashboardParams(BaseModel):
         le=65535,
         description='Port number for Grafana'
     )
-    custom_path: Optional[str] = Field(
+    custom_path: str | None = Field(
         None,
         description='Custom dashboard path (only used when dashboard is "custom")'
     )
@@ -202,16 +201,16 @@ class OpenMonitoringDashboardParams(BaseModel):
     )
 
 @mcp.tool
-async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Dict[str, Any]:
+async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> dict[str, Any]:
     """
     Open a monitoring dashboard in the default browser.
-    
+
     Args:
         params: OpenMonitoringDashboardParams containing dashboard configuration
-        
+
     Returns:
         Dictionary with the result of the operation
-        
+
     Example:
         >>> await open_monitoring_dashboard(params=OpenMonitoringDashboardParams(dashboard="docker"))
         {
@@ -229,7 +228,7 @@ async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Di
             'applications': '/d/applications',
             'custom': params.custom_path or ''
         }
-        
+
         try:
             if params.dashboard not in dashboard_paths and params.dashboard != 'custom':
                 error_msg = f"Unknown dashboard type: {params.dashboard}"
@@ -239,7 +238,7 @@ async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Di
                     "error": error_msg,
                     "available_dashboards": list(dashboard_paths.keys())
                 }
-                
+
             path = dashboard_paths[params.dashboard] if params.dashboard != 'custom' else params.custom_path
             if not path:
                 error_msg = "custom_path is required when dashboard is 'custom'"
@@ -248,7 +247,7 @@ async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> Di
                     "status": "error",
                     "error": error_msg
                 }
-                
+
             url = f"http://localhost:{params.port}{path}"
             webbrowser.open(url)
             logger.info(f"Opened {params.dashboard} dashboard at {url}")

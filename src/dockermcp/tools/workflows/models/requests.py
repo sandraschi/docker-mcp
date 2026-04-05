@@ -2,13 +2,12 @@
 Request models for workflow API endpoints.
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict, Field
 
 from .base import BaseModel
-from .workflow import WorkflowDefinition
 
 
 class WorkflowRequest(BaseModel):
@@ -21,7 +20,7 @@ class WorkflowRequest(BaseModel):
         default_factory=datetime.utcnow,
         description="When the request was created"
     )
-    metadata: Dict[str, Any] = Field(
+    metadata: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional metadata for the request"
     )
@@ -30,21 +29,21 @@ class WorkflowRequest(BaseModel):
 class CreateWorkflowRequest(WorkflowRequest):
     """Request model for creating a new workflow."""
     name: str = Field(..., min_length=1, max_length=255, description="Name of the workflow")
-    description: Optional[str] = Field(None, description="Description of the workflow")
-    services: List[Dict[str, Any]] = Field(
-        ..., 
+    description: str | None = Field(None, description="Description of the workflow")
+    services: list[dict[str, Any]] = Field(
+        ...,
         min_length=1,
         description="List of service definitions"
     )
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Input parameters for the workflow"
     )
-    tags: List[str] = Field(
+    tags: list[str] = Field(
         default_factory=list,
         description="Tags for categorizing the workflow"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -66,7 +65,7 @@ class CreateWorkflowRequest(WorkflowRequest):
 class StartWorkflowRequest(WorkflowRequest):
     """Request model for starting a workflow."""
     workflow_id: str = Field(..., description="ID of the workflow to start")
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Runtime parameters for the workflow"
     )
@@ -90,11 +89,11 @@ class ListWorkflowsRequest(WorkflowRequest):
         description="Maximum number of workflows to return"
     )
     offset: int = Field(0, ge=0, description="Number of workflows to skip")
-    status: Optional[str] = Field(
+    status: str | None = Field(
         None,
         description="Filter workflows by status"
     )
-    tags: List[str] = Field(
+    tags: list[str] = Field(
         default_factory=list,
         description="Filter workflows by tags"
     )

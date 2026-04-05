@@ -2,20 +2,20 @@
 Response models for workflow API endpoints.
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import Field, ConfigDict
+from pydantic import ConfigDict, Field
 
 from .base import BaseModel
-from .workflow import WorkflowStatus, WorkflowState
+from .workflow import WorkflowStatus
 
 
 class ErrorResponse(BaseModel):
     """Standard error response format."""
     error: str = Field(..., description="Error type")
     message: str = Field(..., description="Human-readable error message")
-    details: Dict[str, Any] = Field(
+    details: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional error details"
     )
@@ -33,7 +33,7 @@ class ErrorResponse(BaseModel):
         default_factory=datetime.utcnow,
         description="When the error occurred"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -46,13 +46,13 @@ class ErrorResponse(BaseModel):
             }
         }
     )
-    
+
     @classmethod
     def from_exception(
         cls,
         error: Exception,
         status_code: int = 500,
-        request_id: Optional[UUID] = None,
+        request_id: UUID | None = None,
         **kwargs: Any
     ) -> 'ErrorResponse':
         """Create an ErrorResponse from an exception."""
@@ -73,7 +73,7 @@ class WorkflowResponse(BaseModel):
     created_at: datetime = Field(..., description="When the workflow was created")
     updated_at: datetime = Field(..., description="When the workflow was last updated")
     created_by: str = Field(..., description="User or system that created the workflow")
-    error: Optional[Dict[str, Any]] = Field(
+    error: dict[str, Any] | None = Field(
         None,
         description="Error details if the operation failed"
     )
@@ -137,8 +137,8 @@ class WorkflowListResponse(BaseModel):
             }
         }
     )
-    
-    workflows: List[WorkflowSummary] = Field(
+
+    workflows: list[WorkflowSummary] = Field(
         ...,
         description="List of workflows"
     )

@@ -1,26 +1,26 @@
 # docker-mcp
 
-## FastMCP 3.1.1+ server for comprehensive Docker operations
+## FastMCP 3.2.0 server for comprehensive Docker operations
 
-[![FastMCP](https://img.shields.io/badge/FastMCP-3.1.1+-blue)](https://github.com/jlowin/fastmcp)
+[![FastMCP](https://img.shields.io/badge/FastMCP-3.2.0-blue)](https://github.com/jlowin/fastmcp)
 [![Python](https://img.shields.io/badge/Python-3.12+-green)](https://python.org)
-[![Docker](https://img.shields.io/badge/Docker-✓-blue)](https://www.docker.com/)
+[![Docker](https://img.shields.io/badge/Docker--blue)](https://www.docker.com/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI/CD](https://github.com/sandraschi/dockermcp/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/sandraschi/dockermcp/actions)
 [![Docker Image](https://img.shields.io/docker/pulls/sandraschi/dockermcp)](https://hub.docker.com/r/sandraschi/dockermcp)
 [![codecov](https://codecov.io/gh/sandraschi/dockermcp/branch/main/graph/badge.svg?token=YOUR-TOKEN)](https://codecov.io/gh/sandraschi/dockermcp)
 
 
-## 🚀 Features
+##  Features
 
-### 🐳 Docker Desktop Management (NEW)
+###  Docker Desktop Management (NEW)
 
 Comprehensive Docker Desktop daemon management with native MCP tools:
 
-- **`docker_desktop_status(autofix: bool)`** — Check daemon health with hang detection, list last 10 images/containers, monitor resource allocation, auto-recover from hanging daemon
-- **`docker_daemon_recover()`** — Emergency recovery from hung daemon (kill processes, restart, verify responsiveness)
-- **`docker_daemon_restart()`** — Graceful daemon restart with verification
-- **`docker_desktop_update(full_wipe: bool)`** — Fix elevation errors, clear update temp folders, optional full wipe for reset
+- **`docker_desktop_status(autofix: bool)`**  Check daemon health with hang detection, list last 10 images/containers, monitor resource allocation, auto-recover from hanging daemon
+- **`docker_daemon_recover()`**  Emergency recovery from hung daemon (kill processes, restart, verify responsiveness)
+- **`docker_daemon_restart()`**  Graceful daemon restart with verification
+- **`docker_desktop_update(full_wipe: bool)`**  Fix elevation errors, clear update temp folders, optional full wipe for reset
 
 **Features:**
 - Timeout-based hang detection (5-second timeout)
@@ -35,7 +35,7 @@ Comprehensive Docker Desktop daemon management with native MCP tools:
 
 **Location:** `src/dockermcp/tools/desktop/`
 
-### 📊 Monitoring Stack
+###  Monitoring Stack
 
 DockerMCP includes a comprehensive monitoring stack with the following components:
 
@@ -61,15 +61,15 @@ Access the monitoring interfaces:
 - **Loki**: [http://localhost:3101](http://localhost:3101)
 - **cAdvisor**: [http://localhost:8082](http://localhost:8082)
 
-### 🧪 Testing
+###  Testing
 
 DockerMCP uses a comprehensive testing strategy with the following structure:
 
 ```text
 tests/
-├── unit/           # Unit tests for individual components
-├── integration/    # Integration tests for component interactions
-└── e2e/            # End-to-end tests for complete workflows
+ unit/           # Unit tests for individual components
+ integration/    # Integration tests for component interactions
+ e2e/            # End-to-end tests for complete workflows
 ```
 
 To run the tests:
@@ -85,7 +85,7 @@ pytest tests/unit/
 pytest --cov=src tests/
 ```
 
-### 📝 Logging
+###  Logging
 
 DockerMCP uses structured JSON logging for better observability:
 
@@ -130,7 +130,7 @@ for all its stateful operations. This provides several key benefits:
 - **Intelligent Recovery**: Automated fixes for common Docker issues
 - **Cross-Platform Support**: Works on both Windows and Linux systems
 
-## 🚨 Docker Watchdog
+##  Docker Watchdog
 
 ### Features
 
@@ -140,14 +140,14 @@ for all its stateful operations. This provides several key benefits:
 - **Detailed Logging**: Comprehensive logs for troubleshooting
 - **Service Integration**: Runs as a system service (systemd/Linux, Windows Service/Windows)
 
-## 🚀 Installation
+##  Installation
 
 ### Prerequisites
 - [uv](https://docs.astral.sh/uv/) installed (RECOMMENDED)
 - Python 3.12+
 - FastMCP 3.1.1+
 
-### 📦 Quick Start
+###  Quick Start
 
 Run immediately via `uvx` (no installation needed):
 ```bash
@@ -162,7 +162,7 @@ uv sync
 uv run docker-mcp
 ```
 
-### 🎯 Installation Methods
+###  Installation Methods
 
 #### Option 1: One-liner via `uvx` (No installation)
 ```bash
@@ -211,7 +211,7 @@ sudo systemctl enable --now docker-watchdog
 - **Windows**: `docker_watchdog.log` in the installation directory
 - **Linux**: `journalctl -u docker-watchdog -f`
 
-## 🔄 CI/CD Pipeline
+##  CI/CD Pipeline
 
 DockerMCP uses GitHub Actions for CI/CD with the following workflows:
 
@@ -237,43 +237,43 @@ DockerMCP uses GitHub Actions for CI/CD with the following workflows:
 | `DOCKERHUB_TOKEN` | Docker Hub access token | Yes | - |
 | `CODECOV_TOKEN` | Codecov upload token | No | - |
 
-## 🏗 Project Structure
+##  Project Structure
 
 ```text
 docker-mcp/
-├── src/
-│   └── dockermcp/
-│       ├── api/                 # API endpoints and routes
-│       ├── core/                # Core Docker operations
-│       │   ├── containers.py    # Container management
-│       │   ├── images.py        # Image handling
-│       │   ├── networks.py      # Network management
-│       │   ├── system.py        # System operations
-│       │   └── volumes.py       # Volume management
-│       │
-│       ├── models/              # Data models and schemas
-│       ├── tools/               # FastMCP 3.1+ compatible tools
-│       │   ├── containers/      # Container management tools
-│       │   ├── desktop/         # Docker Desktop management tools (NEW)
-│       │   │   ├── desktop_status.py      # Status check with hang detection
-│       │   │   ├── desktop_recovery.py    # Daemon recovery & restart
-│       │   │   └── desktop_update.py      # Update & elevation fixes
-│       │   ├── images/          # Image management tools
-│       │   ├── networks/        # Network management tools
-│       │   ├── system/          # System management tools
-│       │   ├── volumes/         # Volume management tools
-│       │   └── workflows/       # Workflow automation tools
-│       │
-│       └── utils/               # Utility functions
-│           ├── json_utils.py    # JSON handling utilities
-│           └── process_utils.py # Process management utilities
-│
-├── tests/                      # Test suite
-├── docs/                       # Documentation
-└── examples/                   # Usage examples
+ src/
+    dockermcp/
+        api/                 # API endpoints and routes
+        core/                # Core Docker operations
+           containers.py    # Container management
+           images.py        # Image handling
+           networks.py      # Network management
+           system.py        # System operations
+           volumes.py       # Volume management
+       
+        models/              # Data models and schemas
+        tools/               # FastMCP 3.1+ compatible tools
+           containers/      # Container management tools
+           desktop/         # Docker Desktop management tools (NEW)
+              desktop_status.py      # Status check with hang detection
+              desktop_recovery.py    # Daemon recovery & restart
+              desktop_update.py      # Update & elevation fixes
+           images/          # Image management tools
+           networks/        # Network management tools
+           system/          # System management tools
+           volumes/         # Volume management tools
+           workflows/       # Workflow automation tools
+       
+        utils/               # Utility functions
+            json_utils.py    # JSON handling utilities
+            process_utils.py # Process management utilities
+
+ tests/                      # Test suite
+ docs/                       # Documentation
+ examples/                   # Usage examples
 ```
 
-## 🚀 Quick Start
+##  Quick Start
 
 ### Using Docker (Recommended)
 
@@ -302,7 +302,7 @@ uv sync
 uv run docker-mcp
 ```
 
-## 🛠 Usage
+##  Usage
 
 ### Starting the Server
 
@@ -358,16 +358,16 @@ status = client.call_tool("docker_desktop_status", {"autofix": False})
 print(status)
 ```
 
-## 📚 Documentation
+##  Documentation
 
 Full documentation is available at [GitHub Wiki](https://github.com/sandraschi/docker-mcp/wiki).
 
-## 🤝 Contributing
+##  Contributing
 
 Contributions are welcome! Please read our \
 [Contributing Guidelines](CONTRIBUTING.md) for details.
 
-## 📄 License
+##  License
 
 This project is licensed under the MIT License - \
 see the [LICENSE](LICENSE) file for details.

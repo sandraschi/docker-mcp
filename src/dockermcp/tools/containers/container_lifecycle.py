@@ -7,16 +7,13 @@ standards for tool registration and error handling.
 """
 from __future__ import annotations
 
-import asyncio
-import logging
-from enum import Enum
-from typing import Any, Optional, TypeVar, Dict, List, Annotated
+from enum import StrEnum
+from typing import Any, TypeVar
 
 import docker
-from docker.errors import DockerException, APIError, NotFound, ImageNotFound, ContainerError
-from pydantic import BaseModel, Field, ConfigDict, field_validator, HttpUrl, AnyUrl
 from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
+from pydantic import BaseModel, ConfigDict, Field
 
 from dockermcp.logging_config import logger
 
@@ -26,7 +23,7 @@ mcp = FastMCP("Docker MCP")
 # Type variable for generic type hints
 T = TypeVar('T', bound='BaseModel')
 
-class ContainerAction(str, Enum):
+class ContainerAction(StrEnum):
     """Available container lifecycle actions."""
     START = "start"
     STOP = "stop"
@@ -48,7 +45,7 @@ class ContainerLifecycleRequest(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(
         ...,
         min_length=1,
@@ -92,16 +89,16 @@ class ContainerLifecycleResponse(BaseModel):
             }
         }
     )
-    
+
     success: bool = Field(..., description="Whether the operation was successful")
     message: str = Field(..., description="Human-readable result message")
     container_id: str = Field(..., description="ID of the container")
     action: str = Field(..., description="Action that was performed")
-    state: Optional[dict[str, Any]] = Field(
+    state: dict[str, Any] | None = Field(
         default=None,
         description="Current container state (if available)"
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         description="Error message if the operation failed"
     )
@@ -132,48 +129,48 @@ class ContainerLifecycleParams(BaseModel):
         description="Remove volumes when removing a container"
     )
 
-async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> Dict[str, Any]:
+async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> dict[str, Any]:
     """
     Internal async implementation of container lifecycle management.
     """
     try:
         # Get Docker client
         client = docker.from_env()
-        
+
         # Get the container
         try:
             container = client.containers.get(params.container_id)
         except docker.errors.NotFound:
             raise ToolError(f"Container {params.container_id} not found")
-            
+
         # Execute the requested action
         if params.action == "start":
             container.start()
             message = f"Container {params.container_id} started successfully"
-            
+
         elif params.action == "stop":
             container.stop(timeout=params.timeout)
             message = f"Container {params.container_id} stopped successfully"
-            
+
         elif params.action == "restart":
             container.restart(timeout=params.timeout)
             message = f"Container {params.container_id} restarted successfully"
-            
+
         elif params.action == "remove":
             container.remove(force=params.force, v=params.remove_volumes)
             message = f"Container {params.container_id} removed successfully"
-            
+
         elif params.action == "pause":
             container.pause()
             message = f"Container {params.container_id} paused successfully"
-            
+
         elif params.action == "unpause":
             container.unpause()
             message = f"Container {params.container_id} unpaused successfully"
-            
+
         else:
             raise ValueError(f"Unsupported action: {params.action}")
-            
+
         # Get container state if it still exists
         try:
             container.reload()
@@ -187,7 +184,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         except (docker.errors.NotFound, docker.errors.APIError):
             # Container may have been removed
             state = None
-            
+
         return {
             "success": True,
             "message": message,
@@ -195,7 +192,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
             "action": params.action,
             "state": state
         }
-        
+
     except docker.errors.APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -206,14 +203,14 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         raise ToolError(error_msg)
 
 @mcp.tool
-async def manage_container_lifecycle(params: ContainerLifecycleParams) -> Dict[str, Any]:
+async def manage_container_lifecycle(params: ContainerLifecycleParams) -> dict[str, Any]:
     """
     Execute container lifecycle operations with comprehensive error handling.
-    
+
     This function provides a unified interface for common container operations
     including start, stop, restart, pause, unpause, and remove. It handles
     error cases and returns a standardized response format.
-    
+
     Args:
         params: ContainerLifecycleParams containing:
             - container_id: ID or name of the container
@@ -221,10 +218,10 @@ async def manage_container_lifecycle(params: ContainerLifecycleParams) -> Dict[s
             - force: Force the action (default: False)
             - timeout: Timeout in seconds (default: 10)
             - remove_volumes: Remove volumes when removing (default: False)
-            
+
     Returns:
         Dict[str, Any] containing the operation result and container state
-        
+
     Example:
         >>> from dockermcp.tools.containers.container_lifecycle import ContainerLifecycleParams
         >>> params = ContainerLifecycleParams(

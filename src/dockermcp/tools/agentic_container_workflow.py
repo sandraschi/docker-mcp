@@ -16,17 +16,20 @@ CONTAINER ORCHESTRATION WORKFLOWS:
 - "Scale application cluster" → intelligent resource allocation, load balancing
 """
 
-from typing import Any, Dict, List, Optional, Union
+import logging
+
 from fastmcp import Context
 
-import logging
 logger = logging.getLogger(__name__)
 
 # Conditional imports for advanced_memory integration
 try:
-    from advanced_memory.mcp.inter_server import sample_with_tools, create_tool_spec, SamplingResult
-    from advanced_memory.mcp.tools.content_manager import build_success_response, build_error_response
+    from advanced_memory.mcp.inter_server import SamplingResult, create_tool_spec, sample_with_tools
     from advanced_memory.mcp.mcp_instance import mcp
+    from advanced_memory.mcp.tools.content_manager import (
+        build_error_response,
+        build_success_response,
+    )
     _advanced_memory_available = True
 except ImportError:
     _advanced_memory_available = False
@@ -61,9 +64,9 @@ except ImportError:
 @mcp.tool()
 async def agentic_container_workflow(
     workflow_prompt: str,
-    available_tools: List[str],
+    available_tools: list[str],
     max_iterations: int = 5,
-    context: Optional[Context] = None
+    context: Context | None = None
 ) -> dict:
     """
     Execute agentic container workflows using FastMCP 2.14.1+ sampling with tools.

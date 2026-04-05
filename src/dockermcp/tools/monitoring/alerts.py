@@ -4,17 +4,14 @@ Alert Management Tools for Monitoring Stack
 This module provides tools to manage alerts and notifications in the monitoring stack.
 """
 import json
-import yaml
-from typing import Dict, Any, List, Optional, Literal, Union
 from pathlib import Path
-from enum import Enum
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, validator
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
+import yaml
+from pydantic import BaseModel, Field
 
-from dockermcp.mcp_instance import mcp
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
 
 # Path to alert rules
 alert_rules_dir = Path(__file__).parent.parent.parent.parent.parent / "monitoring" / "prometheus" / "alert.rules"
@@ -34,10 +31,10 @@ class AlertRule(BaseModel):
     expr: str = Field(..., description="PromQL expression for the alert")
     for_duration: str = Field('5m', description="Duration the condition must be true before firing")
     severity: str = Field('warning', description="Severity level (critical, warning, info)")
-    summary: Optional[str] = Field(None, description="Short description of the alert")
-    description: Optional[str] = Field(None, description="Detailed description of the alert")
-    labels: Dict[str, str] = Field(default_factory=dict, description="Additional labels for the alert")
-    annotations: Dict[str, str] = Field(default_factory=dict, description="Additional annotations for the alert")
+    summary: str | None = Field(None, description="Short description of the alert")
+    description: str | None = Field(None, description="Detailed description of the alert")
+    labels: dict[str, str] = Field(default_factory=dict, description="Additional labels for the alert")
+    annotations: dict[str, str] = Field(default_factory=dict, description="Additional annotations for the alert")
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -60,16 +57,16 @@ class ListAlertRulesParams(BaseModel):
     )
 
 @mcp.tool
-async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
+async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
     """
     List all configured alert rules.
-    
+
     Args:
         format: Output format (json, yaml, or text)
-        
+
     Returns:
         Dictionary with the alert rules in the specified format
-        
+
     Example:
         >>> await list_alert_rules(format='json')
         {
@@ -90,7 +87,7 @@ async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
     """
     try:
         alerts = []
-        
+
         if not alert_rules_dir.exists():
             logger.info("No alert rules file found at %s", alert_rules_dir)
             return {
@@ -98,12 +95,12 @@ async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
                 "message": "No alert rules configured",
                 "alerts": []
             }
-        
+
         try:
             # Load alert rules from file
-            with open(alert_rules_dir, 'r') as f:
+            with open(alert_rules_dir) as f:
                 rules = yaml.safe_load(f) or {}
-            
+
             # Extract alert rules
             for group in rules.get('groups', []):
                 for rule in group.get('rules', []):
@@ -124,11 +121,11 @@ async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
                 "status": "error",
                 "error": f"Invalid alert rules file: {str(e)}"
             }
-        
+
         # Format the output
         output = ""
         alerts_dict = [alert.dict(exclude_none=True) for alert in alerts]
-        
+
         if params.format == 'yaml':
             output = yaml.dump({"alerts": alerts_dict}, default_flow_style=False)
         elif params.format == 'text':
@@ -144,7 +141,7 @@ async def list_alert_rules(params: ListAlertRulesParams) -> Dict[str, Any]:
                 output += "\n"
         else:  # json
             output = json.dumps({"alerts": alerts_dict}, indent=2)
-        
+
         return {
             "status": "success",
             "alerts": alerts_dict,
@@ -174,10 +171,10 @@ class AddAlertRuleParams(AlertRule):
     )
 
 @mcp.tool
-async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
+async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
     """
     Add a new alert rule to the monitoring stack.
-    
+
     Args:
         name: Name of the alert
         expr: PromQL expression for the alert
@@ -187,10 +184,10 @@ async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
         description: Detailed description of the alert
         labels: Additional labels for the alert
         annotations: Additional annotations for the alert
-        
+
     Returns:
         Dictionary with the result of the operation
-        
+
     Example:
         >>> await add_alert_rule(
         ...     name="HighCPUUsage",
@@ -247,7 +244,7 @@ async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
         rules = {'groups': [{'name': 'docker-mcp', 'rules': []}]}
         if alert_rules_dir.exists():
             try:
-                with open(alert_rules_dir, 'r') as f:
+                with open(alert_rules_dir) as f:
                     rules = yaml.safe_load(f) or rules
             except yaml.YAMLError as e:
                 error_msg = f"Failed to load existing alert rules: {str(e)}"
@@ -265,7 +262,7 @@ async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
                     group['rules'][i] = new_alert  # Update existing
                     alert_updated = True
                     break
-            
+
             if not alert_updated:
                 group.setdefault('rules', []).append(new_alert)  # Add new
 
@@ -273,7 +270,7 @@ async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
         try:
             with open(alert_rules_dir, 'w') as f:
                 yaml.dump(rules, f, default_flow_style=False)
-            
+
             logger.info(f"Alert rule '{params.name}' {'updated' if alert_updated else 'added'}")
             return {
                 "status": "success",
@@ -281,7 +278,7 @@ async def add_alert_rule(params: AddAlertRuleParams) -> Dict[str, Any]:
                 "alert": params.name,
                 "updated": alert_updated
             }
-        except IOError as e:
+        except OSError as e:
             error_msg = f"Failed to save alert rules: {str(e)}"
             logger.error(error_msg)
             return {
@@ -301,16 +298,16 @@ class RemoveAlertRuleParams(BaseModel):
     name: str = Field(..., description="Name of the alert rule to remove")
 
 @mcp.tool
-async def remove_alert_rule(params: RemoveAlertRuleParams) -> Dict[str, Any]:
+async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
     """
     Remove an alert rule by name.
-    
+
     Args:
         name: Name of the alert rule to remove
-        
+
     Returns:
         Dictionary with the result of the operation
-        
+
     Example:
         >>> await remove_alert_rule("HighCPUUsage")
         {
@@ -330,7 +327,7 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> Dict[str, Any]:
 
         # Load existing rules
         try:
-            with open(alert_rules_dir, 'r') as f:
+            with open(alert_rules_dir) as f:
                 rules = yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
             error_msg = f"Failed to load alert rules: {str(e)}"
@@ -361,14 +358,14 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> Dict[str, Any]:
         try:
             with open(alert_rules_dir, 'w') as f:
                 yaml.dump(rules, f, default_flow_style=False)
-            
+
             logger.info(f"Alert rule '{params.name}' removed")
             return {
                 "status": "success",
                 "message": "Alert rule removed",
                 "removed_alert": params.name
             }
-        except IOError as e:
+        except OSError as e:
             error_msg = f"Failed to save alert rules: {str(e)}"
             logger.error(error_msg)
             return {

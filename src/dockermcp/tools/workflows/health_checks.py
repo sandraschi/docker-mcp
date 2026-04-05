@@ -7,29 +7,27 @@ in a workflow, including HTTP health checks, command-based checks, and custom ch
 from __future__ import annotations
 
 import asyncio
-import json
 import time
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
+from collections.abc import Awaitable, Callable
+from datetime import datetime
+from enum import StrEnum
 from typing import (
-    Any, Dict, List, Optional, Union, Callable, Awaitable, TypeVar, Generic, Type, cast
+    Any,
+    TypeVar,
 )
-from uuid import UUID, uuid4
-import aiohttp
-import httpx
 
-from pydantic import BaseModel, Field, field_validator, model_validator, HttpUrl, AnyUrl
+import httpx
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from .models import (
-    ServiceHealth,
-    ServiceDefinition,
     BaseModel,
+    ServiceDefinition,
+    ServiceHealth,
 )
 
 T = TypeVar('T')
 
-class HealthCheckType(str, Enum):
+class HealthCheckType(StrEnum):
     """Types of health checks supported for services."""
     COMMAND = "command"
     HTTP = "http"
@@ -49,11 +47,11 @@ class HealthCheckResult(BaseModel):
         default_factory=datetime.utcnow,
         description="When the health check was performed"
     )
-    details: Dict[str, Any] = Field(
+    details: dict[str, Any] = Field(
         default_factory=dict,
         description="Additional details about the health check result"
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         None,
         description="Error message if the health check failed"
     )
@@ -63,21 +61,21 @@ class HealthCheckResult(BaseModel):
     )
 
     @classmethod
-    def healthy(cls, **kwargs: Any) -> 'HealthCheckResult':
+    def healthy(cls, **kwargs: Any) -> HealthCheckResult:
         """Create a healthy result."""
         return cls(status=ServiceHealth.HEALTHY, **kwargs)
-    
+
     @classmethod
-    def unhealthy(cls, error: str, **kwargs: Any) -> 'HealthCheckResult':
+    def unhealthy(cls, error: str, **kwargs: Any) -> HealthCheckResult:
         """Create an unhealthy result with an error message."""
         return cls(
             status=ServiceHealth.UNHEALTHY,
             error=error,
             **kwargs
         )
-    
+
     @classmethod
-    def from_exception(cls, exc: Exception, **kwargs: Any) -> 'HealthCheckResult':
+    def from_exception(cls, exc: Exception, **kwargs: Any) -> HealthCheckResult:
         """Create a result from an exception."""
         return cls.unhealthy(
             error=str(exc) or exc.__class__.__name__,
@@ -86,7 +84,7 @@ class HealthCheckResult(BaseModel):
         )
 
 
-class BaseHealthCheck(BaseModel, Generic[T]):
+class BaseHealthCheck[T](BaseModel):
     """Base class for all health check implementations."""
     name: str = Field(
         ...,
@@ -119,12 +117,12 @@ class BaseHealthCheck(BaseModel, Generic[T]):
 
     async def execute(self) -> HealthCheckResult:
         """Execute the health check and return the result.
-        
+
         Subclasses must implement this method to perform the actual health check.
         """
         start_time = time.monotonic()
         result = HealthCheckResult(status=ServiceHealth.UNKNOWN)
-        
+
         try:
             # Execute the check with retries
             for attempt in range(1, self.retries + 1):
@@ -132,29 +130,29 @@ class BaseHealthCheck(BaseModel, Generic[T]):
                     check_result = await self._execute_check()
                     if check_result.status in (ServiceHealth.HEALTHY, ServiceHealth.DEGRADED):
                         return check_result
-                    
+
                     # If we have retries left, wait before trying again
                     if attempt < self.retries:
                         await asyncio.sleep(min(1, self.timeout / 2))
-                except Exception as e:
+                except Exception:
                     if attempt == self.retries:
                         raise
                     await asyncio.sleep(min(1, self.timeout / 2))
-            
+
             # If we get here, all retries failed
             return HealthCheckResult(
                 status=ServiceHealth.UNHEALTHY,
                 error=f"Health check failed after {self.retries} attempts"
             )
-            
+
         except Exception as e:
             return HealthCheckResult.from_exception(e)
         finally:
             result.duration_ms = (time.monotonic() - start_time) * 1000
-    
+
     async def _execute_check(self) -> HealthCheckResult:
         """Perform the actual health check logic.
-        
+
         Subclasses must implement this method.
         """
         raise NotImplementedError("Subclasses must implement _execute_check")
@@ -162,17 +160,17 @@ class BaseHealthCheck(BaseModel, Generic[T]):
 
 class CommandHealthCheck(BaseHealthCheck):
     """Health check that runs a command in the container."""
-    command: List[str] = Field(
+    command: list[str] = Field(
         ...,
         min_length=1,
         description="Command to run in the container"
     )
-    
+
     check_type: HealthCheckType = Field(
         default=HealthCheckType.COMMAND,
         frozen=True
     )
-    
+
     async def _execute_check(self) -> HealthCheckResult:
         # In a real implementation, this would execute the command in the container
         # For now, we'll simulate a successful check
@@ -192,24 +190,24 @@ class HTTPHealthCheck(BaseHealthCheck):
         pattern=r'^(GET|POST|PUT|DELETE|HEAD|OPTIONS|PATCH)$',
         description="HTTP method to use"
     )
-    headers: Dict[str, str] = Field(
+    headers: dict[str, str] = Field(
         default_factory=dict,
         description="HTTP headers to include in the request"
     )
-    body: Optional[Dict[str, Any]] = Field(
+    body: dict[str, Any] | None = Field(
         None,
         description="Request body (for POST/PUT/PATCH)"
     )
-    expected_status: List[int] = Field(
+    expected_status: list[int] = Field(
         [200],
         description="List of HTTP status codes that indicate success"
     )
-    
+
     check_type: HealthCheckType = Field(
         default=HealthCheckType.HTTP,
         frozen=True
     )
-    
+
     @field_validator('url', mode='before')
     @classmethod
     def validate_url(cls, v: Any) -> HttpUrl:
@@ -218,7 +216,7 @@ class HTTPHealthCheck(BaseHealthCheck):
             if not v.startswith(('http://', 'https://')):
                 v = f'http://{v}'
         return v
-    
+
     async def _execute_check(self) -> HealthCheckResult:
         """Execute an HTTP health check."""
         async with httpx.AsyncClient(timeout=self.timeout) as client:
@@ -229,14 +227,14 @@ class HTTPHealthCheck(BaseHealthCheck):
                     headers=self.headers,
                     json=self.body
                 )
-                
+
                 is_healthy = response.status_code in self.expected_status
-                
+
                 try:
                     response_data = response.json()
                 except ValueError:
                     response_data = response.text
-                
+
                 return HealthCheckResult(
                     status=ServiceHealth.HEALTHY if is_healthy else ServiceHealth.UNHEALTHY,
                     details={
@@ -246,7 +244,7 @@ class HTTPHealthCheck(BaseHealthCheck):
                     },
                     error=None if is_healthy else f"Unexpected status code: {response.status_code}"
                 )
-                
+
             except httpx.RequestError as e:
                 return HealthCheckResult.unhealthy(
                     f"Request failed: {str(e) or e.__class__.__name__}",
@@ -266,12 +264,12 @@ class TCPHealthCheck(BaseHealthCheck):
         le=65535,
         description="Port to connect to"
     )
-    
+
     check_type: HealthCheckType = Field(
         default=HealthCheckType.TCP,
         frozen=True
     )
-    
+
     async def _execute_check(self) -> HealthCheckResult:
         """Execute a TCP health check."""
         try:
@@ -283,8 +281,8 @@ class TCPHealthCheck(BaseHealthCheck):
             writer.close()
             await writer.wait_closed()
             return HealthCheckResult.healthy()
-            
-        except (asyncio.TimeoutError, ConnectionRefusedError, OSError) as e:
+
+        except (TimeoutError, ConnectionRefusedError, OSError) as e:
             return HealthCheckResult.unhealthy(
                 f"TCP connection failed: {str(e) or e.__class__.__name__}",
                 details={"error_type": e.__class__.__name__}
@@ -297,14 +295,14 @@ class CustomHealthCheck(BaseHealthCheck):
         ...,
         description="Import path to a function that performs the health check"
     )
-    
+
     check_type: HealthCheckType = Field(
         default=HealthCheckType.CUSTOM,
         frozen=True
     )
-    
-    _func: Optional[Callable[..., Awaitable[HealthCheckResult]]] = None
-    
+
+    _func: Callable[..., Awaitable[HealthCheckResult]] | None = None
+
     async def _execute_check(self) -> HealthCheckResult:
         """Execute a custom health check function."""
         if self._func is None:
@@ -317,7 +315,7 @@ class CustomHealthCheck(BaseHealthCheck):
                 return HealthCheckResult.unhealthy(
                     f"Failed to import check function: {e}"
                 )
-        
+
         try:
             return await self._func()
         except Exception as e:
@@ -326,12 +324,12 @@ class CustomHealthCheck(BaseHealthCheck):
 
 class HealthChecker:
     """Manages health checks for services."""
-    
+
     def __init__(self):
-        self.checks: Dict[str, BaseHealthCheck] = {}
-        self.results: Dict[str, HealthCheckResult] = {}
-        self.tasks: Dict[str, asyncio.Task] = {}
-    
+        self.checks: dict[str, BaseHealthCheck] = {}
+        self.results: dict[str, HealthCheckResult] = {}
+        self.tasks: dict[str, asyncio.Task] = {}
+
     def add_check(self, check: BaseHealthCheck) -> None:
         """Add a health check to be monitored."""
         self.checks[check.name] = check
@@ -339,32 +337,32 @@ class HealthChecker:
             self.results[check.name] = HealthCheckResult(
                 status=ServiceHealth.STARTING
             )
-    
+
     async def start(self) -> None:
         """Start all health checks."""
         for check in self.checks.values():
             self.tasks[check.name] = asyncio.create_task(
                 self._run_check(check)
             )
-    
+
     async def stop(self) -> None:
         """Stop all health checks."""
         for task in self.tasks.values():
             task.cancel()
         await asyncio.gather(*self.tasks.values(), return_exceptions=True)
         self.tasks.clear()
-    
-    def get_status(self, name: str) -> Optional[HealthCheckResult]:
+
+    def get_status(self, name: str) -> HealthCheckResult | None:
         """Get the current status of a health check."""
         return self.results.get(name)
-    
+
     def get_overall_status(self) -> ServiceHealth:
         """Get the overall health status."""
         if not self.results:
             return ServiceHealth.UNKNOWN
-        
+
         statuses = [result.status for result in self.results.values()]
-        
+
         if ServiceHealth.UNHEALTHY in statuses:
             return ServiceHealth.UNHEALTHY
         elif ServiceHealth.DEGRADED in statuses:
@@ -375,13 +373,13 @@ class HealthChecker:
             return ServiceHealth.STARTING
         else:
             return ServiceHealth.UNKNOWN
-    
+
     async def _run_check(self, check: BaseHealthCheck) -> None:
         """Run a health check in a loop."""
         # Initial delay if specified
         if check.start_period > 0:
             await asyncio.sleep(check.start_period)
-        
+
         while True:
             try:
                 result = await check.execute()
@@ -391,16 +389,16 @@ class HealthChecker:
                 break
             except Exception as e:
                 self.results[check.name] = HealthCheckResult.from_exception(e)
-            
+
             # Wait for the next check interval
             await asyncio.sleep(check.interval)
 
 
 # Factory function to create the appropriate health check
-def create_health_check(config: Dict[str, Any]) -> BaseHealthCheck:
+def create_health_check(config: dict[str, Any]) -> BaseHealthCheck:
     """Create a health check from a configuration dictionary."""
     check_type = HealthCheckType(config.get('type', 'command').lower())
-    
+
     if check_type == HealthCheckType.HTTP:
         return HTTPHealthCheck(**config)
     elif check_type == HealthCheckType.TCP:
@@ -413,13 +411,13 @@ def create_health_check(config: Dict[str, Any]) -> BaseHealthCheck:
         raise ValueError(f"Unsupported health check type: {check_type}")
 
 
-def health_check_from_service(service: ServiceDefinition) -> Optional[BaseHealthCheck]:
+def health_check_from_service(service: ServiceDefinition) -> BaseHealthCheck | None:
     """Create a health check from a service definition."""
     if not service.health_check:
         return None
-    
+
     config = service.health_check.copy()
-    
+
     # Determine the check type based on the configuration
     if 'test' in config and isinstance(config['test'], list):
         if config['test'][0].upper() in ('CMD', 'CMD-SHELL'):
@@ -431,7 +429,7 @@ def health_check_from_service(service: ServiceDefinition) -> Optional[BaseHealth
                 retries=config.get('retries', 3),
                 start_period=config.get('start_period', 0)
             )
-    
+
     # Default to HTTP check if a URL is provided
     if 'url' in config or 'port' in config:
         return HTTPHealthCheck(
@@ -445,7 +443,7 @@ def health_check_from_service(service: ServiceDefinition) -> Optional[BaseHealth
             retries=config.get('retries', 3),
             start_period=config.get('start_period', 0)
         )
-    
+
     # Fall back to TCP check if only a port is specified
     if 'port' in config:
         return TCPHealthCheck(
@@ -456,5 +454,5 @@ def health_check_from_service(service: ServiceDefinition) -> Optional[BaseHealth
             retries=config.get('retries', 3),
             start_period=config.get('start_period', 0)
         )
-    
+
     return None

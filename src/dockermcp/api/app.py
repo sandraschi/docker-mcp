@@ -1,18 +1,19 @@
 """
 FastAPI routes for Docker MCP webapp
 """
+import logging
+
+import docker
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-import docker
-import logging
 
 logger = logging.getLogger(__name__)
 
 def create_app() -> FastAPI:
     """Create and configure FastAPI app with Docker endpoints"""
-    
+
     app = FastAPI(title="Docker MCP API", version="0.1.0")
-    
+
     # Add CORS middleware
     app.add_middleware(
         CORSMiddleware,
@@ -21,42 +22,42 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    
+
     # Initialize Docker client
     try:
         client = docker.from_env()
     except Exception as e:
         logger.error(f"Failed to connect to Docker: {e}")
         client = None
-    
+
     # Health check
     @app.get("/health")
     async def health():
         return {"status": "ok"}
-    
+
     # Dashboard endpoint
     @app.get("/api/dashboard")
     async def get_dashboard():
         """Get dashboard overview with system info and container status"""
         if not client:
             raise HTTPException(status_code=503, detail="Docker not available")
-        
+
         try:
             # Get system info
             info = client.info()
             version = client.version()
-            
+
             # Get containers
             containers = client.containers.list(all=True)
             running = len([c for c in containers if c.status == "running"])
-            
+
             # Get images
             images = client.images.list()
-            
+
             # Calculate disk usage
             disk_info = client.df()
             total_size = sum(i.get("Size", 0) for i in disk_info.get("Images", []))
-            
+
             return {
                 "system_info": {
                     "docker_version": version.get("Version"),
@@ -111,14 +112,14 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.error(f"Error getting dashboard: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    
+
     # Containers endpoint
     @app.get("/api/containers")
     async def get_containers():
         """Get list of all containers"""
         if not client:
             raise HTTPException(status_code=503, detail="Docker not available")
-        
+
         try:
             containers = client.containers.list(all=True)
             return {
@@ -138,7 +139,7 @@ def create_app() -> FastAPI:
         except Exception as e:
             logger.error(f"Error getting containers: {e}")
             raise HTTPException(status_code=500, detail=str(e))
-    
+
     # Tools endpoint
     @app.get("/api/tools")
     async def get_tools():
@@ -149,7 +150,7 @@ def create_app() -> FastAPI:
             "docker_daemon_restart",
             "docker_desktop_update",
         ]
-        
+
         container_tools = [
             "list_containers",
             "start_container",
@@ -158,13 +159,13 @@ def create_app() -> FastAPI:
             "remove_container",
             "get_container_logs",
         ]
-        
+
         return {
             "tools": docker_desktop_tools + container_tools,
             "docker_desktop_tools": docker_desktop_tools,
             "container_tools": container_tools,
         }
-    
+
     return app
 
 if __name__ == "__main__":

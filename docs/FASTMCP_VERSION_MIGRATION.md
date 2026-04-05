@@ -1,181 +1,94 @@
-# FastMCP 2.11 to 2.12 Migration Guide
+# FastMCP 2.x to 3.2.0 Migration Guide
 
-This document outlines the key differences between FastMCP 2.11 and 2.12, focusing on tool development patterns and requirements.
+This document outlines the key differences between older FastMCP versions and 3.2.0, focusing on tool development patterns, the singleton MCP pattern, and the removal of `ToolResult`.
 
 ## Table of Contents
-- [Import Patterns](#import-patterns)
+- [Singleton MCP Pattern](#singleton-mcp-pattern)
 - [Tool Definition](#tool-definition)
-- [Tool Registration](#tool-registration)
-- [Error Handling](#error-handling)
 - [Response Formats](#response-formats)
+- [Error Handling](#error-handling)
 - [Best Practices](#best-practices)
-- [Common Pitfalls](#common-pitfalls)
 
-## Import Patterns
+## Singleton MCP Pattern
 
-### FastMCP 2.11 (Old)
+In FastMCP 3.2.0, we use a singleton instance of the FastMCP server to avoid circular dependencies and ensure all parts of the application share the same tool registry.
+
+### FastMCP 3.2.0 (SOTA)
+Create a centralized `mcp_instance.py`:
 ```python
-# Direct imports from fastmcp
-from fastmcp import Tool, get_tools_metadata
-from fastmcp.exceptions import ToolError
+from fastmcp import FastMCP
+
+_mcp = None
+
+def get_mcp():
+    global _mcp
+    if _mcp is None:
+        _mcp = FastMCP("DockerMCP")
+    return _mcp
 ```
 
-### FastMCP 2.12 (New)
+Then in each tool file:
 ```python
-# Preferred: Import from fastmcp.tools
-try:
-    from fastmcp.tools import Tool, get_tools_metadata
-    from fastmcp.exceptions import ToolError
-except ImportError:
-    # Fallback for backward compatibility
-    from fastmcp import Tool, get_tools_metadata
-    from fastmcp.exceptions import ToolError
+from dockermcp.mcp_instance import get_mcp
+
+mcp = get_mcp()
+
+@mcp.tool()
+async def my_tool(param1: str) -> dict:
+    return {"status": "success", "data": param1}
 ```
 
 ## Tool Definition
 
-### FastMCP 2.11 (Old)
+### FastMCP 3.2.0 (New)
 ```python
-@Tool(
-    name="tool_name",
-    description="Tool description",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'param1': {'type': 'string'}
-        }
-    }
-)
-def my_tool(param1: str) -> dict:
-    return {"result": param1}
-```
-
-### FastMCP 2.12 (New)
-```python
-@Tool(
-    name="tool_name",
-    description="Tool description",
-    parameters={
-        'type': 'object',
-        'properties': {
-            'param1': {
-                'type': 'string',
-                'description': 'Parameter description',
-                'default': 'default_value'  # Optional
-            }
-        },
-        'required': ['param1']  # Explicit required parameters
-    }
-)
+@mcp.tool()
 async def my_tool(param1: str) -> dict:
     """
-    Detailed docstring with parameter and return type documentation.
-    
-    Args:
-        param1: Description of parameter
-        
-    Returns:
-        dict: Result with status and data
+    Detailed docstring following SOTA standards.
     """
-    try:
-        return {
-            "status": "success",
-            "data": param1,
-            "message": "Operation completed successfully"
-        }
-    except Exception as e:
-        return {
-            "status": "error",
-            "error": str(e),
-            "message": f"Failed to process: {str(e)}"
-        }
-```
-
-## Tool Registration
-
-### FastMCP 2.11 (Old)
-```python
-# In __init__.py
-def get_tools():
-    from . import my_tool_module
-    return [my_tool_module.my_tool]
-```
-
-### FastMCP 2.12 (New)
-```python
-# In __init__.py
-def get_tools() -> List[Tool]:
-    """
-    Get all tools for registration with FastMCP.
-    
-    Returns:
-        List[Tool]: List of Tool instances to be registered
-    """
-    try:
-        from . import my_tool_module
-        
-        tools = my_tool_module.get_tools()
-        
-        # Verify all items are Tool instances
-        for tool in tools:
-            if not isinstance(tool, Tool):
-                raise TypeError(f"Expected Tool instance, got {type(tool).__name__}")
-        
-        logger.info(f"Loaded {len(tools)} tools")
-        return tools
-        
-    except Exception as e:
-        logger.error(f"Failed to load tools: {str(e)}", exc_info=True)
-        raise
-```
-
-## Error Handling
-
-### FastMCP 2.11 (Old)
-```python
-try:
-    # Operation
-    return {"result": "success"}
-except Exception as e:
-    return {"error": str(e)}
-```
-
-### FastMCP 2.12 (New)
-```python
-try:
-    # Operation
     return {
         "status": "success",
-        "data": result_data,
-        "message": "Operation completed"
-    }
-except Exception as e:
-    logger.error(f"Error in my_tool: {str(e)}", exc_info=True)
-    return {
-        "status": "error",
-        "error": str(e),
-        "message": f"Failed to complete operation: {str(e)}"
+        "data": param1,
+        "message": "Operation completed successfully"
     }
 ```
 
 ## Response Formats
 
-### FastMCP 2.11 (Old)
+### FastMCP 3.x (Deprecated)
+The `ToolResult` class was used in earlier 3.x previews for complex responses.
+
+### FastMCP 3.2.0 (SOTA)
+Simple dictionaries are now the preferred return type for tools. FastMCP 3.2.0 automatically handles conversion to the appropriate MCP response format.
+
 ```json
 {
-    "result": "some data"
+  "status": "success",
+  "data": {
+    "key": "value"
+  },
+  "message": "Operation completed successfully"
 }
 ```
 
-### FastMCP 2.12 (New)
-```json
-{
-    "status": "success",
-    "data": {
-        "key": "value"
-    },
-    "message": "Operation completed successfully"
-}
+## Error Handling
+
+### FastMCP 3.2.0 (SOTA)
+Instead of raising `ToolError`, return a standard error dictionary to ensure graceful handling and informative feedback for the user.
+
+```python
+try:
+    # Operation
+    return {
+        "status": "success",
+        "data": result_data
+    }
+except Exception as e:
+    return {
+        "status": "error",
+        "message": f"Failed to complete operation: {str(e)}"
+    }
 ```
 
 ## Best Practices

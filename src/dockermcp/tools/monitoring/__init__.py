@@ -3,16 +3,17 @@ Monitoring Tools for DockerMCP
 
 This module provides tools for managing the monitoring stack (Prometheus, Grafana, Loki, etc.).
 """
-from typing import Dict, Any, List, Optional, Literal
-import subprocess
 import logging
+import subprocess
 from pathlib import Path
-from pydantic import BaseModel, Field, model_validator
-from typing_extensions import Annotated
+from typing import Annotated, Any, Dict, List, Literal, Optional
 
-from dockermcp.mcp_instance import mcp
-from dockermcp.logging_config import logger
+from pydantic import BaseModel, Field, model_validator
+
 from dockermcp.exceptions import DockerOperationError
+from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
+
 
 class CommandResult(BaseModel):
     """Result of a shell command execution."""
@@ -26,27 +27,27 @@ class MonitoringResponse(BaseModel):
     """Standard response model for monitoring operations."""
     status: Literal["success", "error"]
     message: str
-    details: Optional[Dict[str, Any]] = Field(default_factory=dict)
-    error: Optional[str] = None
+    details: dict[str, Any] | None = Field(default_factory=dict)
+    error: str | None = None
 
 class MonitoringManager:
     """Manages the monitoring stack."""
-    
+
     def __init__(self):
         self.monitoring_dir = Path(__file__).parent.parent.parent.parent.parent / "monitoring"
         self.compose_file = self.monitoring_dir / "docker-compose-monitoring.yml"
         self.compose_cmd = ["docker", "compose", "-f", str(self.compose_file)]
-    
-    def run_command(self, cmd: List[str]) -> CommandResult:
+
+    def run_command(self, cmd: list[str]) -> CommandResult:
         """
         Run a shell command and return the result.
-        
+
         Args:
             cmd: List of command arguments
-            
+
         Returns:
             CommandResult with the command execution details
-            
+
         Raises:
             DockerOperationError: If the command fails
         """
@@ -59,7 +60,7 @@ class MonitoringManager:
                 text=True,
                 check=False
             )
-            
+
             cmd_result = CommandResult(
                 status="success" if result.returncode == 0 else "error",
                 returncode=result.returncode,
@@ -67,26 +68,26 @@ class MonitoringManager:
                 stderr=result.stderr.strip(),
                 command=" ".join(cmd)
             )
-            
+
             if cmd_result.status == "error":
                 logger.error(
                     f"Command failed with code {cmd_result.returncode}: {cmd_result.stderr}"
                 )
-                
+
             return cmd_result
-            
+
         except Exception as e:
             error_msg = f"Error executing command: {str(e)}"
             logger.exception(error_msg)
             raise DockerOperationError(error_msg) from e
-    
+
     def start_services(self, build: bool = False) -> CommandResult:
         """
         Start the monitoring services.
-        
+
         Args:
             build: Whether to build images before starting
-            
+
         Returns:
             CommandResult with the command execution details
         """
@@ -94,15 +95,15 @@ class MonitoringManager:
         if build:
             cmd.append("--build")
         return self.run_command(cmd)
-    
+
     def stop_services(self, remove_volumes: bool = False, timeout: int = 10) -> CommandResult:
         """
         Stop the monitoring services.
-        
+
         Args:
             remove_volumes: Whether to remove volumes
             timeout: Timeout in seconds before killing containers
-            
+
         Returns:
             CommandResult with the command execution details
         """
@@ -110,61 +111,61 @@ class MonitoringManager:
         if remove_volumes:
             cmd.append("--volumes")
         return self.run_command(cmd)
-    
+
     def restart_services(self, build: bool = False) -> CommandResult:
         """
         Restart the monitoring services.
-        
+
         Args:
             build: Whether to rebuild images before starting
-            
+
         Returns:
             CommandResult with the command execution details
         """
         self.stop_services()
         return self.start_services(build=build)
-    
+
     def get_status(self, all_containers: bool = True) -> CommandResult:
         """
         Get the status of monitoring services.
-        
+
         Args:
             all_containers: Whether to show all containers (including stopped ones)
-            
+
         Returns:
             CommandResult with the command execution details
         """
         cmd = self.compose_cmd + ["ps", "--all"] if all_containers else self.compose_cmd + ["ps"]
         return self.run_command(cmd)
-    
+
     def get_logs(
-        self, 
-        service: Optional[str] = None, 
+        self,
+        service: str | None = None,
         tail: int = 100,
         follow: bool = False,
         timestamps: bool = False
     ) -> CommandResult:
         """
         Get logs from monitoring services.
-        
+
         Args:
             service: Optional service name to get logs for
             tail: Number of lines to show from the end
             follow: Follow log output
             timestamps: Include timestamps
-            
+
         Returns:
             CommandResult with the command execution details
         """
         cmd = self.compose_cmd + ["logs", f"--tail={tail}"]
-        
+
         if follow:
             cmd.append("--follow")
         if timestamps:
             cmd.append("--timestamps")
         if service:
             cmd.append(service)
-            
+
         return self.run_command(cmd)
 
 # Create a singleton instance
@@ -181,13 +182,13 @@ class StartMonitoringParams(BaseModel):
 async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
     """
     Start the monitoring stack including Prometheus, Grafana, Loki, and other services.
-    
+
     Args:
         params: StartMonitoringParams containing the build flag
-        
+
     Returns:
         MonitoringResponse with the result of the operation
-        
+
     Example:
         >>> await start_monitoring(StartMonitoringParams(build=True))
         {
@@ -201,7 +202,7 @@ async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
     """
     try:
         result = monitoring_manager.start_services(build=params.build)
-        
+
         if result.status == "success":
             return MonitoringResponse(
                 status="success",
@@ -211,7 +212,7 @@ async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
                     "output": result.stdout
                 }
             ).model_dump()
-            
+
         return MonitoringResponse(
             status="error",
             message="Failed to start monitoring services",
@@ -222,7 +223,7 @@ async def start_monitoring(params: StartMonitoringParams) -> MonitoringResponse:
                 "output": result.stdout
             }
         ).model_dump()
-        
+
     except Exception as e:
         logger.exception("Error starting monitoring services")
         return MonitoringResponse(
@@ -237,7 +238,7 @@ class StopMonitoringParams(BaseModel):
         default=False,
         description="Whether to remove volumes when stopping"
     )] = False
-    
+
     timeout: Annotated[int, Field(
         default=10,
         ge=1,
@@ -249,13 +250,13 @@ class StopMonitoringParams(BaseModel):
 async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
     """
     Stop the monitoring stack.
-    
+
     Args:
         params: StopMonitoringParams containing stop options
-        
+
     Returns:
         MonitoringResponse with the result of the operation
-        
+
     Example:
         >>> await stop_monitoring(StopMonitoringParams(remove_volumes=True, timeout=30))
         {
@@ -272,7 +273,7 @@ async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
             remove_volumes=params.remove_volumes,
             timeout=params.timeout
         )
-        
+
         if result.status == "success":
             return MonitoringResponse(
                 status="success",
@@ -282,7 +283,7 @@ async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
                     "output": result.stdout
                 }
             ).model_dump()
-            
+
         return MonitoringResponse(
             status="error",
             message="Failed to stop monitoring services",
@@ -293,7 +294,7 @@ async def stop_monitoring(params: StopMonitoringParams) -> MonitoringResponse:
                 "output": result.stdout
             }
         ).model_dump()
-        
+
     except Exception as e:
         logger.exception("Error stopping monitoring services")
         return MonitoringResponse(
@@ -308,7 +309,7 @@ class MonitoringStatusParams(BaseModel):
         default=False,
         description="Whether to include detailed container information"
     )] = False
-    
+
     all_containers: Annotated[bool, Field(
         default=True,
         description="Whether to include stopped containers"
@@ -318,13 +319,13 @@ class MonitoringStatusParams(BaseModel):
 async def monitoring_status(params: MonitoringStatusParams) -> MonitoringResponse:
     """
     Get the status of monitoring stack services.
-    
+
     Args:
         params: MonitoringStatusParams containing status options
-        
+
     Returns:
         MonitoringResponse with the status of monitoring services
-        
+
     Example:
         >>> await monitoring_status(MonitoringStatusParams(detailed=True))
         {
@@ -347,7 +348,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
             result = monitoring_manager.run_command(
                 ["docker", "ps", "--filter", "name=monitoring_", "--format", "{{.Names}}|{{.Status}}|{{.Ports}}"]
             )
-            
+
             if result.status != "success":
                 return MonitoringResponse(
                     status="error",
@@ -358,7 +359,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
                         "returncode": result.returncode
                     }
                 ).model_dump()
-                
+
             # Parse the detailed output
             services = []
             for line in result.stdout.splitlines():
@@ -373,7 +374,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
                         })
         else:
             result = monitoring_manager.get_status(all_containers=params.all_containers)
-            
+
             if result.status != "success":
                 return MonitoringResponse(
                     status="error",
@@ -384,13 +385,13 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
                         "returncode": result.returncode
                     }
                 ).model_dump()
-                
+
             # Parse the standard output
             services = []
             for line in result.stdout.splitlines():
                 if not line.strip() or 'NAME' in line and 'STATUS' in line:
                     continue
-                    
+
                 parts = line.split()
                 if len(parts) >= 4:
                     service = {
@@ -399,7 +400,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
                         'ports': ' '.join(parts[4:]) if len(parts) > 4 else ''
                     }
                     services.append(service)
-        
+
         return MonitoringResponse(
             status="success",
             message=f"Found {len(services)} monitoring services",
@@ -408,7 +409,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
                 "raw_output": result.stdout if params.detailed else None
             }
         ).model_dump()
-        
+
     except Exception as e:
         logger.exception("Error getting monitoring status")
         return MonitoringResponse(
@@ -419,23 +420,23 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
 
 class MonitoringLogsParams(BaseModel):
     """Parameters for getting monitoring logs."""
-    service: Annotated[Optional[str], Field(
+    service: Annotated[str | None, Field(
         default=None,
         description="Name of the service to get logs from (optional)"
     )] = None
-    
+
     tail: Annotated[int, Field(
         default=100,
         ge=1,
         le=10000,
         description="Number of lines to show from the end of the logs"
     )] = 100
-    
+
     follow: Annotated[bool, Field(
         default=False,
         description="Whether to follow the log output"
     )] = False
-    
+
     timestamps: Annotated[bool, Field(
         default=False,
         description="Whether to include timestamps in logs"
@@ -445,13 +446,13 @@ class MonitoringLogsParams(BaseModel):
 async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
     """
     Get logs from monitoring services.
-    
+
     Args:
         params: MonitoringLogsParams containing log retrieval options
-        
+
     Returns:
         MonitoringResponse with the logs and metadata
-        
+
     Example:
         >>> await monitoring_logs(MonitoringLogsParams(
         ...     service="grafana",
@@ -476,10 +477,10 @@ async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
             follow=params.follow,
             timestamps=params.timestamps
         )
-        
+
         if result.status == "success":
             lines = len(result.stdout.splitlines()) if result.stdout else 0
-            
+
             return MonitoringResponse(
                 status="success",
                 message=f"Retrieved {lines} log lines" if not params.follow else "Following logs...",
@@ -490,7 +491,7 @@ async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
                     "timestamps": params.timestamps
                 }
             ).model_dump()
-            
+
         return MonitoringResponse(
             status="error",
             message="Failed to retrieve logs",
@@ -500,7 +501,7 @@ async def monitoring_logs(params: MonitoringLogsParams) -> MonitoringResponse:
                 "returncode": result.returncode
             }
         ).model_dump()
-        
+
     except Exception as e:
         logger.exception("Error retrieving logs")
         return MonitoringResponse(

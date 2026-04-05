@@ -6,17 +6,12 @@ and removal. It follows FastMCP 2.12+ standards for tool registration and error 
 """
 from __future__ import annotations
 
-import json
-import logging
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Annotated
+from enum import StrEnum
+from typing import Any
 
 import docker
-from docker.errors import DockerException, APIError, NotFound
+from docker.errors import APIError, DockerException, NotFound
 from fastmcp import FastMCP
-from fastmcp.tools import Tool
-from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, Field
 
 from dockermcp.logging_config import logger
@@ -24,7 +19,7 @@ from dockermcp.logging_config import logger
 # Initialize MCP instance
 mcp = FastMCP("Docker MCP")
 
-class VolumeDriver(str, Enum):
+class VolumeDriver(StrEnum):
     """Supported Docker volume drivers."""
     LOCAL = "local"
     NONE = "none"
@@ -32,7 +27,7 @@ class VolumeDriver(str, Enum):
 
 class VolumeCreateRequest(BaseModel):
     """Request model for creating a new volume."""
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         description="Name of the volume. If not specified, Docker generates a name."
     )
@@ -40,11 +35,11 @@ class VolumeCreateRequest(BaseModel):
         "local",
         description="Name of the volume driver to use. Defaults to 'local'."
     )
-    driver_opts: Dict[str, str] = Field(
+    driver_opts: dict[str, str] = Field(
         default_factory=dict,
         description="Key-value mapping of driver options and values."
     )
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description="Labels to set on the volume, as a key-value mapping."
     )
@@ -55,30 +50,30 @@ class VolumeMount(BaseModel):
     source: str = Field(..., description="The source of the mount")
     target: str = Field(..., description="The target path in the container")
     read_only: bool = Field(False, description="Whether the mount is read-only")
-    volume: Dict[str, Any] = Field(..., description="Volume details")
+    volume: dict[str, Any] = Field(..., description="Volume details")
 
 class ListVolumesParams(BaseModel):
     """Parameters for list_volumes tool."""
-    names: List[str] = Field(
+    names: list[str] = Field(
         default_factory=list,
         description="Filter volumes by names"
     )
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description="Filter by labels (key=value)"
     )
-    dangling: Optional[bool] = Field(
+    dangling: bool | None = Field(
         default=None,
         description="Filter for dangling volumes (true/false)"
     )
-    driver: Optional[str] = Field(
+    driver: str | None = Field(
         default=None,
         description="Filter by volume driver name"
     )
 
 class CreateVolumeParams(BaseModel):
     """Parameters for create_volume tool."""
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None,
         description="Name of the volume. If not specified, Docker generates a name."
     )
@@ -86,11 +81,11 @@ class CreateVolumeParams(BaseModel):
         "local",
         description="Name of the volume driver to use. Defaults to 'local'."
     )
-    driver_opts: Dict[str, str] = Field(
+    driver_opts: dict[str, str] = Field(
         default_factory=dict,
         description="Key-value mapping of driver options and values."
     )
-    labels: Dict[str, str] = Field(
+    labels: dict[str, str] = Field(
         default_factory=dict,
         description="Labels to set on the volume, as a key-value mapping."
     )
@@ -115,7 +110,7 @@ class RemoveVolumeParams(BaseModel):
 
 class PruneVolumesParams(BaseModel):
     """Parameters for prune_volumes tool."""
-    filters: Dict[str, str] = Field(
+    filters: dict[str, str] = Field(
         default_factory=dict,
         description="Filters to process on the prune list. "
                    "Valid filters: label (label=<key>=<value>), "
@@ -123,23 +118,23 @@ class PruneVolumesParams(BaseModel):
     )
 
 @mcp.tool
-async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
+async def list_volumes(params: ListVolumesParams) -> dict[str, Any]:
     """
     List Docker volumes with filtering options.
-    
+
     This function lists all Docker volumes, with optional filtering by name, labels,
     dangling state, and driver.
-    
+
     Args:
         params: ListVolumesParams containing:
             - names: List of volume names to filter by
             - labels: Dictionary of labels to filter by (key=value)
             - dangling: Filter for dangling volumes (true/false)
             - driver: Filter by volume driver name
-        
+
     Returns:
         Dictionary with list of volumes and metadata
-        
+
     Example:
         >>> await list_volumes(params=ListVolumesParams(
         ...     labels={"environment": "production"},
@@ -171,7 +166,7 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Build filters
         filters = {}
         if params.names:
@@ -182,10 +177,10 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
             filters['dangling'] = [str(params.dangling).lower()]
         if params.driver:
             filters['driver'] = [params.driver]
-        
+
         # List volumes
         volumes = client.volumes.list(filters=filters)
-        
+
         # Prepare response
         result = []
         for vol in volumes:
@@ -201,7 +196,7 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
                 logger.warning(f"Error getting volume info: {str(e)}")
                 vol_info['usage_data'] = None
                 result.append(vol_info)
-        
+
         count = len(result)
         return {
             'status': 'success',
@@ -211,12 +206,12 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
             },
             'message': f"Found {count} volume(s)"
         }
-        
+
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
@@ -225,7 +220,7 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
             "message": "Docker daemon not available",
             "error": "DOCKER_DAEMON_UNAVAILABLE"
         }
-        
+
     except Exception as e:
         error_msg = f"Unexpected error listing volumes: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -236,22 +231,22 @@ async def list_volumes(params: ListVolumesParams) -> Dict[str, Any]:
         }
 
 @mcp.tool
-async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
+async def create_volume(params: CreateVolumeParams) -> dict[str, Any]:
     """
     Create a new Docker volume.
-    
+
     This function creates a new Docker volume with the specified configuration.
-    
+
     Args:
         params: CreateVolumeParams containing:
             - name: Name of the volume (optional)
             - driver: Name of the volume driver to use (default: "local")
             - driver_opts: Key-value mapping of driver options and values
             - labels: Labels to set on the volume
-        
+
     Returns:
         Dictionary with the created volume information
-        
+
     Example:
         >>> await create_volume(params=CreateVolumeParams(
         ...     name="my-app-data",
@@ -278,7 +273,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Create the volume
         volume = client.volumes.create(
             name=params.name,
@@ -286,10 +281,10 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             driver_opts=params.driver_opts,
             labels=params.labels
         )
-        
+
         # Get the created volume details
         volume.reload()
-        
+
         volume_info = {
             'name': volume.name,
             'driver': volume.attrs['Driver'],
@@ -299,7 +294,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             'scope': volume.attrs.get('Scope', 'local'),
             'created_at': volume.attrs.get('CreatedAt')
         }
-        
+
         return {
             'status': 'success',
             'data': {
@@ -307,7 +302,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             },
             'message': f"Volume '{volume.name}' created successfully"
         }
-        
+
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
@@ -316,7 +311,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             "message": error_msg,
             "error": "DOCKER_API_ERROR"
         }
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
@@ -325,7 +320,7 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
             "message": "Docker daemon not available",
             "error": "DOCKER_DAEMON_UNAVAILABLE"
         }
-        
+
     except Exception as e:
         error_msg = f"Unexpected error creating volume: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -336,19 +331,19 @@ async def create_volume(params: CreateVolumeParams) -> Dict[str, Any]:
         }
 
 @mcp.tool
-async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
+async def inspect_volume(params: InspectVolumeParams) -> dict[str, Any]:
     """
     Inspect a Docker volume.
-    
+
     This function retrieves detailed information about a specific Docker volume.
-    
+
     Args:
         params: InspectVolumeParams containing:
             - name: Name or ID of the volume to inspect
-        
+
     Returns:
         Dictionary with the volume details
-        
+
     Example:
         >>> await inspect_volume(params=InspectVolumeParams(name="my-volume"))
         {
@@ -375,7 +370,7 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Get the volume
         try:
             volume = client.volumes.get(params.name)
@@ -385,10 +380,10 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
                 "message": f"Volume not found: {params.name}",
                 "error": "VOLUME_NOT_FOUND"
             }
-        
+
         # Get volume details
         volume.reload()
-        
+
         # Prepare volume info
         volume_info = {
             'name': volume.name,
@@ -400,11 +395,11 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
             'created_at': volume.attrs.get('CreatedAt'),
             'status': volume.attrs.get('Status', {})
         }
-        
+
         # Add usage data if available
         if 'UsageData' in volume.attrs:
             volume_info['usage_data'] = volume.attrs['UsageData']
-        
+
         return {
             'status': 'success',
             'data': {
@@ -412,7 +407,7 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
             },
             'message': f"Volume '{volume.name}' inspected successfully"
         }
-        
+
     except APIError as e:
         error_msg = f"Docker API error: {str(e)}"
         logger.error(error_msg)
@@ -421,7 +416,7 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
             "message": error_msg,
             "error": "DOCKER_API_ERROR"
         }
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
@@ -430,7 +425,7 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
             "message": "Docker daemon not available",
             "error": "DOCKER_DAEMON_UNAVAILABLE"
         }
-        
+
     except Exception as e:
         error_msg = f"Unexpected error inspecting volume: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -441,18 +436,18 @@ async def inspect_volume(params: InspectVolumeParams) -> Dict[str, Any]:
         }
 
 @mcp.tool
-async def remove_volume(params: RemoveVolumeParams) -> Dict[str, Any]:
+async def remove_volume(params: RemoveVolumeParams) -> dict[str, Any]:
     """
     Remove a Docker volume.
-    
+
     Args:
         params: RemoveVolumeParams containing:
             - name: Name or ID of the volume to remove
             - force: Force removal even if in use (default: False)
-        
+
     Returns:
         Dictionary with operation status and result
-        
+
     Example:
         >>> await remove_volume(params=RemoveVolumeParams(
         ...     name="my-volume",
@@ -470,11 +465,11 @@ async def remove_volume(params: RemoveVolumeParams) -> Dict[str, Any]:
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Get the volume
         volume = client.volumes.get(params.name)
         volume.remove(force=params.force)
-        
+
         return {
             "status": "success",
             "data": {
@@ -511,19 +506,19 @@ async def remove_volume(params: RemoveVolumeParams) -> Dict[str, Any]:
         }
 
 @mcp.tool
-async def prune_volumes(params: PruneVolumesParams) -> Dict[str, Any]:
+async def prune_volumes(params: PruneVolumesParams) -> dict[str, Any]:
     """
     Remove unused Docker volumes.
-    
+
     This function removes all unused volumes, with optional filtering.
-    
+
     Args:
         params: PruneVolumesParams containing:
             - filters: Dictionary of filters to process on the prune list
-                
+
     Returns:
         Dictionary with the prune results
-        
+
     Example:
         >>> await prune_volumes(params=PruneVolumesParams(filters={"all": "true"}))
         {
@@ -540,16 +535,16 @@ async def prune_volumes(params: PruneVolumesParams) -> Dict[str, Any]:
     try:
         # Initialize Docker client
         client = docker.from_env()
-        
+
         # Prune volumes
         result = client.volumes.prune(filters=params.filters)
-        
+
         # Prepare response
         volumes_deleted = result.get('VolumesDeleted', [])
         space_reclaimed = result.get('SpaceReclaimed', 0)
         size_mb = space_reclaimed / (1024 * 1024)
         count = len(volumes_deleted)
-        
+
         return {
             "status": "success",
             "data": {
@@ -560,7 +555,7 @@ async def prune_volumes(params: PruneVolumesParams) -> Dict[str, Any]:
             },
             "message": f"Pruned {count} volume(s) ({size_mb:.2f} MB)"
         }
-        
+
     except docker.errors.APIError as e:
         error_msg = f"Docker API error while pruning volumes: {str(e)}"
         logger.error(error_msg)

@@ -7,15 +7,14 @@ including system information, disk usage analysis, and system cleanup operations
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, Optional
+from typing import Any
 
 from docker.errors import DockerException
+from pydantic import BaseModel, ConfigDict, Field
 
-from pydantic import BaseModel, Field, ConfigDict
-
-from dockermcp import docker_client, check_docker_available
-from dockermcp.mcp_instance import mcp
+from dockermcp import check_docker_available, docker_client
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
 
 # ============================================================================
 # Request/Response Models
@@ -24,7 +23,7 @@ from dockermcp.logging_config import logger
 class SystemInfoRequest(BaseModel):
     """Request model for get_system_info tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     include_disk_usage: bool = Field(
         default=True,
         json_schema_extra={"description": "Include disk usage information in the response"}
@@ -37,13 +36,13 @@ class SystemInfoRequest(BaseModel):
 class SystemInfoResponse(BaseModel):
     """Response model for get_system_info tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
-    system_info: Optional[Dict[str, Any]] = Field(
+    system_info: dict[str, Any] | None = Field(
         default=None,
         json_schema_extra={"description": "Docker system information"}
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         json_schema_extra={"description": "Error message if operation failed"}
     )
@@ -51,7 +50,7 @@ class SystemInfoResponse(BaseModel):
 class DiskUsageRequest(BaseModel):
     """Request model for get_disk_usage tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     detailed: bool = Field(
         default=True,
         json_schema_extra={"description": "Include detailed breakdown of disk usage"}
@@ -60,13 +59,13 @@ class DiskUsageRequest(BaseModel):
 class DiskUsageResponse(BaseModel):
     """Response model for get_disk_usage tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
-    disk_usage: Optional[Dict[str, Any]] = Field(
+    disk_usage: dict[str, Any] | None = Field(
         default=None,
         json_schema_extra={"description": "Disk usage information"}
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         json_schema_extra={"description": "Error message if operation failed"}
     )
@@ -74,7 +73,7 @@ class DiskUsageResponse(BaseModel):
 class PruneSystemRequest(BaseModel):
     """Request model for prune_system tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     prune_containers: bool = Field(
         default=True,
         json_schema_extra={"description": "Remove stopped containers"}
@@ -99,13 +98,13 @@ class PruneSystemRequest(BaseModel):
 class PruneSystemResponse(BaseModel):
     """Response model for prune_system tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
-    pruned_data: Optional[Dict[str, Any]] = Field(
+    pruned_data: dict[str, Any] | None = Field(
         default=None,
         json_schema_extra={"description": "Information about pruned resources"}
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         json_schema_extra={"description": "Error message if operation failed"}
     )
@@ -113,7 +112,7 @@ class PruneSystemResponse(BaseModel):
 class ParseDurationRequest(BaseModel):
     """Request model for parse_duration tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     duration_string: str = Field(
         ...,
         json_schema_extra={"description": "Duration string to parse (e.g., '24h', '30m', '2d')"}
@@ -122,13 +121,13 @@ class ParseDurationRequest(BaseModel):
 class ParseDurationResponse(BaseModel):
     """Response model for parse_duration tool."""
     model_config = ConfigDict(extra='forbid')
-    
+
     status: str = Field(..., json_schema_extra={"description": "Status of the operation ('success' or 'error')"})
-    seconds: Optional[int] = Field(
+    seconds: int | None = Field(
         default=None,
         json_schema_extra={"description": "Duration converted to seconds"}
     )
-    error: Optional[str] = Field(
+    error: str | None = Field(
         default=None,
         json_schema_extra={"description": "Error message if operation failed"}
     )
@@ -151,15 +150,15 @@ def format_bytes(size_bytes: int) -> str:
 def parse_duration_string(duration_str: str) -> int:
     """Parse duration string into seconds."""
     duration_str = duration_str.strip().lower()
-    
+
     # Match pattern like "24h", "30m", "2d", etc.
     match = re.match(r'^(\d+)([smhdw])$', duration_str)
     if not match:
         raise ValueError(f"Invalid duration format: {duration_str}")
-    
+
     value, unit = match.groups()
     value = int(value)
-    
+
     multipliers = {
         's': 1,
         'm': 60,
@@ -167,7 +166,7 @@ def parse_duration_string(duration_str: str) -> int:
         'd': 86400,
         'w': 604800
     }
-    
+
     return value * multipliers[unit]
 
 # ============================================================================
@@ -181,21 +180,21 @@ async def get_system_info(
 ) -> SystemInfoResponse:
     """
     Get comprehensive Docker system information.
-    
+
     Args:
         request: SystemInfoRequest with options for what to include
-        
+
     Returns:
         SystemInfoResponse with system information or error details
     """
     try:
         logger.info("Getting Docker system information")
         client = docker_client
-        
+
         # Get basic system info
         info = client.info()
         version = client.version()
-        
+
         system_data = {
             "docker_version": version.get("Version", "unknown"),
             "api_version": version.get("ApiVersion", "unknown"),
@@ -220,7 +219,7 @@ async def get_system_info(
                 "cores": info.get("NCPU", 0)
             }
         }
-        
+
         # Add disk usage if requested
         if request.include_disk_usage:
             try:
@@ -234,7 +233,7 @@ async def get_system_info(
             except Exception as e:
                 logger.warning(f"Could not get disk usage: {e}")
                 system_data["disk_usage"] = {"error": str(e)}
-        
+
         # Add swarm info if requested
         if request.include_swarm_info:
             try:
@@ -243,14 +242,14 @@ async def get_system_info(
             except Exception as e:
                 logger.warning(f"Could not get swarm info: {e}")
                 system_data["swarm"] = {"error": str(e)}
-        
 
-        
+
+
         return SystemInfoResponse(
             status="success",
             system_info=system_data
         )
-        
+
     except DockerException as e:
         error_msg = f"Docker error getting system info: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -273,20 +272,20 @@ async def get_disk_usage(
 ) -> DiskUsageResponse:
     """
     Get detailed Docker disk usage information.
-    
+
     Args:
         request: DiskUsageRequest with options for detail level
-        
+
     Returns:
         DiskUsageResponse with disk usage information or error details
     """
     try:
         logger.info("Getting Docker disk usage information")
         client = docker_client
-        
+
         # Get disk usage data
         df_info = client.df()
-        
+
         disk_data = {
             "containers": [],
             "images": [],
@@ -300,7 +299,7 @@ async def get_disk_usage(
                 "total_size": 0
             }
         }
-        
+
         # Process containers
         for container in df_info.get("Containers", []):
             size_rw = container.get("SizeRw", 0) or 0
@@ -314,7 +313,7 @@ async def get_disk_usage(
                 "size_root_fs_formatted": format_bytes(size_root_fs)
             })
             disk_data["summary"]["total_containers_size"] += size_rw
-        
+
         # Process images
         for image in df_info.get("Images", []):
             size = image.get("Size", 0) or 0
@@ -328,7 +327,7 @@ async def get_disk_usage(
                 "shared_size_formatted": format_bytes(shared_size)
             })
             disk_data["summary"]["total_images_size"] += size
-        
+
         # Process volumes
         for volume in df_info.get("Volumes", []):
             usage_data = volume.get("UsageData", {}) or {}
@@ -340,7 +339,7 @@ async def get_disk_usage(
                 "ref_count": usage_data.get("RefCount", 0)
             })
             disk_data["summary"]["total_volumes_size"] += size
-        
+
         # Process build cache
         for cache in df_info.get("BuildCache", []):
             size = cache.get("Size", 0) or 0
@@ -352,30 +351,30 @@ async def get_disk_usage(
                 "shared": cache.get("Shared", False)
             })
             disk_data["summary"]["total_build_cache_size"] += size
-        
+
         # Calculate total
         summary = disk_data["summary"]
         summary["total_size"] = (
-            summary["total_containers_size"] + 
-            summary["total_images_size"] + 
-            summary["total_volumes_size"] + 
+            summary["total_containers_size"] +
+            summary["total_images_size"] +
+            summary["total_volumes_size"] +
             summary["total_build_cache_size"]
         )
-        
+
         # Add formatted totals
         summary["total_containers_size_formatted"] = format_bytes(summary["total_containers_size"])
         summary["total_images_size_formatted"] = format_bytes(summary["total_images_size"])
         summary["total_volumes_size_formatted"] = format_bytes(summary["total_volumes_size"])
         summary["total_build_cache_size_formatted"] = format_bytes(summary["total_build_cache_size"])
         summary["total_size_formatted"] = format_bytes(summary["total_size"])
-        
 
-        
+
+
         return DiskUsageResponse(
             status="success",
             disk_usage=disk_data
         )
-        
+
     except DockerException as e:
         error_msg = f"Docker error getting disk usage: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -398,17 +397,17 @@ async def prune_system(
 ) -> PruneSystemResponse:
     """
     Prune unused Docker system resources.
-    
+
     Args:
         request: PruneSystemRequest with options for what to prune
-        
+
     Returns:
         PruneSystemResponse with information about pruned resources
     """
     try:
         logger.info("Starting Docker system prune operation")
         client = docker_client
-        
+
         pruned_data = {
             "containers_pruned": [],
             "images_pruned": [],
@@ -417,7 +416,7 @@ async def prune_system(
             "build_cache_pruned": [],
             "total_space_reclaimed": 0
         }
-        
+
         # Prune containers
         if request.prune_containers:
             try:
@@ -427,7 +426,7 @@ async def prune_system(
                 logger.info(f"Pruned {len(pruned_data['containers_pruned'])} containers")
             except Exception as e:
                 logger.warning(f"Failed to prune containers: {e}")
-        
+
         # Prune images
         if request.prune_images:
             try:
@@ -437,7 +436,7 @@ async def prune_system(
                 logger.info(f"Pruned {len(pruned_data['images_pruned'])} images")
             except Exception as e:
                 logger.warning(f"Failed to prune images: {e}")
-        
+
         # Prune networks
         if request.prune_networks:
             try:
@@ -446,7 +445,7 @@ async def prune_system(
                 logger.info(f"Pruned {len(pruned_data['networks_pruned'])} networks")
             except Exception as e:
                 logger.warning(f"Failed to prune networks: {e}")
-        
+
         # Prune volumes (optional, potentially dangerous)
         if request.prune_volumes:
             try:
@@ -456,7 +455,7 @@ async def prune_system(
                 logger.info(f"Pruned {len(pruned_data['volumes_pruned'])} volumes")
             except Exception as e:
                 logger.warning(f"Failed to prune volumes: {e}")
-        
+
         # Prune build cache
         if request.prune_build_cache:
             try:
@@ -467,19 +466,19 @@ async def prune_system(
                 logger.info("Pruned build cache")
             except Exception as e:
                 logger.warning(f"Failed to prune build cache: {e}")
-        
+
         # Format the space reclaimed
         pruned_data["total_space_reclaimed_formatted"] = format_bytes(
             pruned_data["total_space_reclaimed"]
         )
-        
 
-        
+
+
         return PruneSystemResponse(
             status="success",
             pruned_data=pruned_data
         )
-        
+
     except DockerException as e:
         error_msg = f"Docker error during system prune: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -501,23 +500,23 @@ async def parse_duration(
 ) -> ParseDurationResponse:
     """
     Parse a duration string into seconds.
-    
+
     Args:
         request: ParseDurationRequest with duration string to parse
-        
+
     Returns:
         ParseDurationResponse with parsed duration in seconds
     """
     try:
         logger.info(f"Parsing duration string: {request.duration_string}")
-        
+
         seconds = parse_duration_string(request.duration_string)
-        
+
         return ParseDurationResponse(
             status="success",
             seconds=seconds
         )
-        
+
     except ValueError as e:
         error_msg = f"Invalid duration format: {str(e)}"
         logger.error(error_msg)
@@ -539,12 +538,12 @@ async def parse_duration(
 
 __all__ = [
     "get_system_info",
-    "get_disk_usage", 
+    "get_disk_usage",
     "prune_system",
     "parse_duration",
     "SystemInfoRequest",
     "SystemInfoResponse",
-    "DiskUsageRequest", 
+    "DiskUsageRequest",
     "DiskUsageResponse",
     "PruneSystemRequest",
     "PruneSystemResponse",

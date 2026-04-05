@@ -5,13 +5,13 @@ This module provides functionality to attempt reconnection to the Docker daemon
 if the connection is lost.
 """
 import asyncio
-import logging
-from typing import Dict, Any, Optional
+
 from pydantic import BaseModel, Field
 
+from dockermcp import docker_available, retry_docker_connection
 from dockermcp.mcp_instance import mcp
-from dockermcp import retry_docker_connection, docker_available
 from dockermcp.tools import ToolResponse
+
 
 class ReconnectDockerParams(BaseModel):
     """Parameters for the reconnect_docker tool."""
@@ -38,12 +38,12 @@ class ReconnectDockerResponse(BaseModel):
 async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[ReconnectDockerResponse]:
     """
     Attempt to reconnect to the Docker daemon.
-    
+
     Args:
         params: ReconnectDockerParams containing:
             - max_retries: Maximum number of retry attempts (default: 3)
             - retry_delay: Delay between retry attempts in seconds (default: 1.0)
-            
+
     Returns:
         ToolResponse containing the reconnection status
     """
@@ -57,7 +57,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
                     docker_available=True
                 )
             )
-        
+
         success = False
         for attempt in range(1, params.max_retries + 1):
             try:
@@ -71,7 +71,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
                 logger.error(f"Error during reconnection attempt {attempt}: {str(e)}")
                 if attempt < params.max_retries:
                     await asyncio.sleep(params.retry_delay)
-        
+
         if success:
             return ToolResponse.from_success(
                 message="Successfully reconnected to Docker daemon",
@@ -86,7 +86,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
                 message=f"Failed to reconnect to Docker daemon after {params.max_retries} attempts",
                 error=Exception("Docker reconnection failed")
             )
-            
+
     except Exception as e:
         error_msg = f"Error in reconnect_docker: {str(e)}"
         logger.error(error_msg, exc_info=True)
@@ -94,7 +94,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
 
 def register_tool():
     """Register the Docker reconnect tool with the MCP server.
-    
+
     Returns:
         List of tool functions to register
     """

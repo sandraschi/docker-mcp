@@ -13,9 +13,7 @@ import os
 import signal
 import sys
 import time
-import traceback
 from pathlib import Path
-from typing import Any, Dict, Optional, Type, TypeVar, cast
 
 # Add the parent directory to the Python path
 src_dir = str(Path(__file__).parent.absolute())
@@ -26,9 +24,6 @@ if src_dir not in sys.path:
 from .logging_config import (
     configure_logging,
     logger,
-    log_exception,
-    LogContext,
-    LogContextManager,
 )
 
 # Configure logging with JSON format and proper stream handling
@@ -45,31 +40,30 @@ should_exit = False
 
 class DockerMCPServer:
     """Main server class for Docker MCP."""
-    
+
     def __init__(self):
         """Initialize the server with default settings."""
         self.logger = logger.bind(component="docker_mcp")
         self.should_exit = False
         self.startup_time = time.time()
         self._shutdown_handlers = []
-        
+
         # Register cleanup handlers
         atexit.register(self.cleanup)
         signal.signal(signal.SIGINT, self.handle_exit_signal)
         signal.signal(signal.SIGTERM, self.handle_exit_signal)
-    
+
     def add_shutdown_handler(self, handler: callable) -> None:
         """Register a function to be called during shutdown."""
         self._shutdown_handlers.append(handler)
-    
+
     async def startup(self) -> None:
         """Initialize the server components."""
         self.logger.info("Starting Docker MCP server...")
-        
+
         try:
             # Import the MCP instance first to ensure it's created
-            from .mcp_instance import get_mcp
-            
+
             # Import API endpoints to register them
             try:
                 from dockermcp.api import containers
@@ -82,7 +76,7 @@ class DockerMCPServer:
                     self.logger.debug("Successfully imported API endpoints (fallback)")
                 except ImportError:
                     self.logger.warning("Failed to import API endpoints (fallback)")
-            
+
             # Import tools to ensure they're registered with the MCP instance
             try:
                 from dockermcp import tools  # This will register all tools via the import
@@ -90,9 +84,9 @@ class DockerMCPServer:
             except ImportError as e:
                 self.logger.error(f"Failed to import tools: {e}", exc_info=True)
                 raise
-                
+
             self.logger.info("Docker MCP server started successfully")
-            
+
         except Exception as e:
             self.logger.critical(
                 "Failed to start Docker MCP server",
@@ -100,15 +94,15 @@ class DockerMCPServer:
                 extra={"error": str(e)},
             )
             raise
-    
+
     async def shutdown(self) -> None:
         """Clean up resources and shut down the server gracefully."""
         if self.should_exit:
             return
-            
+
         self.should_exit = True
         self.logger.info("Shutting down Docker MCP server...")
-        
+
         # Call all registered shutdown handlers in reverse order
         for handler in reversed(self._shutdown_handlers):
             try:
@@ -122,27 +116,27 @@ class DockerMCPServer:
                     exc_info=True,
                     extra={"handler": handler.__name__ if hasattr(handler, "__name__") else str(handler)},
                 )
-        
+
         self.logger.info("Docker MCP server shut down successfully")
-    
+
     def handle_exit_signal(self, signum: int, frame) -> None:
         """Handle system signals for graceful shutdown."""
         self.logger.info(f"Received signal {signal.Signals(signum).name}, shutting down...")
         self.should_exit = True
-        
+
         # Schedule the shutdown in the event loop
         if asyncio.get_running_loop().is_running():
             asyncio.create_task(self.shutdown())
-    
+
     def cleanup(self) -> None:
         """Clean up resources during application exit."""
         self.logger.debug("Cleaning up resources...")
         # Add any cleanup code here
-    
+
     def log_system_info(self) -> None:
         """Log system information for debugging."""
         import platform
-        
+
         system_info = {
             "python_version": sys.version,
             "platform": platform.platform(),
@@ -156,16 +150,16 @@ class DockerMCPServer:
             "uid": os.getuid() if hasattr(os, 'getuid') else None,
             "gid": os.getgid() if hasattr(os, 'getgid') else None,
         }
-        
+
         self.logger.info("System information", **system_info)
 
-def handle_exception(exc_type: Type[BaseException], exc_value: BaseException, exc_traceback) -> None:
+def handle_exception(exc_type: type[BaseException], exc_value: BaseException, exc_traceback) -> None:
     """Global exception handler for uncaught exceptions."""
     if issubclass(exc_type, KeyboardInterrupt):
         # Don't log keyboard interrupts
         sys.__excepthook__(exc_type, exc_value, exc_traceback)
         return
-    
+
     logger.critical(
         "Uncaught exception",
         exc_info=(exc_type, exc_value, exc_traceback),
@@ -178,18 +172,18 @@ def handle_exception(exc_type: Type[BaseException], exc_value: BaseException, ex
 async def run_server() -> None:
     """Run the Docker MCP server."""
     server = DockerMCPServer()
-    
+
     try:
         # Log system information
         server.log_system_info()
-        
+
         # Initialize the server
         await server.startup()
-        
+
         # Keep the server running until shutdown is requested
         while not server.should_exit:
             await asyncio.sleep(0.1)
-            
+
     except asyncio.CancelledError:
         server.logger.info("Server task was cancelled")
     except Exception as e:
@@ -207,37 +201,37 @@ def main() -> int:
     """Entry point for the Docker MCP server."""
     # Set up global exception handler
     sys.excepthook = handle_exception
-    
+
     # Configure root logger to be silent
     logging.basicConfig(
         level=logging.CRITICAL,
         force=True,
         handlers=[logging.NullHandler()]
     )
-    
+
     # Silence common noisy loggers
     for logger_name in [
-        'fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 
+        'fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore',
         'h11', 'asyncio', 'watchfiles', 'uvicorn.error',
         'docker', 'urllib3', 'websockets', 'aiohttp'
     ]:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
-    
+
     # Run the server
     try:
         logger.info("=== Docker MCP Server Starting ===")
         logger.info(f"Python Path: {sys.path}")
-        
+
         # Get the singleton instance
         logger.info("Initializing FastMCP instance...")
-        mcp = get_mcp()
-        
+        get_mcp()
+
         # Run the server in the event loop
         logger.info("Starting event loop...")
         asyncio.run(run_server())
-        
+
         return 0
-        
+
     except Exception as e:
         logger.critical(
             "Fatal error in main process",

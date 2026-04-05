@@ -11,15 +11,15 @@ from .image_management import *
 __all__ = [
     # Image management operations
     "list_images",
-    "get_image_history", 
+    "get_image_history",
     "tag_image",
     "search_images",
     "prune_images",
-    
+
     # Response models
     "ImageListResponse",
     "ImageHistoryResponse",
-    "ImageTagResponse", 
+    "ImageTagResponse",
     "ImageSearchResponse",
     "ImagePruneResponse"
 ]

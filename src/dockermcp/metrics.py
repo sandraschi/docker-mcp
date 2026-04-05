@@ -4,20 +4,21 @@ Metrics and timing utilities for Docker MCP.
 This module provides utilities for tracking performance metrics and timing
 operations in a structured way, with support for logging and analysis.
 """
-import time
 import functools
 import logging
-from typing import Any, Callable, Dict, List, Optional, TypeVar, Union, cast
+import time
+from collections.abc import Callable
 from contextlib import contextmanager
+from typing import Any, TypeVar, cast
 
-from .logging_config import logger, log_context
+from .logging_config import log_context, logger
 
 # Type variable for generic function wrapping
 F = TypeVar('F', bound=Callable[..., Any])
 
-def log_metrics(name: str, value: float, tags: Optional[Dict[str, Any]] = None) -> None:
+def log_metrics(name: str, value: float, tags: dict[str, Any] | None = None) -> None:
     """Log a metric value with optional tags.
-    
+
     Args:
         name: Name of the metric
         value: Numeric value of the metric
@@ -25,25 +26,25 @@ def log_metrics(name: str, value: float, tags: Optional[Dict[str, Any]] = None) 
     """
     if not hasattr(log_context, 'metrics'):
         log_context.metrics = {}
-    
+
     metric = {'value': value}
     if tags:
         metric['tags'] = tags
-    
+
     # Initialize metrics list if it doesn't exist
     if name not in log_context.metrics:
         log_context.metrics[name] = []
-    
+
     log_context.metrics[name].append(metric)
     logger.debug(f"Recorded metric: {name}={value}", extra={'metrics': {name: metric}})
 
 def time_it(name: str, log_level: int = logging.DEBUG) -> Callable[[F], F]:
     """Decorator to measure and log the execution time of a function.
-    
+
     Args:
         name: Name to identify this timing measurement
         log_level: Logging level to use for the timing message
-    
+
     Returns:
         Decorated function that logs its execution time
     """
@@ -67,11 +68,11 @@ def time_it(name: str, log_level: int = logging.DEBUG) -> Callable[[F], F]:
 @contextmanager
 def time_block(name: str, log_level: int = logging.DEBUG) -> Any:
     """Context manager to measure and log the execution time of a code block.
-    
+
     Args:
         name: Name to identify this timing measurement
         log_level: Logging level to use for the timing message
-    
+
     Yields:
         None
     """
@@ -89,10 +90,10 @@ def time_block(name: str, log_level: int = logging.DEBUG) -> Any:
 
 def count_invocations(name: str) -> Callable[[F], F]:
     """Decorator to count function invocations.
-    
+
     Args:
         name: Name to identify this counter
-    
+
     Returns:
         Decorated function that counts its invocations
     """
@@ -106,10 +107,10 @@ def count_invocations(name: str) -> Callable[[F], F]:
 
 def track_errors(name: str) -> Callable[[F], F]:
     """Decorator to track and log function errors.
-    
+
     Args:
         name: Name to identify this error tracker
-    
+
     Returns:
         Decorated function that tracks errors
     """
@@ -124,27 +125,27 @@ def track_errors(name: str) -> Callable[[F], F]:
         return cast(F, wrapper)
     return decorator
 
-def get_metrics_summary() -> Dict[str, Dict[str, Any]]:
+def get_metrics_summary() -> dict[str, dict[str, Any]]:
     """Get a summary of all recorded metrics.
-    
+
     Returns:
         Dictionary with metric names as keys and their summaries as values
     """
     if not hasattr(log_context, 'metrics') or not log_context.metrics:
         return {}
-    
-    summary: Dict[str, Dict[str, Any]] = {}
-    
+
+    summary: dict[str, dict[str, Any]] = {}
+
     for name, values in log_context.metrics.items():
         if not values:
             continue
-            
+
         # Calculate basic statistics
         numeric_values = [v['value'] if isinstance(v, dict) else v for v in values]
         count = len(numeric_values)
         total = sum(numeric_values)
         avg = total / count if count > 0 else 0
-        
+
         summary[name] = {
             'count': count,
             'total': total,
@@ -153,7 +154,7 @@ def get_metrics_summary() -> Dict[str, Dict[str, Any]]:
             'max': max(numeric_values) if numeric_values else None,
             'samples': numeric_values[-10:],  # Last 10 samples
         }
-    
+
     return summary
 
 def reset_metrics() -> None:

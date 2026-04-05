@@ -4,16 +4,17 @@
 
 1. [Introduction](#introduction)
 2. [Authentication](#authentication)
-3. [Endpoints](#endpoints)
+3. [Endpoints (REST API)](#endpoints-rest-api)
    - [Container Management](#container-management)
    - [Image Management](#image-management)
    - [Network Management](#network-management)
    - [Volume Management](#volume-management)
    - [System Management](#system-management)
    - [Workflow Management](#workflow-management)
-4. [Error Handling](#error-handling)
-5. [Rate Limiting](#rate-limiting)
-6. [Examples](#examples)
+4. [MCP Tools](#mcp-tools)
+5. [Error Handling](#error-handling)
+6. [Rate Limiting](#rate-limiting)
+7. [Examples](#examples)
 
 ## Introduction
 
@@ -28,7 +29,7 @@ GET /api/containers
 X-API-Key: your-api-key-here
 ```
 
-## Endpoints
+## Endpoints (REST API)
 
 ### Container Management
 
@@ -227,6 +228,29 @@ POST /api/workflows
   "message": "Workflow created successfully"
 }
 ```
+
+## MCP Tools
+
+DockerMCP provides a set of high-level tools via the Model Context Protocol (MCP). These tools are the primary interface for AI agents (like Claude or Gemini) to interact with the Docker daemon.
+
+### Tool Registry
+
+| Tool Name | Description | Parameters |
+|-----------|-------------|------------|
+| `list_containers` | List Docker containers with optional filtering. | `all` (bool), `limit` (int), `filters` (dict) |
+| `container_management` | Perform lifecycle operations on containers (start, stop, etc.). | `action` (str), `container_id` (str), `**kwargs` |
+| `network_management` | Manage Docker networks. | `action` (str), `name` (str), `**kwargs` |
+| `volume_management` | Manage Docker volumes. | `action` (str), `name` (str), `**kwargs` |
+| `system_management` | Get Docker system information and disk usage. | `action` (str), `**kwargs` |
+| `docker_desktop_status` | [Windows] Check status of Docker Desktop and daemon. | `refresh` (bool) |
+| `docker_daemon_recover` | [Windows] Attempt to recover a hung Docker daemon. | `force` (bool) |
+| `agentic_container_workflow` | [SEP-1577] Execute complex multi-step container goals. | `goal` (str) |
+
+### Contextual Discovery
+
+Agents can discover available tools using the `list_tools` operation defined in the MCP specification. Each tool returns a standardized dictionary with `status`, `data`, and optional `message` fields.
+
+---
 
 ## Error Handling
 

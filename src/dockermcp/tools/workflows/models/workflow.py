@@ -1,16 +1,17 @@
 """
 Workflow-related models.
 """
-from datetime import datetime, timezone
-from enum import Enum
-from typing import Any, Dict, List, Optional, Set
-from pydantic import Field, ConfigDict
+from datetime import UTC, datetime
+from enum import StrEnum
+from typing import Any
+
+from pydantic import ConfigDict, Field
 
 from .base import BaseModel
 from .service import ServiceDefinition
 
 
-class WorkflowStatus(str, Enum):
+class WorkflowStatus(StrEnum):
     """Possible statuses of a workflow."""
     CREATED = "created"
     RUNNING = "running"
@@ -22,32 +23,32 @@ class WorkflowStatus(str, Enum):
     RETRYING = "retrying"
     TIMED_OUT = "timed_out"
     SKIPPED = "skipped"
-    
+
     @classmethod
     def is_terminal(cls, status: 'WorkflowStatus') -> bool:
         """Check if a status is terminal (no further state changes)."""
-        return status in (cls.COMPLETED, cls.FAILED, cls.CANCELLED, 
+        return status in (cls.COMPLETED, cls.FAILED, cls.CANCELLED,
                         cls.PAUSED, cls.TIMED_OUT, cls.SKIPPED)
 
 
 class WorkflowDefinition(BaseModel):
     """Definition of a workflow."""
     name: str = Field(..., min_length=1, max_length=255, description="Name of the workflow")
-    description: Optional[str] = Field(None, description="Description of the workflow")
-    services: List[ServiceDefinition] = Field(
+    description: str | None = Field(None, description="Description of the workflow")
+    services: list[ServiceDefinition] = Field(
         ...,
         min_length=1,
         description="Services that make up this workflow"
     )
-    parameters: Dict[str, Any] = Field(
+    parameters: dict[str, Any] = Field(
         default_factory=dict,
         description="Input parameters for the workflow"
     )
-    tags: List[str] = Field(
+    tags: list[str] = Field(
         default_factory=list,
         description="Tags for categorizing the workflow"
     )
-    
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -80,39 +81,39 @@ class WorkflowState(BaseModel):
         default=WorkflowStatus.CREATED,
         description="Current status of the workflow"
     )
-    start_time: Optional[datetime] = Field(
+    start_time: datetime | None = Field(
         None,
         description="When the workflow execution started"
     )
-    end_time: Optional[datetime] = Field(
+    end_time: datetime | None = Field(
         None,
         description="When the workflow execution completed"
     )
-    error: Optional[Dict[str, Any]] = Field(
+    error: dict[str, Any] | None = Field(
         None,
         description="Error details if the workflow failed"
     )
-    
+
     def is_running(self) -> bool:
         """Check if the workflow is currently running."""
         return self.status == WorkflowStatus.RUNNING
-    
+
     def is_completed(self) -> bool:
         """Check if the workflow has completed successfully."""
         return self.status == WorkflowStatus.COMPLETED
-    
+
     def is_failed(self) -> bool:
         """Check if the workflow has failed."""
         return self.status == WorkflowStatus.FAILED
-    
+
     def is_cancelled(self) -> bool:
         """Check if the workflow was cancelled."""
         return self.status == WorkflowStatus.CANCELLED
-    
-    def get_duration(self) -> Optional[float]:
+
+    def get_duration(self) -> float | None:
         """Get the duration of the workflow in seconds."""
         if not self.start_time:
             return None
-            
-        end_time = self.end_time or datetime.now(timezone.utc)
+
+        end_time = self.end_time or datetime.now(UTC)
         return (end_time - self.start_time).total_seconds()

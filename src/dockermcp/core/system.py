@@ -4,9 +4,10 @@ System-level Docker operations.
 This module provides functions for system-wide Docker operations including
 system information, disk usage, and cleanup.
 """
-from typing import Dict, List, Optional, Any
 import asyncio
 import logging
+from typing import Any
+
 from ..logging_config import ContextLogger
 
 logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
@@ -15,12 +16,12 @@ logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 class SystemManager:
     """Manager for system-level Docker operations."""
-    
+
     def __init__(self, docker_client):
         """Initialize with a Docker client."""
         self.client = docker_client
-    
-    async def get_system_info(self) -> Dict[str, Any]:
+
+    async def get_system_info(self) -> dict[str, Any]:
         """Get Docker system information."""
         try:
             info = await asyncio.get_event_loop().run_in_executor(

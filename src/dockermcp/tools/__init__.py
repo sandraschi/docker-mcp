@@ -7,8 +7,9 @@ import importlib
 import logging
 import pkgutil
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Type, TypeVar, Callable, Set, Generic
+from typing import Any, Dict, Generic, List, Optional, Set, Type, TypeVar
 
 from fastmcp import FastMCP  # Correct import for FastMCP 2.12
 from fastmcp.exceptions import ToolError
@@ -21,6 +22,7 @@ if src_dir not in sys.path:
 
 # Configure logging first to ensure all modules use the same config
 from dockermcp.logging_config import configure_logging, logger
+
 configure_logging(level="INFO")
 
 # Silence noisy loggers
@@ -30,46 +32,46 @@ for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'as
 # Type variable for tool response models
 T = TypeVar('T')
 
-class ToolResponse(BaseModel, Generic[T]):
+class ToolResponse[T](BaseModel):
     """Standard response model for all tools."""
     success: bool
     message: str
-    data: Optional[T] = None
-    error: Optional[str] = None
+    data: T | None = None
+    error: str | None = None
 
     @classmethod
-    def from_success(cls, message: str, data: Optional[T] = None) -> 'ToolResponse[T]':
+    def from_success(cls, message: str, data: T | None = None) -> 'ToolResponse[T]':
         """Create a success response."""
         return cls(success=True, message=message, data=data)
 
     @classmethod
-    def from_error(cls, message: str, error: Optional[Exception] = None) -> 'ToolResponse[Any]':
+    def from_error(cls, message: str, error: Exception | None = None) -> 'ToolResponse[Any]':
         """Create an error response."""
         error_msg = str(error) if error else message
         return cls(success=False, message=message, error=error_msg)
 
-def discover_tools() -> Set[str]:
+def discover_tools() -> set[str]:
     """
     Automatically discover all tools from submodules.
-    
+
     Returns:
         Set of tool names that were discovered and registered
     """
     tools_dir = Path(__file__).parent
     discovered_tools = set()
-    
+
     # Skip __pycache__, __init__.py, and files starting with _
     modules = [
         name for _, name, is_pkg in pkgutil.iter_modules([str(tools_dir)])
         if not name.startswith('_') and name != 'models' and not name.startswith('test_')
     ]
-    
+
     for name in modules:
         try:
             # Import the module to register the tools
             module = importlib.import_module(f'.{name}', package=__name__)
             logger.debug(f'Imported tools module: {name}')
-            
+
             # Get all tools from the module
             for attr_name in dir(module):
                 attr = getattr(module, attr_name)
@@ -80,10 +82,10 @@ def discover_tools() -> Set[str]:
         except ImportError as e:
             logger.warning(f'Failed to import module {name}: {str(e)}')
             continue
-    
+
     return discovered_tools
 
-def get_tools() -> List[Dict[str, Any]]:
+def get_tools() -> list[dict[str, Any]]:
     """Get metadata for all registered tools."""
     # In FastMCP 2.12+, tools are automatically registered via the @tool decorator
     # This function is kept for backward compatibility
@@ -93,11 +95,12 @@ def get_tools() -> List[Dict[str, Any]]:
 discovered_tools = discover_tools()
 
 # Re-export common types and functions for tool development
-from .containers.list_containers import list_containers
-from .containers.container_lifecycle import manage_container_lifecycle, ContainerAction
+from .containers.container_exec import execute_in_container as exec_command
+from .containers.container_lifecycle import ContainerAction, manage_container_lifecycle
 from .containers.container_logs import get_container_logs as container_logs
 from .containers.container_stats import get_container_stats as container_stats
-from .containers.container_exec import execute_in_container as exec_command
+from .containers.list_containers import list_containers
+
 
 # Create convenience functions for common container operations
 async def start_container(container_id: str, **kwargs):
@@ -117,7 +120,8 @@ async def remove_container(container_id: str, force: bool = False, remove_volume
     return await manage_container_lifecycle(container_id, ContainerAction.REMOVE, force=force, remove_volumes=remove_volumes, **kwargs)
 
 # Import available image management functions
-from .images.image_management import list_images, tag_image, search_images
+from .images.image_management import list_images, search_images, tag_image
+
 
 # Define stubs for missing functions to avoid import errors
 def pull_image(*args, **kwargs):
@@ -133,48 +137,41 @@ def push_image(*args, **kwargs):
     raise NotImplementedError("push_image has not been implemented yet")
 
 # Import network management functions
+from .networks.network_management import connect_container_to_network as connect_container
 from .networks.network_management import (
-    list_networks,
-    inspect_network,
     create_network,
+    inspect_network,
+    list_networks,
     remove_network,
-    connect_container_to_network as connect_container,
-    disconnect_container_from_network as disconnect_container
 )
+from .networks.network_management import disconnect_container_from_network as disconnect_container
 
 # Alias for backward compatibility
 get_network = inspect_network
 
 # Import volume management functions
-from .volumes.volume_management import (
-    list_volumes,
-    create_volume,
-    remove_volume,
-    prune_volumes
-)
+from .system.system_management import get_disk_usage as disk_usage
 
 # Import system management functions
-from .system.system_management import (
-    get_system_info as system_info,
-    get_disk_usage as disk_usage,
-    prune_system
-)
+from .system.system_management import get_system_info as system_info
+from .system.system_management import prune_system
+from .volumes.volume_management import create_volume, list_volumes, prune_volumes, remove_volume
 
 # Import workflow management functions
 from .workflows.workflow_management import (
     create_workflow,
+    get_workflow_status,
     start_workflow,
     stop_workflow,
-    get_workflow_status
 )
 
 # Import desktop management functions (Docker Desktop daemon, updates, recovery)
 try:
     from .desktop import (
-        docker_desktop_status,
         docker_daemon_recover,
         docker_daemon_restart,
-        docker_desktop_update
+        docker_desktop_status,
+        docker_desktop_update,
     )
     desktop_tools = [
         docker_desktop_status,
@@ -194,11 +191,11 @@ except ImportError as e:
 gpu_tools = []
 try:
     from .gpu import (
-        list_gpus,
-        get_gpu_info,
-        monitor_gpu_usage,
         create_gpu_container,
-        get_container_gpu_info
+        get_container_gpu_info,
+        get_gpu_info,
+        list_gpus,
+        monitor_gpu_usage,
     )
     gpu_tools = [
         list_gpus,
@@ -231,7 +228,7 @@ __all__ = [
     'container_logs',
     'container_stats',
     'exec_command',
-    
+
     # Image tools
     'list_images',
     'pull_image',
@@ -240,7 +237,7 @@ __all__ = [
     'tag_image',
     'push_image',
     'search_images',
-    
+
     # Network tools
     'list_networks',
     'get_network',
@@ -248,36 +245,36 @@ __all__ = [
     'remove_network',
     'connect_container',
     'disconnect_container',
-    
+
     # Volume tools
     'list_volumes',
     'create_volume',
     'remove_volume',
     'prune_volumes',
-    
+
     # System tools
     'system_info',
     'disk_usage',
     'prune_system',
-    
+
     # Desktop management tools
     'docker_desktop_status',
     'docker_daemon_recover',
     'docker_daemon_restart',
     'docker_desktop_update',
-    
+
     # Workflow tools
     'create_workflow',
     'start_workflow',
     'stop_workflow',
     'get_workflow_status',
-    
+
     # GPU tools
     'list_gpus',
     'get_gpu_info',
     'monitor_gpu_usage',
     'create_gpu_container',
     'get_container_gpu_info',
-    
+
     'discovered_tools'
 ]

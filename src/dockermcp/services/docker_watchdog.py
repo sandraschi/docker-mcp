@@ -8,7 +8,7 @@ import asyncio
 import logging
 import platform
 import subprocess
-from typing import Dict, Any, Optional
+from typing import Any
 
 import docker
 from docker.errors import DockerException
@@ -19,7 +19,7 @@ class DockerWatchdog:
     def __init__(self, check_interval: int = 30, max_retries: int = 3):
         """
         Initialize the Docker watchdog service.
-        
+
         Args:
             check_interval: Seconds between health checks
             max_retries: Number of retry attempts before giving up
@@ -29,7 +29,7 @@ class DockerWatchdog:
         self.retry_count = 0
         self.is_windows = platform.system().lower() == 'windows'
         self.docker_client = self._get_docker_client()
-        
+
     def _get_docker_client(self) -> docker.DockerClient:
         """Get a Docker client with error handling."""
         try:
@@ -37,26 +37,26 @@ class DockerWatchdog:
         except DockerException as e:
             logger.error(f"Failed to initialize Docker client: {e}")
             raise
-    
-    async def check_docker_health(self) -> Dict[str, Any]:
+
+    async def check_docker_health(self) -> dict[str, Any]:
         """Check if Docker daemon is healthy."""
         try:
             # Test basic API connectivity
             self.docker_client.ping()
-            
+
             # Test container operations
             self.docker_client.containers.list(limit=1)
-            
+
             self.retry_count = 0  # Reset retry counter on success
             return {
                 'status': 'healthy',
                 'message': 'Docker daemon is responding normally'
             }
-            
+
         except Exception as e:
             self.retry_count += 1
             logger.warning(f"Docker health check failed (attempt {self.retry_count}/{self.max_retries}): {e}")
-            
+
             if self.retry_count >= self.max_retries:
                 return {
                     'status': 'unhealthy',
@@ -68,8 +68,8 @@ class DockerWatchdog:
                 'message': f'Docker daemon check failed (attempt {self.retry_count}/{self.max_retries})',
                 'error': str(e)
             }
-    
-    async def restart_docker_service(self) -> Dict[str, Any]:
+
+    async def restart_docker_service(self) -> dict[str, Any]:
         """Attempt to restart the Docker service."""
         try:
             if self.is_windows:
@@ -79,39 +79,39 @@ class DockerWatchdog:
             else:
                 # Linux/Unix service restart
                 subprocess.run(['sudo', 'systemctl', 'restart', 'docker'], check=True, capture_output=True, text=True)
-                
+
             # Give Docker some time to start up
             await asyncio.sleep(5)
             return {'success': True, 'message': 'Docker service restarted successfully'}
-            
+
         except subprocess.CalledProcessError as e:
             error_msg = f"Failed to restart Docker service: {e.stderr}"
             logger.error(error_msg)
             return {'success': False, 'error': error_msg}
-            
+
         except Exception as e:
             error_msg = f"Error restarting Docker service: {str(e)}"
             logger.error(error_msg)
             return {'success': False, 'error': error_msg}
-    
+
     async def monitor(self):
         """Main monitoring loop."""
         logger.info("Starting Docker watchdog service...")
-        
+
         while True:
             health = await self.check_docker_health()
-            
+
             if health['status'] == 'unhealthy':
                 logger.warning("Docker daemon is unhealthy, attempting recovery...")
                 result = await self.restart_docker_service()
-                
+
                 if not result.get('success'):
                     logger.error(f"Failed to recover Docker: {result.get('error')}")
                     # TODO: Send alert/notification
                 else:
                     logger.info("Docker service recovery successful")
                     self.docker_client = self._get_docker_client()  # Reinitialize client
-            
+
             await asyncio.sleep(self.check_interval)
 
     @classmethod
@@ -123,7 +123,7 @@ class DockerWatchdog:
 
 if __name__ == "__main__":
     import sys
-    
+
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
@@ -133,7 +133,7 @@ if __name__ == "__main__":
             logging.FileHandler('docker_watchdog.log')
         ]
     )
-    
+
     # Start the watchdog
     try:
         asyncio.run(DockerWatchdog.start_service())

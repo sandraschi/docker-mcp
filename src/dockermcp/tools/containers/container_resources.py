@@ -7,25 +7,19 @@ for tool registration and error handling.
 """
 from __future__ import annotations
 
-import logging
-import math
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Annotated
+from enum import StrEnum
+from typing import Any
 
 import docker
-from docker.errors import APIError, ContainerError, DockerException, NotFound
-from fastmcp.tools import Tool
+from docker.errors import APIError, NotFound
+
 # from fastmcp.exceptions import ToolError  # Not used, causes import error in FastMCP 2.12+
 from fastmcp import FastMCP
 from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    confloat,
     conint,
-    field_validator,
-    model_validator,
 )
 
 from dockermcp.logging_config import logger
@@ -35,14 +29,14 @@ from dockermcp.tools import ToolResponse
 mcp = FastMCP("Container Resource Tools")
 
 # Enums for resource management
-class CpuPriority(str, Enum):
+class CpuPriority(StrEnum):
     """CPU priority levels for container CPU shares."""
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
     CRITICAL = "critical"
 
-class MemoryUnit(str, Enum):
+class MemoryUnit(StrEnum):
     """Memory unit options for resource limits."""
     BYTES = "b"
     KILOBYTES = "k"
@@ -84,7 +78,7 @@ class ResourceUpdateResult(BaseModel):
     resource_type: str = Field(..., description="Type of resource that was updated")
     previous_value: Any = Field(None, description="Previous resource value")
     new_value: Any = Field(..., description="New resource value")
-    warnings: List[str] = Field(
+    warnings: list[str] = Field(
         default_factory=list,
         description="List of warning messages, if any"
     )
@@ -99,7 +93,7 @@ class GetContainerResourcesParams(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(
         ...,
         description="ID or name of the container"
@@ -138,10 +132,10 @@ class ContainerResourcesResponse(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(..., description="ID of the container")
-    resources: Dict[str, Any] = Field(..., description="Resource limits and configuration")
-    usage: Optional[Dict[str, Any]] = Field(
+    resources: dict[str, Any] = Field(..., description="Resource limits and configuration")
+    usage: dict[str, Any] | None = Field(
         None,
         description="Current resource usage statistics"
     )
@@ -150,19 +144,19 @@ class ContainerResourcesResponse(BaseModel):
 async def get_container_resources(params: GetContainerResourcesParams) -> ToolResponse[ContainerResourcesResponse]:
     """
     Get detailed resource allocation and usage information for a container.
-    
+
     This function provides a comprehensive view of a container's resource configuration
     including CPU, memory, I/O, and process limits. It can optionally include current
     resource usage statistics.
-    
+
     Args:
         params: GetContainerResourcesParams containing:
             - container_id: ID or name of the container
             - include_usage: Whether to include current resource usage statistics
-            
+
     Returns:
         ToolResponse[ContainerResourcesResponse] containing container resource information
-        
+
     Raises:
         DockerException: If there's an error communicating with the Docker daemon
         APIError: If the Docker API returns an error
@@ -172,14 +166,14 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         "Getting container resources",
         extra={"container_id": params.container_id, "include_usage": params.include_usage}
     )
-    
+
     try:
         client = docker.from_env()
         container = client.containers.get(params.container_id)
-        
+
         # Get container attributes
         attrs = container.attrs
-        
+
         # Build resources dictionary
         resources = {
             "cpu": {
@@ -212,7 +206,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
             },
             "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy")
         }
-        
+
         # Get usage stats if requested
         usage = None
         if params.include_usage:
@@ -232,7 +226,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                     extra={"container_id": params.container_id},
                     exc_info=True
                 )
-        
+
         return ToolResponse[ContainerResourcesResponse](
             success=True,
             message=f"Retrieved resources for container {container.id}",
@@ -242,7 +236,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                 usage=usage
             )
         )
-        
+
     except NotFound as e:
         logger.error(
             f"Container not found: {params.container_id}",
@@ -286,7 +280,7 @@ class ResetContainerResourcesParams(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(..., description="ID or name of the container to reset")
 
 class ResetContainerResourcesResponse(BaseModel):
@@ -299,9 +293,9 @@ class ResetContainerResourcesResponse(BaseModel):
             }
         }
     )
-    
+
     container_id: str = Field(..., description="ID of the container")
-    reset_resources: List[str] = Field(
+    reset_resources: list[str] = Field(
         ...,
         description="List of resource types that were reset"
     )
@@ -312,24 +306,24 @@ async def reset_container_resources(
 ) -> ToolResponse[ResetContainerResourcesResponse]:
     """
     Reset all resource limits for a container to their default values.
-    
+
     This function removes all custom resource constraints (CPU, memory, I/O, etc.)
     from a container, restoring them to their default values. This is useful for
     removing resource limitations or troubleshooting resource-related issues.
-    
+
     Args:
         params: ResetContainerResourcesParams containing:
             - container_id: ID or name of the container to reset
-            
+
     Returns:
         ToolResponse[ResetContainerResourcesResponse] containing:
             - container_id: ID of the container
             - reset_resources: List of resource types that were reset
-            
+
     Raises:
         DockerException: If there's an error communicating with the Docker daemon
         APIError: If the Docker API returns an error
-        
+
     Example:
         >>> response = await reset_container_resources(
         ...     ResetContainerResourcesParams(container_id="my-container")
@@ -341,14 +335,14 @@ async def reset_container_resources(
         "Resetting container resources to default values",
         extra={"container_id": params.container_id}
     )
-    
+
     try:
         client = docker.from_env()
         container = client.containers.get(params.container_id)
-        
+
         # Get current container config
         current_config = container.attrs["HostConfig"]
-        
+
         # Build update config with default/empty values
         update_config = {
             # Reset CPU settings
@@ -356,13 +350,13 @@ async def reset_container_resources(
             "CpuQuota": 0,   # 0 means use the default
             "CpuPeriod": 0,  # 0 means use the default
             "CpusetCpus": "",  # Empty means use all CPUs
-            
+
             # Reset memory settings
             "Memory": 0,           # 0 means no limit
             "MemoryReservation": 0, # 0 means no limit
             "MemorySwap": 0,        # 0 means no limit
             "MemorySwappiness": None,  # None means use the default
-            
+
             # Reset I/O settings
             "BlkioWeight": 0,  # 0 means use the default
             "BlkioWeightDevice": None,
@@ -370,17 +364,17 @@ async def reset_container_resources(
             "BlkioDeviceWriteBps": None,
             "BlkioDeviceReadIOps": None,
             "BlkioDeviceWriteIOps": None,
-            
+
             # Reset process limits
             "PidsLimit": 0,  # 0 means no limit
-            
+
             # Reset restart policy
             "RestartPolicy": {"Name": "no"}
         }
-        
+
         # Track which resources were reset
         reset_resources = []
-        
+
         # Check which resources were actually set and need to be reset
         if current_config.get("CpuShares") != 0:
             reset_resources.append("cpu_shares")
@@ -414,12 +408,12 @@ async def reset_container_resources(
             reset_resources.append("pids_limit")
         if current_config.get("RestartPolicy", {}).get("Name") != "no":
             reset_resources.append("restart_policy")
-        
+
         # Only update if there are resources to reset
         if reset_resources:
             # Update the container with the reset configuration
             container.update(**update_config)
-            
+
             logger.info(
                 f"Reset {len(reset_resources)} resources for container {params.container_id}",
                 extra={
@@ -432,7 +426,7 @@ async def reset_container_resources(
                 f"No resource limits to reset for container {params.container_id}",
                 extra={"container_id": params.container_id}
             )
-        
+
         return ToolResponse[ResetContainerResourcesResponse](
             success=True,
             message=f"Reset {len(reset_resources)} resources for container {container.id}",
@@ -441,7 +435,7 @@ async def reset_container_resources(
                 reset_resources=reset_resources
             )
         )
-        
+
     except NotFound as e:
         logger.error(
             f"Container not found: {params.container_id}",

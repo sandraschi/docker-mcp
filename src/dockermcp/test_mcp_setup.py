@@ -20,15 +20,15 @@ def test_mcp_setup():
     try:
         # Get the MCP instance
         mcp = get_mcp()
-        
+
         # Get registered tools
         tools = mcp.get_tools()
-        
+
         # Print tool information
         logger.info(f"Found {len(tools)} registered tools:")
         for tool in tools:
             logger.info(f"- {tool['name']}: {tool.get('description', 'No description')}")
-        
+
         return True
     except Exception as e:
         logger.error(f"Error testing MCP setup: {e}", exc_info=True)

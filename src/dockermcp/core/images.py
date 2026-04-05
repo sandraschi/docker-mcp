@@ -4,9 +4,10 @@ Image management operations.
 This module provides functions for managing Docker images including
 listing, pulling, and removing images.
 """
-from typing import Dict, List, Optional, Any
 import asyncio
 import logging
+from typing import Any
+
 from ..logging_config import ContextLogger
 
 logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
@@ -15,12 +16,12 @@ logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 class ImageManager:
     """Manager for image operations."""
-    
+
     def __init__(self, docker_client):
         """Initialize with a Docker client."""
         self.client = docker_client
-    
-    async def list_images(self, name: Optional[str] = None) -> List[Dict[str, Any]]:
+
+    async def list_images(self, name: str | None = None) -> list[dict[str, Any]]:
         """List all images with optional filtering by name."""
         try:
             images = await asyncio.get_event_loop().run_in_executor(

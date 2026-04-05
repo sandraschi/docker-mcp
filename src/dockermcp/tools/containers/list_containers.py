@@ -6,13 +6,15 @@ It follows FastMCP 2.12+ standards for tool registration.
 """
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
-from docker.errors import DockerException
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any
 
+from docker.errors import DockerException
+from pydantic import BaseModel, ConfigDict, Field
+
+from dockermcp import check_docker_available, docker_client
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
-from dockermcp import docker_client, check_docker_available
+
 
 class ContainerInfo(BaseModel):
     """Information about a Docker container."""
@@ -22,8 +24,8 @@ class ContainerInfo(BaseModel):
     image: str = Field(..., description="Container image")
     created: str = Field(..., description="Creation timestamp")
     state: str = Field(..., description="Container state")
-    labels: Dict[str, str] = Field(default_factory=dict, description="Container labels")
-    
+    labels: dict[str, str] = Field(default_factory=dict, description="Container labels")
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -44,32 +46,32 @@ class ListContainersParams(BaseModel):
         True,
         description="If True, include stopped containers"
     )
-    filters: Optional[Dict[str, str]] = Field(
+    filters: dict[str, str] | None = Field(
         None,
         description="Dictionary of filter key-value pairs"
     )
 
 @mcp.tool
 @check_docker_available
-async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
+async def list_containers(params: ListContainersParams) -> dict[str, Any]:
     """
     List Docker containers with optional filtering.
-    
+
     Args:
         params: ListContainersParams containing:
             - all_states: If True, include stopped containers
             - filters: Dictionary of filter key-value pairs
-        
+
     Returns:
         Dictionary containing:
             - status: "success" or "error"
             - message: Status message
             - containers: List of container information dictionaries
             - error: Error message if any
-            
+
     Raises:
         ToolError: If there's an error communicating with the Docker daemon
-        
+
     Example:
         >>> from dockermcp.tools.containers.list_containers import ListContainersParams
         >>> params = ListContainersParams(all_states=True, filters={"status": "running"})
@@ -81,18 +83,18 @@ async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
     try:
         # Use shared client
         client = docker_client
-        
+
         # Convert empty dict to None for Docker SDK
         filters = params.filters or {}
         if not filters:
             filters = None
-            
+
         # Get containers from Docker
         containers = client.containers.list(
             all=params.all_states,
             filters=filters
         )
-        
+
         # Process containers into response
         container_list = []
         for container in containers:
@@ -108,13 +110,13 @@ async def list_containers(params: ListContainersParams) -> Dict[str, Any]:
                     labels=container_inspect.get('Config', {}).get('Labels', {})
                 ).model_dump()
             )
-            
+
         return {
             "status": "success",
             "message": f"Found {len(container_list)} containers",
             "containers": container_list
         }
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg, exc_info=True)

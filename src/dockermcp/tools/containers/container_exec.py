@@ -8,26 +8,28 @@ FastMCP 2.12+ standards for tool registration and error handling.
 from __future__ import annotations
 
 import asyncio
-import logging
+from collections.abc import AsyncGenerator
 from datetime import datetime
-from enum import Enum
-from typing import Any, Optional, Union, AsyncGenerator, Annotated, Dict
+from enum import StrEnum
+from typing import Annotated, Any
 
 import docker
-from docker.errors import DockerException, APIError, NotFound, ContainerError
-from dockermcp.mcp_instance import mcp
-from pydantic import Field, field_validator
+from docker.errors import APIError, DockerException, NotFound
+from pydantic import Field
 
 from dockermcp.logging_config import logger
+from dockermcp.mcp_instance import mcp
+
 from .models import ContainerExecResponse
 
-class StreamType(str, Enum):
+
+class StreamType(StrEnum):
     """Output stream types for command execution."""
     STDOUT = "stdout"
     STDERR = "stderr"
     BOTH = "both"
 
-class ExecUser(str, Enum):
+class ExecUser(StrEnum):
     """Special user values for command execution."""
     ROOT = "root"
     CONTAINER_DEFAULT = ""
@@ -35,9 +37,9 @@ class ExecUser(str, Enum):
 @mcp.tool
 async def execute_in_container(
     container_id: Annotated[str, Field(description="ID or name of the container")],
-    command: Annotated[Union[str, list[str]], Field(description="Command to execute (string or list of arguments)")],
+    command: Annotated[str | list[str], Field(description="Command to execute (string or list of arguments)")],
     user: Annotated[str, Field(description="User to run the command as (empty for container default, 'root' for root)", default="")],
-    workdir: Annotated[Optional[str], Field(description="Working directory inside the container", default=None)],
+    workdir: Annotated[str | None, Field(description="Working directory inside the container", default=None)],
     environment: Annotated[dict[str, str], Field(description="Environment variables for the command", default={})],
     privileged: Annotated[bool, Field(description="Run with extended privileges (use with caution)", default=False)],
     tty: Annotated[bool, Field(description="Allocate a pseudo-TTY (required for interactive commands)", default=False)],
@@ -49,16 +51,16 @@ async def execute_in_container(
 ) -> ContainerExecResponse:
     """
     Execute a command in a running Docker container.
-    
+
     This function provides a flexible interface for executing commands in containers
     with support for both synchronous and streaming execution modes.
-    
+
     Security Notes:
     - Avoid using privileged mode unless absolutely necessary
     - Always validate and sanitize command inputs
     - Use the principle of least privilege when specifying users
     - Be cautious with environment variables that may contain sensitive data
-    
+
     Args:
         container_id: ID or name of the container
         command: Command to execute (string or list of arguments)
@@ -72,10 +74,10 @@ async def execute_in_container(
         detach: Run command in background (returns immediately)
         stdin: Open stdin for the command (required for interactive input)
         timeout: Timeout in seconds for command execution (1-3600)
-        
+
     Returns:
         ContainerExecResponse with command execution results or stream information
-        
+
     Example:
         # Synchronous execution
         >>> result = await execute_in_container(
@@ -85,7 +87,7 @@ async def execute_in_container(
         ... )
         >>> print(result.output)  # Command output
         >>> print(result.exit_code)  # Exit code
-        
+
         # Error handling
         >>> if result.status == 'error':
         ...     print(f"Error: {result.error}")
@@ -104,12 +106,12 @@ async def execute_in_container(
                 container_id=container_id,
                 message=error_msg
             )
-            
+
         # Initialize Docker client
         try:
             client = docker.from_env()
             container = client.containers.get(container_id)
-        except NotFound as e:
+        except NotFound:
             error_msg = f"Container not found: {container_id}"
             logger.error(error_msg)
             return ContainerExecResponse.error(
@@ -117,7 +119,7 @@ async def execute_in_container(
                 container_id=container_id,
                 message=error_msg
             )
-        
+
         # Prepare exec parameters
         exec_params = {
             'cmd': command if isinstance(command, list) else command.split(),
@@ -131,13 +133,13 @@ async def execute_in_container(
             'stderr': stream_type_enum in [StreamType.STDERR, StreamType.BOTH],
             'detach': detach
         }
-        
+
         # Clean up None values
         exec_params = {k: v for k, v in exec_params.items() if v is not None}
-        
+
         # Execute the command
         exec_id = container.client.api.exec_create(container.id, **exec_params)
-        
+
         if stream:
             # For streaming, return the generator
             return ContainerExecResponse.success(
@@ -156,16 +158,16 @@ async def execute_in_container(
                     output="",  # No output for detached mode
                     message="Command started in detached mode"
                 )
-            
+
             # Get the output and exit code
             result = container.client.api.exec_start(exec_id['Id'], stream=False, demux=True)
             stdout_data = result[0].decode('utf-8') if result[0] else ""
             stderr_data = result[1].decode('utf-8') if result[1] else ""
-            
+
             # Get the exit code
             inspect_data = container.client.api.exec_inspect(exec_id['Id'])
             exit_code = inspect_data.get('ExitCode', -1)
-            
+
             if exit_code == 0:
                 return ContainerExecResponse.success(
                     exec_id=exec_id['Id'],
@@ -188,7 +190,7 @@ async def execute_in_container(
             container_id=container_id,
             message="Docker API error"
         )
-        
+
     except DockerException as e:
         error_msg = f"Docker error: {str(e)}"
         logger.error(error_msg)
@@ -197,7 +199,7 @@ async def execute_in_container(
             container_id=container_id,
             message="Docker daemon not available"
         )
-        
+
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error executing command in container {container_id}: {error_msg}")
@@ -214,12 +216,12 @@ async def _stream_exec_output(
 ) -> AsyncGenerator[dict[str, Any], None]:
     """
     Stream command output from a Docker exec instance.
-    
+
     Args:
         docker_client: Docker client instance
         exec_id: Exec instance ID
         timeout: Timeout in seconds
-        
+
     Yields:
         Dictionary with stream data:
         {
@@ -231,10 +233,10 @@ async def _stream_exec_output(
     try:
         # Start the exec instance with streaming
         socket = docker_client.api.exec_start(exec_id, socket=True)
-        
+
         # Set a timeout for the entire stream
         start_time = datetime.now()
-        
+
         try:
             while True:
                 # Check for timeout
@@ -246,39 +248,39 @@ async def _stream_exec_output(
                         'timestamp': datetime.utcnow().isoformat() + 'Z'
                     }
                     break
-                
+
                 # Read from the socket
                 try:
                     data = socket._sock.recv(8192)
                     if not data:
                         break
-                        
+
                     # Parse the Docker stream format (8-byte header + data)
                     if len(data) > 8:
                         stream_type = {1: 'stdout', 2: 'stderr'}.get(data[0], 'stdout')
                         output = data[8:].decode('utf-8', errors='replace')
-                        
+
                         if output:
                             yield {
                                 'type': stream_type,
                                 'data': output,
                                 'timestamp': datetime.utcnow().isoformat() + 'Z'
                             }
-                    
+
                     # Small sleep to prevent high CPU usage
                     await asyncio.sleep(0.01)
-                    
+
                 except (BlockingIOError, TimeoutError):
                     await asyncio.sleep(0.1)
                     continue
-                    
+
         finally:
             # Clean up the socket
             try:
                 socket.close()
             except:
                 pass
-                
+
     except Exception as e:
         logger.error(f"Error in command output stream: {str(e)}")
         yield {
