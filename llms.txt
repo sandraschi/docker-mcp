@@ -1,36 +1,228 @@
-# docker-mcp
-> > **Purpose**: Comprehensive GitHub configuration guide to avoid hours of trial-and-error setup. > > **Copy this to new MCP repos** to get everything right the first time! --- 1. [Quick Setup Checklis...
+# llms.txt for docker-mcp
+# Last Updated: January 2026
+# FastMCP 3.1+ Server for comprehensive Docker operations
 
-This project includes automated llms.txt generation for AI accessibility.
+## Project Overview
 
-## Docs
-- [Readme](docs\github\README.md): > **Purpose**: Comprehensive GitHub configuration guide to avoid hours of trial-and-error setup.
-- [Readme](README.md): [![FastMCP](https://img.shields.io/badge/FastMCP-2.13+-blue)](https://github.com/jlowin/fastmcp)
-- [Readme](docs\glama\README.md): This directory contains documentation related to achieving GLAMA AI Gold standard status for the Adv...
-- [Readme](docs\mcpb-packaging\README.md): **Complete guide to packaging and distributing MCP servers with MCPB**
-- [Complete Setup Guide](docs\github\COMPLETE_SETUP_GUIDE.md): > **6 hours of pain distilled into 30 minutes of setup**
-- [Megatest Location And Cleanup](docs\testing\MEGATEST_LOCATION_AND_CLEANUP.md): Megatest supports **flexible test location** and **configurable cleanup** strategies to balance:
-- [Serena Install And Test](docs\serena\SERENA_INSTALL_AND_TEST.md): **Date:** 2025-10-09
-- [Complete Type Fix Guide](docs\github\COMPLETE_TYPE_FIX_GUIDE.md): > **From 130+ type errors to 0** - The systematic approach that actually works!
-- [Changelog](CHANGELOG.md): All notable changes to this project will be documented in this file.
-- [Mcpjam Guide](docs\MCPJAM-GUIDE.md): This guide explains how to set up and use MCPJam with the Docker MCP server for development and test...
+Docker MCP Server is a FastMCP 3.1+ server providing:
+- Native MCP tools for Docker daemon management (status, recovery, restart, update)
+- Container lifecycle management (create, start, stop, restart, remove)
+- Image handling (pull, list, tag, remove)
+- Network operations (create, inspect, connect, disconnect)
+- Volume management (create, remove, prune)
+- System monitoring (disk usage, info, version)
+- Docker Desktop daemon health checks with hang detection and auto-recovery
 
-## Api
-- [  Init  ](src\dockermcp\api\__init__.py): Api definitions and implementations
-- [Containers](src\dockermcp\api\containers.py): Api definitions and implementations
-- [Service](src\dockermcp\tools\workflows\models\service.py): Models definitions and implementations
-- [  Init  ](src\dockermcp\tools\workflows\models\__init__.py): Models definitions and implementations
-- [  Init  ](src\dockermcp\models\__init__.py): Models definitions and implementations
+## Key Features
 
-## Examples
-- [Examples](examples/): Example code and implementations
+### Docker Desktop Management (NEW)
+- `docker_desktop_status(autofix: bool)` - Check daemon health with hang detection, list images/containers
+- `docker_daemon_recover()` - Emergency recovery from hanging daemon
+- `docker_daemon_restart()` - Graceful daemon restart
+- `docker_desktop_update(full_wipe: bool)` - Fix update elevation errors
+
+### Core Docker Operations
+- Container management (full lifecycle)
+- Image operations (pull, list, tag, remove, commit, export, import)
+- Network management (create, inspect, list, remove, connect, disconnect)
+- Volume management (create, list, remove, prune)
+- System monitoring (info, disk usage, version)
+
+### Web Application
+- FastAPI backend on port 10807
+- React/Vite webapp on port 10806
+- Real-time Docker data via docker-py
+- Dashboard with system info and container status
+- Container browser and management
+- MCP tools catalog
+
+## Directory Structure
+
+```
+docker-mcp/
+├── src/dockermcp/
+│   ├── api/app.py                 # FastAPI endpoints
+│   ├── core/                      # Core Docker operations
+│   ├── tools/
+│   │   ├── desktop/               # Docker Desktop tools (NEW)
+│   │   │   ├── desktop_status.py
+│   │   │   ├── desktop_recovery.py
+│   │   │   └── desktop_update.py
+│   │   ├── containers/
+│   │   ├── images/
+│   │   ├── networks/
+│   │   ├── volumes/
+│   │   └── system/
+│   └── server.py                  # MCP + FastAPI server
+├── web_sota/                      # React webapp
+│   ├── src/pages/
+│   │   ├── dashboard.tsx          # System overview
+│   │   ├── containers.tsx         # Container browser
+│   │   ├── tools.tsx              # MCP tools catalog
+│   │   └── help.tsx               # Documentation
+│   └── start.ps1                  # Startup script
+├── tests/                         # Test suite
+├── justfile                       # Task automation
+├── README.md                      # Project documentation
+├── CHANGELOG.md                   # Version history
+└── pyproject.toml                 # Python project config
+```
+
+## Quick Start
+
+### Install & Run
+```bash
+# Install dependencies
+uv sync
+
+# Run MCP server + webapp
+uv run docker-mcp
+
+# Or use just
+just dev
+```
+
+### Webapp
+```bash
+# Development mode
+cd web_sota
+npm install
+npm run dev
+
+# Production build
+npm run build
+```
+
+### Docker Compose
+```bash
+# Full stack (with monitoring)
+docker compose up -d
+
+# Monitoring only
+just docker-monitoring
+```
+
+## Development Commands
+
+See `justfile` for available commands:
+- `just dev` - Run server
+- `just test` - Run tests
+- `just lint` - Format and lint code
+- `just docker-build` - Build Docker image
+- `just webapp-dev` - Run webapp in dev mode
+
+## API Endpoints
+
+- `GET /health` - Health check
+- `GET /api/dashboard` - System overview (containers, images, disk, memory)
+- `GET /api/containers` - List all containers
+- `GET /api/tools` - List available MCP tools
+
+## MCP Tools
+
+### Docker Desktop Management
+- docker_desktop_status(autofix=bool) - Check daemon health
+- docker_daemon_recover() - Recover hanging daemon
+- docker_daemon_restart() - Restart daemon
+- docker_desktop_update(full_wipe=bool) - Fix elevation errors
+
+### Container Management
+- list_containers() - List all containers
+- start_container(container_id) - Start container
+- stop_container(container_id) - Stop container
+- restart_container(container_id) - Restart container
+- remove_container(container_id) - Remove container
+- get_container_logs(container_id) - View logs
+
+### Image Management
+- list_images() - List images
+- pull_image(repository) - Pull image
+- remove_image(image_id) - Remove image
+
+### Network Management
+- list_networks() - List networks
+- create_network(name) - Create network
+- remove_network(network_id) - Remove network
+
+### Volume Management
+- list_volumes() - List volumes
+- create_volume(name) - Create volume
+- remove_volume(volume_id) - Remove volume
+
+### System Operations
+- get_system_info() - System information
+- get_disk_usage() - Disk usage breakdown
+- prune_system() - System cleanup
 
 ## Configuration
-- [Pyproject](pyproject.toml): Python project configuration and dependencies
-- [Package](web_sota\package.json): Node.js project configuration and dependencies
-- [Cargo](Cargo.toml): Rust project configuration and dependencies
-- [](.env): Environment variables and configuration
-- [Config](.git\config): Application configuration files
 
-## Optional
-- [Changelog](CHANGELOG.md): Project changelog information
+### Environment Variables
+- `DOCKER_HOST` - Docker daemon socket (default: unix:///var/run/docker.sock)
+- `LOG_LEVEL` - Logging level (default: INFO)
+- `LOG_FILE` - Log file path (default: logs/dockermcp.log)
+
+### Docker Desktop Settings
+For AI workloads (LLM inference):
+- Memory: 12GB+ (Settings > Resources > Memory)
+- CPUs: 4+ cores (Settings > Resources > CPUs)
+- Swap: 4-8GB
+
+## Testing
+
+```bash
+# Run all tests
+just test
+
+# Run with coverage
+just test-cov
+
+# Type checking
+just type-check
+
+# Linting
+just lint
+```
+
+## Documentation
+
+- `README.md` - Project overview and features
+- `CHANGELOG.md` - Version history
+- `docs/` - Additional documentation
+- `web_sota/src/pages/help.tsx` - In-app help
+
+## Technologies
+
+- **FastMCP**: 3.1+ (MCP server framework)
+- **Python**: 3.12+
+- **FastAPI**: Web framework
+- **docker-py**: Docker client
+- **React**: Frontend
+- **Vite**: Build tool
+- **Tailwind CSS**: Styling
+
+## Related Repositories
+
+- **mcp-central-docs**: Central documentation hub
+  - `docker/DOCKER_DAEMON_AI_WORKLOADS.md` - AI workload optimization
+  - `docker/OLLAMA_GEMMA_SETUP.md` - LLM setup guide
+  - `scripts/fix-docker-daemon.ps1` - Daemon maintenance script
+
+- **docker-mcp-sota**: Webapp repository
+  - React frontend on port 10806
+  - Vite build tool
+
+## License
+
+MIT License - See LICENSE file
+
+## Contact & Support
+
+- Issues: GitHub Issues
+- Discussions: GitHub Discussions
+- Docs: https://github.com/sandraschi/docker-mcp
+
+---
+
+**Last Updated**: January 2026
+**Version**: FastMCP 3.1+
+**Status**: Production Ready
