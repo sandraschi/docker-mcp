@@ -9,7 +9,8 @@ import {
     ChevronRight,
     Box,
     HelpCircle,
-    Container
+    Container,
+    Image as ImageIcon
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -23,6 +24,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     const navItems = [
         { href: '/', label: 'Overview', icon: LayoutDashboard },
         { href: '/containers', label: 'Containers', icon: Container },
+        { href: '/images', label: 'Images', icon: ImageIcon },
         { href: '/chat', label: 'AI Command', icon: MessageSquare },
         { href: '/tools', label: 'MCP Tools', icon: Wrench },
         { href: '/help', label: 'Help', icon: HelpCircle },

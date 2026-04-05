@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import { AppLayout } from '@/components/layout/app-layout';
 import { Dashboard } from '@/pages/dashboard';
 import { Containers } from '@/pages/containers';
+import { Images } from '@/pages/images';
 import { Chat } from '@/pages/chat';
 import { Tools } from '@/pages/tools';
 import { Help } from '@/pages/help';
@@ -14,6 +15,7 @@ function App() {
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/containers" element={<Containers />} />
+          <Route path="/images" element={<Images />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/tools" element={<Tools />} />
           <Route path="/help" element={<Help />} />
