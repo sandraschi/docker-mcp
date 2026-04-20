@@ -1,5 +1,7 @@
 # docker-mcp
 
+[![FastMCP Version](https://img.shields.io/badge/FastMCP-3.2.0-blue?style=flat-square&logo=python&logoColor=white)](https://github.com/sandraschi/fastmcp) [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json)](https://github.com/astral-sh/ruff) [![Linted with Biome](https://img.shields.io/badge/Linted_with-Biome-60a5fa?style=flat-square&logo=biome&logoColor=white)](https://biomejs.dev/) [![Built with Just](https://img.shields.io/badge/Built_with-Just-000000?style=flat-square&logo=gnu-bash&logoColor=white)](https://github.com/casey/just)
+
 ## FastMCP 3.2.0 server for comprehensive Docker operations
 
 [![FastMCP](https://img.shields.io/badge/FastMCP-3.2.0-blue)](https://github.com/jlowin/fastmcp)
@@ -94,9 +96,9 @@ DockerMCP uses structured JSON logging for better observability:
 - Configurable log levels and output formats
 - Automatic log rotation for file output
 
-### State Management (Powered by FastMCP 3.1.1+)
+### State Management (Powered by FastMCP 3.2.0+)
 
-DockerMCP leverages FastMCP 3.1+'s built-in state management system \
+DockerMCP leverages FastMCP 3.2.0+'s built-in state management system \
 for all its stateful operations. This provides several key benefits:
 
 - **No External Dependencies**: No Redis or other external services required
@@ -145,7 +147,7 @@ for all its stateful operations. This provides several key benefits:
 ### Prerequisites
 - [uv](https://docs.astral.sh/uv/) installed (RECOMMENDED)
 - Python 3.12+
-- FastMCP 3.1.1+
+- FastMCP 3.2.0+
 
 ###  Quick Start
 
@@ -252,7 +254,7 @@ docker-mcp/
            volumes.py       # Volume management
        
         models/              # Data models and schemas
-        tools/               # FastMCP 3.1+ compatible tools
+        tools/               # FastMCP 3.2.0+ compatible tools
            containers/      # Container management tools
            desktop/         # Docker Desktop management tools (NEW)
               desktop_status.py      # Status check with hang detection
@@ -367,6 +369,17 @@ Full documentation is available at [GitHub Wiki](https://github.com/sandraschi/d
 Contributions are welcome! Please read our \
 [Contributing Guidelines](CONTRIBUTING.md) for details.
 
+
+## 🛡️ Industrial Quality Stack
+
+This project adheres to **SOTA 14.1** industrial standards for high-fidelity agentic orchestration:
+
+- **Python (Core)**: [Ruff](https://astral.sh/ruff) for linting and formatting. Zero-tolerance for `print` statements in core handlers (`T201`).
+- **Webapp (UI)**: [Biome](https://biomejs.dev/) for sub-millisecond linting. Strict `noConsoleLog` enforcement.
+- **Protocol Compliance**: Hardened `stdout/stderr` isolation to ensure crash-resistant JSON-RPC communication.
+- **Automation**: [Justfile](./justfile) recipes for all fleet operations (`just lint`, `just fix`, `just dev`).
+- **Security**: Automated audits via `bandit` and `safety`.
+
 ##  License
 
 This project is licensed under the MIT License - \
@@ -374,4 +387,4 @@ see the [LICENSE](LICENSE) file for details.
 
 ---
 
-*Docker MCP Server - Comprehensive Docker operations with FastMCP 3.1.1+*
+*Docker MCP Server - Comprehensive Docker operations with FastMCP 3.2.0+*

@@ -116,10 +116,10 @@ docker-build:
 
 # Run Docker image
 docker-run:
-    docker run -d `
-      --name docker-mcp `
-      -p 8000:8000 `
-      -v /var/run/docker.sock:/var/run/docker.sock `
+    docker run -d \
+      --name docker-mcp \
+      -p 8000:8000 \
+      -v /var/run/docker.sock:/var/run/docker.sock \
       docker-mcp:latest
 
 # Docker compose up
