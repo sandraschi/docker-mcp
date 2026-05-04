@@ -1,16 +1,16 @@
 """Unit tests for monitoring tools."""
-import pytest
 import sys
-from unittest.mock import patch, MagicMock, AsyncMock, ANY
-from pathlib import Path
-import json
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 
 # Mock the FastMCP Tool decorator
 class MockTool:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-    
+
     def __call__(self, func):
         func._is_tool = True
         return func
@@ -25,7 +25,8 @@ sys.modules['fastmcp.tools.tool'].Tool = MockTool
 sys.modules['docker'] = MagicMock()
 
 # Now import the modules we want to test
-from dockermcp.tools.monitoring import MonitoringManager, start_monitoring, monitoring_status as get_monitoring_status
+from dockermcp.tools.monitoring import MonitoringManager, start_monitoring
+from dockermcp.tools.monitoring import monitoring_status as get_monitoring_status
 
 # Test data
 TEST_ALERT_RULE = {
@@ -60,7 +61,7 @@ def mock_path():
 async def test_start_monitoring(mock_subprocess):
     """Test starting the monitoring stack."""
     result = await start_monitoring()
-    
+
     assert result["status"] == "success"
     assert "started" in result["message"].lower()
     mock_subprocess.assert_called_once()
@@ -76,22 +77,22 @@ async def test_get_monitoring_status():
             "status": "success",
             "stdout": "monitoring_prometheus_1|Up 5 minutes\nmonitoring_grafana_1|Up 5 minutes"
         }
-        
+
         # Test the function
         result = await get_monitoring_status()
-        
+
         # Assertions
         assert result["status"] == "success"
         assert len(result.get("services", [])) > 0
-        
+
         # Check if the services are parsed correctly
         service_names = [s["name"] for s in result["services"] if isinstance(s, dict)]
         assert "monitoring_prometheus_1" in service_names
         assert "monitoring_grafana_1" in service_names
-        
+
         # Check the status of one of the services
         prometheus = next(
-            (s for s in result["services"] 
+            (s for s in result["services"]
              if isinstance(s, dict) and s.get("name") == "monitoring_prometheus_1"),
             None
         )
@@ -107,22 +108,22 @@ async def test_monitoring_status_detailed():
         # Setup the mock to return a successful response with detailed info
         mock_run.return_value.stdout = "monitoring_grafana_1|Up 5 minutes (healthy)"
         mock_run.return_value.returncode = 0
-        
+
         # Test the function with detailed=True
         result = await get_monitoring_status(detailed=True)
-        
+
         # Assertions
         assert result["status"] == "success"
         assert len(result.get("services", [])) > 0
-        
+
         # Check if the service info is in the result
         service_found = any(
-            isinstance(s, dict) and 
+            isinstance(s, dict) and
             "monitoring_grafana_1" in s.get("name", "")
             for s in result["services"]
         )
         assert service_found, "Grafana service not found in results"
-        
+
         # Check if raw output is included
         assert "raw_output" in result
         assert result["raw_output"] is not None

@@ -13,6 +13,7 @@ if src_dir not in sys.path:
 # Import only what we need to test the singleton
 from fastmcp import FastMCP
 
+
 class FastMCPSingleton:
     _instance = None
     _lock = threading.Lock()
@@ -22,10 +23,10 @@ class FastMCPSingleton:
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
-                    cls._instance = super(FastMCPSingleton, cls).__new__(cls)
+                    cls._instance = super().__new__(cls)
                     cls._instance._initialize()
         return cls._instance
-    
+
     def _initialize(self):
         if not self._initialized:
             self._initialized = True
@@ -46,41 +47,41 @@ def test_singleton():
     singleton2 = FastMCPSingleton()
     mcp1 = singleton1.mcp
     mcp2 = singleton2.mcp
-    
+
     # All should be the same object
     assert singleton1 is singleton2, "Multiple singleton instances detected!"
     assert mcp1 is mcp2, "Multiple FastMCP instances detected!"
-    
+
     # Check instance attributes
     assert hasattr(mcp1, "name"), "FastMCP instance is missing expected attributes"
     assert mcp1.name == "test-mcp", "Unexpected FastMCP instance name"
-    
+
     print("✅ Singleton test passed: Only one FastMCP instance exists")
 
 def test_thread_safety():
     """Test that the singleton is thread-safe."""
     instances = []
-    
+
     def get_instance():
         singleton = FastMCPSingleton()
         instances.append(singleton.mcp)
-    
+
     # Create multiple threads that try to get the instance
     threads = []
     for _ in range(10):
         t = threading.Thread(target=get_instance)
         threads.append(t)
         t.start()
-    
+
     # Wait for all threads to complete
     for t in threads:
         t.join()
-    
+
     # All instances should be the same object
     first = instances[0]
     for instance in instances[1:]:
         assert instance is first, "Thread safety violation: Different instances detected"
-    
+
     print("✅ Thread safety test passed: Only one instance across threads")
 
 if __name__ == "__main__":

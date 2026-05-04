@@ -76,7 +76,7 @@ def check_docker_available[F: Callable[..., Any]](func: F) -> F:
         except docker.errors.DockerException as e:
             return {
                 "status": "error",
-                "message": f"❌ Docker operation failed: {str(e)}",
+                "message": f"❌ Docker operation failed: {e!s}",
                 "error_type": type(e).__name__
             }
     return cast(F, wrapper)
@@ -105,7 +105,7 @@ def initialize_docker_connection() -> bool:
     except Exception as e:
         docker_client = None
         docker_available = False
-        docker_error = f"Unexpected error: {str(e)}"
+        docker_error = f"Unexpected error: {e!s}"
         logger.error(f"Docker connection error: {docker_error}")
         return False
 
@@ -155,7 +155,7 @@ def get_docker_status() -> dict[str, Any]:
                 "images_count": info.get("Images", 0)
             })
         except Exception as e:
-            status["error"] = f"Error getting Docker info: {str(e)}"
+            status["error"] = f"Error getting Docker info: {e!s}"
 
     return status
 
@@ -196,22 +196,22 @@ register_tools()
 
 # Export public API
 __all__ = [
-    'mcp',
-    'container_mgr',
-    'image_mgr',
-    'network_mgr',
-    'volume_mgr',
-    'system_mgr',
     'ContainerManager',
     'ImageManager',
     'NetworkManager',
-    'VolumeManager',
     'SystemManager',
-    'docker_client',
-    'docker_available',
-    'initialize_docker_connection',
-    'retry_docker_connection',
-    'get_docker_status',
+    'VolumeManager',
     '__version__',
-    'register_tools'
+    'container_mgr',
+    'docker_available',
+    'docker_client',
+    'get_docker_status',
+    'image_mgr',
+    'initialize_docker_connection',
+    'mcp',
+    'network_mgr',
+    'register_tools',
+    'retry_docker_connection',
+    'system_mgr',
+    'volume_mgr'
 ]

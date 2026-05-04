@@ -4,7 +4,8 @@ Implements network-related operations with proper error handling and type hints.
 """
 import json
 import subprocess
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 from dockermcp.logging_config import logger
 
 # Get a child logger for this module
@@ -14,8 +15,8 @@ class NetworkManager:
     """
     Handles Docker network operations with proper error handling.
     """
-    
-    def list_networks(self) -> Dict[str, Any]:
+
+    def list_networks(self) -> dict[str, Any]:
         """
         List all Docker networks.
         
@@ -29,19 +30,19 @@ class NetworkManager:
                 text=True,
                 check=True
             )
-            
+
             # Parse the JSON output
             networks = []
             for line in result.stdout.strip().split('\n'):
                 if line:
                     networks.append(json.loads(line))
-            
+
             return {
                 'success': True,
                 'networks': networks,
                 'count': len(networks)
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to list networks: {e.stderr}")
             return {
@@ -58,8 +59,8 @@ class NetworkManager:
                 'networks': [],
                 'count': 0
             }
-    
-    def create_network(self, name: str, driver: str = "bridge") -> Dict[str, Any]:
+
+    def create_network(self, name: str, driver: str = "bridge") -> dict[str, Any]:
         """
         Create a new Docker network.
         
@@ -77,14 +78,14 @@ class NetworkManager:
                 text=True,
                 check=True
             )
-            
+
             return {
                 'success': True,
                 'network_id': result.stdout.strip(),
                 'name': name,
                 'driver': driver
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to create network {name}: {e.stderr}")
             return {
@@ -93,8 +94,8 @@ class NetworkManager:
                 'name': name,
                 'driver': driver
             }
-    
-    def remove_network(self, network_id: str) -> Dict[str, Any]:
+
+    def remove_network(self, network_id: str) -> dict[str, Any]:
         """
         Remove a Docker network.
         
@@ -111,13 +112,13 @@ class NetworkManager:
                 text=True,
                 check=True
             )
-            
+
             return {
                 'success': True,
                 'network_id': network_id,
                 'message': f"Network {network_id} removed successfully"
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove network {network_id}: {e.stderr}")
             return {

@@ -4,6 +4,7 @@ Script to update FastMCP to the latest version.
 import subprocess
 import sys
 
+
 def update_fastmcp():
     """Update FastMCP to the latest version."""
     print("Updating FastMCP to the latest version...")

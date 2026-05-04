@@ -59,7 +59,7 @@ class GrafanaManager:
             return {"status": "not_running"}
 
         except Exception as e:
-            logger.error(f"Error checking Grafana status: {str(e)}")
+            logger.error(f"Error checking Grafana status: {e!s}")
             return {
                 "status": "error",
                 "error": str(e)
@@ -89,7 +89,7 @@ class GrafanaManager:
             try:
                 self.docker_client.images.pull(self.GRAFANA_IMAGE)
             except Exception as e:
-                logger.warning(f"Could not pull Grafana image: {str(e)}")
+                logger.warning(f"Could not pull Grafana image: {e!s}")
 
             # Create a volume for persistent storage if it doesn't exist
             volumes = self.docker_client.volumes.list()
@@ -123,7 +123,7 @@ class GrafanaManager:
             }
 
         except Exception as e:
-            error_msg = f"Failed to set up Grafana: {str(e)}"
+            error_msg = f"Failed to set up Grafana: {e!s}"
             logger.error(error_msg, exc_info=True)
             return {
                 "success": False,
@@ -165,13 +165,13 @@ class GrafanaManager:
         except requests.exceptions.RequestException as e:
             return {
                 "success": False,
-                "error": f"Failed to fetch dashboard: {str(e)}",
+                "error": f"Failed to fetch dashboard: {e!s}",
                 "status_code": getattr(e.response, 'status_code', None)
             }
         except Exception as e:
             return {
                 "success": False,
-                "error": f"Error: {str(e)}"
+                "error": f"Error: {e!s}"
             }
 
     @staticmethod

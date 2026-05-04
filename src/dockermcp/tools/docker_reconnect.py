@@ -68,7 +68,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
                 if attempt < params.max_retries:
                     await asyncio.sleep(params.retry_delay)
             except Exception as e:
-                logger.error(f"Error during reconnection attempt {attempt}: {str(e)}")
+                logger.error(f"Error during reconnection attempt {attempt}: {e!s}")
                 if attempt < params.max_retries:
                     await asyncio.sleep(params.retry_delay)
 
@@ -88,7 +88,7 @@ async def reconnect_docker(params: ReconnectDockerParams) -> ToolResponse[Reconn
             )
 
     except Exception as e:
-        error_msg = f"Error in reconnect_docker: {str(e)}"
+        error_msg = f"Error in reconnect_docker: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ToolResponse.from_error(error_msg, e)
 

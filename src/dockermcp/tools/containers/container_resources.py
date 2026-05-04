@@ -222,7 +222,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                 }
             except Exception as e:
                 logger.warning(
-                    f"Failed to get container stats: {str(e)}",
+                    f"Failed to get container stats: {e!s}",
                     extra={"container_id": params.container_id},
                     exc_info=True
                 )
@@ -245,30 +245,30 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            message=f"Container not found: {str(e)}",
-            error=f"Container not found: {str(e)}"
+            message=f"Container not found: {e!s}",
+            error=f"Container not found: {e!s}"
         )
     except APIError as e:
         logger.error(
-            f"Docker API error: {str(e)}",
+            f"Docker API error: {e!s}",
             extra={"container_id": params.container_id},
             exc_info=True
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            message=f"Docker API error: {str(e)}",
-            error=f"Docker API error: {str(e)}"
+            message=f"Docker API error: {e!s}",
+            error=f"Docker API error: {e!s}"
         )
     except Exception as e:
         logger.error(
-            f"Error getting container resources: {str(e)}",
+            f"Error getting container resources: {e!s}",
             extra={"container_id": params.container_id},
             exc_info=True
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
-            message=f"Error getting container resources: {str(e)}",
-            error=f"Error getting container resources: {str(e)}"
+            message=f"Error getting container resources: {e!s}",
+            error=f"Error getting container resources: {e!s}"
         )
 
 class ResetContainerResourcesParams(BaseModel):
@@ -444,30 +444,30 @@ async def reset_container_resources(
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            message=f"Container not found: {str(e)}",
-            error=f"Container not found: {str(e)}"
+            message=f"Container not found: {e!s}",
+            error=f"Container not found: {e!s}"
         )
     except APIError as e:
         logger.error(
-            f"Docker API error: {str(e)}",
+            f"Docker API error: {e!s}",
             extra={"container_id": params.container_id},
             exc_info=True
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            message=f"Docker API error: {str(e)}",
-            error=f"Docker API error: {str(e)}"
+            message=f"Docker API error: {e!s}",
+            error=f"Docker API error: {e!s}"
         )
     except Exception as e:
         logger.error(
-            f"Error resetting container resources: {str(e)}",
+            f"Error resetting container resources: {e!s}",
             extra={"container_id": params.container_id},
             exc_info=True
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
-            message=f"Error resetting container resources: {str(e)}",
-            error=f"Error resetting container resources: {str(e)}"
+            message=f"Error resetting container resources: {e!s}",
+            error=f"Error resetting container resources: {e!s}"
         )
 
 # Register tools with FastMCP

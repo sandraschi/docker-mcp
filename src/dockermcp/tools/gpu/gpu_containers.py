@@ -202,7 +202,7 @@ class GPUContainerManager:
         except Exception as e:
             return {
                 'status': 'error',
-                'error': f'Failed to get container GPU info: {str(e)}'
+                'error': f'Failed to get container GPU info: {e!s}'
             }
 
 # Global GPU container manager instance
@@ -335,14 +335,14 @@ async def create_gpu_container(
             'image': image
         }
     except docker.errors.APIError as e:
-        error_msg = f'Docker API error: {str(e)}'
+        error_msg = f'Docker API error: {e!s}'
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
             'error': error_msg
         }
     except Exception as e:
-        error_msg = f'Failed to create GPU container: {str(e)}'
+        error_msg = f'Failed to create GPU container: {e!s}'
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -388,7 +388,7 @@ async def get_container_gpu_info(container_id: str) -> dict[str, Any]:
             logger.error(result.get('error', 'Unknown error getting container GPU info'))
         return result
     except Exception as e:
-        error_msg = f'Failed to get container GPU info: {str(e)}'
+        error_msg = f'Failed to get container GPU info: {e!s}'
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',

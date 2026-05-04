@@ -37,16 +37,16 @@ def update_file_content(content: str) -> str:
     """Update the content of a Python file with proper logging configuration."""
     # Remove basic logging config
     content = re.sub(BASIC_LOGGING_PATTERN, '', content)
-    
+
     # Replace print statements with logger calls
     def replace_print(match):
         print_stmt = match.group(0).strip()
         # Extract the part inside print()
         content = print_stmt[6:-1]  # Remove 'print(' and ')'
         return f"logger.info({content})"
-    
+
     content = re.sub(PRINT_STATEMENT, replace_print, content)
-    
+
     # Add logging imports if not present
     if 'import logging' in content and 'from dockermcp.logging_config' not in content:
         # Replace 'import logging' with our custom imports
@@ -62,24 +62,24 @@ def update_file_content(content: str) -> str:
                 continue
             else:
                 break
-        
+
         lines.insert(import_line, LOGGING_IMPORTS)
         content = '\n'.join(lines)
-    
+
     return content
 
 def process_file(filepath: Path) -> None:
     """Process a single Python file."""
     try:
-        with open(filepath, 'r', encoding='utf-8') as f:
+        with open(filepath, encoding='utf-8') as f:
             content = f.read()
-        
+
         # Skip files that don't need updating
         if 'print(' not in content and 'logging.basicConfig' not in content:
             return
-        
+
         updated_content = update_file_content(content)
-        
+
         if updated_content != content:
             with open(filepath, 'w', encoding='utf-8') as f:
                 f.write(updated_content)
@@ -94,7 +94,7 @@ def main():
         # Skip virtual environment directories
         if any(part.startswith('.') or part == 'venv' for part in root.split(os.sep)):
             continue
-            
+
         for filename in files:
             if filename.endswith('.py'):
                 filepath = Path(root) / filename

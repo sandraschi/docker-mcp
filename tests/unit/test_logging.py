@@ -6,26 +6,25 @@ import json
 import logging
 import logging.handlers
 import os
-import sys
 import uuid
 from datetime import datetime
-from typing import Any, Dict
+
 
 class LogContext:
     """Simple context manager for logging context."""
     def __init__(self):
         self.correlation_id = None
         self.request_id = None
-        
+
     def contextualize(self, **kwargs):
         """Set context variables."""
         self.correlation_id = kwargs.get('correlation_id')
         self.request_id = kwargs.get('request_id')
         return self
-    
+
     def __enter__(self):
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.correlation_id = None
         self.request_id = None
@@ -35,11 +34,11 @@ log_context = LogContext()
 
 class JsonFormatter(logging.Formatter):
     """JSON formatter for structured logging."""
-    
+
     def __init__(self, *args, **kwargs):
         self.disable_json = kwargs.pop('disable_json', False)
         super().__init__(*args, **kwargs)
-    
+
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
         # Create a dict with the log record data
@@ -56,23 +55,23 @@ class JsonFormatter(logging.Formatter):
             'environment': 'test',
             'hostname': 'test-host'
         }
-        
+
         # Add correlation ID if available
         if hasattr(record, 'correlation_id'):
             log_record['correlation_id'] = record.correlation_id
         elif log_context.correlation_id:
             log_record['correlation_id'] = log_context.correlation_id
-            
+
         # Add request ID if available
         if hasattr(record, 'request_id'):
             log_record['request_id'] = record.request_id
         elif log_context.request_id:
             log_record['request_id'] = log_context.request_id
-        
+
         # Add exception info if present
         if record.exc_info:
             log_record['exception'] = self.formatException(record.exc_info)
-        
+
         # Add any extra attributes
         for key, value in record.__dict__.items():
             if key not in ('args', 'asctime', 'created', 'exc_info', 'exc_text',
@@ -86,7 +85,7 @@ class JsonFormatter(logging.Formatter):
                     log_record[key] = value
                 except (TypeError, OverflowError):
                     log_record[key] = str(value)
-        
+
         # Ensure the final output is valid JSON
         try:
             return json.dumps(log_record, ensure_ascii=False, default=str)
@@ -96,7 +95,7 @@ class JsonFormatter(logging.Formatter):
                 'timestamp': datetime.utcnow().isoformat() + 'Z',
                 'level': 'error',
                 'name': 'logging',
-                'message': f'Failed to serialize log record: {str(e)}',
+                'message': f'Failed to serialize log record: {e!s}',
                 'original_message': str(record.msg)
             }, default=str)
 
@@ -105,15 +104,15 @@ def configure_logging(level="INFO", log_file=None, json_format=True, **kwargs):
     # Create logs directory if it doesn't exist
     if log_file:
         os.makedirs(os.path.dirname(log_file), exist_ok=True)
-    
+
     # Set up the root logger
     logger = logging.getLogger()
     logger.setLevel(level)
-    
+
     # Remove all existing handlers
     for handler in logger.handlers[:]:
         logger.removeHandler(handler)
-    
+
     # Create formatter
     if json_format:
         formatter = JsonFormatter(disable_json=kwargs.get('disable_json_for_rpc', False))
@@ -121,13 +120,13 @@ def configure_logging(level="INFO", log_file=None, json_format=True, **kwargs):
         formatter = logging.Formatter(
             '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-    
+
     # Add console handler
     if kwargs.get('enable_console', True):
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(formatter)
         logger.addHandler(console_handler)
-    
+
     # Add file handler if log file is specified
     if log_file:
         file_handler = logging.handlers.RotatingFileHandler(
@@ -155,10 +154,10 @@ def test_json_logging():
     logger.warning("This is a warning message")
     logger.error("This is an error message")
     logger.critical("This is a critical message")
-    
+
     # Test with extra fields
     logger.info("User logged in", extra={"user_id": 123, "ip": "192.168.1.1"})
-    
+
     # Test with context
     with log_context.contextualize(
         correlation_id=str(uuid.uuid4()),
@@ -166,13 +165,13 @@ def test_json_logging():
         user_id="test_user"
     ):
         logger.info("Processing request with context")
-    
+
     # Test exception
     try:
         1 / 0
-    except Exception as e:
+    except Exception:
         logger.exception("An error occurred")
-    
+
     # Test complex data
     complex_data = {
         "nested": {"key": "value"},
@@ -180,7 +179,7 @@ def test_json_logging():
         "timestamp": datetime.utcnow().isoformat()
     }
     logger.info("Complex data example", extra={"data": complex_data})
-    
+
     logger.critical("This is a critical message", extra={"key5": True})
 
 if __name__ == "__main__":

@@ -3,10 +3,11 @@ Vienna-specific functionality for Docker MCP.
 Provides tools specific to Sandra's Vienna environment.
 """
 import json
-from dockermcp.utils import run_docker_command
 import socket
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from dockermcp.logging_config import logger
+from dockermcp.utils import run_docker_command
 
 # Get a child logger for this module
 logger = logger.getChild('vienna')
@@ -15,8 +16,8 @@ class ViennaEnvironment:
     """
     Provides Vienna-specific functionality for Docker management.
     """
-    
-    def get_environment_status(self) -> Dict[str, Any]:
+
+    def get_environment_status(self) -> dict[str, Any]:
         """
         Get the status of the Vienna development environment.
         
@@ -27,20 +28,20 @@ class ViennaEnvironment:
             # Get host information
             hostname = socket.gethostname()
             ip_address = socket.gethostbyname(hostname)
-            
+
             # Get Docker system info using the utility function
             docker_info = run_docker_command('system', ['info'])
-            
+
             docker_data = {}
             if docker_info.returncode == 0:
                 try:
                     docker_data = json.loads(docker_info.stdout)
                 except json.JSONDecodeError:
                     pass
-            
+
             # Get running containers using the utility function
             containers = run_docker_command('ps')
-            
+
             running_containers = []
             if containers.returncode == 0:
                 for line in containers.stdout.strip().split('\n'):
@@ -49,10 +50,10 @@ class ViennaEnvironment:
                             running_containers.append(json.loads(line))
                         except json.JSONDecodeError:
                             continue
-            
+
             # Check for known Vienna stacks
             known_stacks = self._check_known_stacks()
-            
+
             return {
                 'success': True,
                 'host': {
@@ -71,15 +72,15 @@ class ViennaEnvironment:
                 'stacks': known_stacks,
                 'status': 'healthy' if all(s['healthy'] for s in known_stacks.values()) else 'degraded'
             }
-            
+
         except Exception as e:
-            logger.error(f"Error getting environment status: {str(e)}")
+            logger.error(f"Error getting environment status: {e!s}")
             return {
                 'success': False,
-                'error': f"Error getting environment status: {str(e)}"
+                'error': f"Error getting environment status: {e!s}"
             }
-    
-    def _check_known_stacks(self) -> Dict[str, Dict[str, Any]]:
+
+    def _check_known_stacks(self) -> dict[str, dict[str, Any]]:
         """
         Check the status of known Vienna stacks.
         
@@ -91,21 +92,21 @@ class ViennaEnvironment:
             'immich': {'name': 'Immich', 'healthy': False, 'containers': []},
             'myai': {'name': 'MyAI', 'healthy': False, 'containers': []}
         }
-        
+
         try:
             # Get all containers using the utility function
             containers = run_docker_command('ps', ['-a'])
-            
+
             if result.returncode != 0:
                 return stacks
-            
+
             containers = []
             for line in result.stdout.strip().split('\n'):
                 if line:
                     try:
                         container = json.loads(line)
                         containers.append(container)
-                        
+
                         # Check for Veogen stack
                         if 'veogen' in container['Names'].lower():
                             stacks['veogen']['containers'].append({
@@ -114,7 +115,7 @@ class ViennaEnvironment:
                                 'status': container['Status'],
                                 'healthy': 'Up' in container['Status']
                             })
-                        
+
                         # Check for Immich stack
                         elif 'immich' in container['Names'].lower():
                             stacks['immich']['containers'].append({
@@ -123,7 +124,7 @@ class ViennaEnvironment:
                                 'status': container['Status'],
                                 'healthy': 'Up' in container['Status']
                             })
-                        
+
                         # Check for MyAI stack
                         elif any(x in container['Names'].lower() for x in ['myai', 'bob', 'alice']):
                             stacks['myai']['containers'].append({
@@ -132,24 +133,24 @@ class ViennaEnvironment:
                                 'status': container['Status'],
                                 'healthy': 'Up' in container['Status']
                             })
-                            
+
                     except (json.JSONDecodeError, KeyError):
                         continue
-            
+
             # Determine stack health
             for stack in stacks.values():
                 if stack['containers']:
                     stack['healthy'] = all(c['healthy'] for c in stack['containers'])
                 else:
                     stack['healthy'] = False
-            
+
             return stacks
-            
+
         except Exception as e:
-            logger.error(f"Error checking known stacks: {str(e)}")
+            logger.error(f"Error checking known stacks: {e!s}")
             return stacks
-    
-    def check_veogen_stack(self) -> Dict[str, Any]:
+
+    def check_veogen_stack(self) -> dict[str, Any]:
         """
         Check the status of the Veogen stack.
         
@@ -159,9 +160,9 @@ class ViennaEnvironment:
         try:
             stacks = self._check_known_stacks()
             veogen = stacks.get('veogen', {'name': 'Veogen', 'healthy': False, 'containers': []})
-            
+
             # Additional Veogen-specific checks can be added here
-            
+
             return {
                 'success': True,
                 'stack': 'veogen',
@@ -172,15 +173,15 @@ class ViennaEnvironment:
                     {'name': 'All Containers Healthy', 'status': 'ok' if veogen['healthy'] else 'error'}
                 ]
             }
-            
+
         except Exception as e:
-            logger.error(f"Error checking Veogen stack: {str(e)}")
+            logger.error(f"Error checking Veogen stack: {e!s}")
             return {
                 'success': False,
-                'error': f"Error checking Veogen stack: {str(e)}"
+                'error': f"Error checking Veogen stack: {e!s}"
             }
-    
-    def check_immich_stack(self) -> Dict[str, Any]:
+
+    def check_immich_stack(self) -> dict[str, Any]:
         """
         Check the status of the Immich stack.
         
@@ -190,9 +191,9 @@ class ViennaEnvironment:
         try:
             stacks = self._check_known_stacks()
             immich = stacks.get('immich', {'name': 'Immich', 'healthy': False, 'containers': []})
-            
+
             # Additional Immich-specific checks can be added here
-            
+
             return {
                 'success': True,
                 'stack': 'immich',
@@ -203,15 +204,15 @@ class ViennaEnvironment:
                     {'name': 'All Containers Healthy', 'status': 'ok' if immich['healthy'] else 'error'}
                 ]
             }
-            
+
         except Exception as e:
-            logger.error(f"Error checking Immich stack: {str(e)}")
+            logger.error(f"Error checking Immich stack: {e!s}")
             return {
                 'success': False,
-                'error': f"Error checking Immich stack: {str(e)}"
+                'error': f"Error checking Immich stack: {e!s}"
             }
-    
-    def check_myai_stack(self) -> Dict[str, Any]:
+
+    def check_myai_stack(self) -> dict[str, Any]:
         """
         Check the status of the MyAI stack.
         
@@ -221,9 +222,9 @@ class ViennaEnvironment:
         try:
             stacks = self._check_known_stacks()
             myai = stacks.get('myai', {'name': 'MyAI', 'healthy': False, 'containers': []})
-            
+
             # Additional MyAI-specific checks can be added here
-            
+
             return {
                 'success': True,
                 'stack': 'myai',
@@ -234,10 +235,10 @@ class ViennaEnvironment:
                     {'name': 'All Containers Healthy', 'status': 'ok' if myai['healthy'] else 'error'}
                 ]
             }
-            
+
         except Exception as e:
-            logger.error(f"Error checking MyAI stack: {str(e)}")
+            logger.error(f"Error checking MyAI stack: {e!s}")
             return {
                 'success': False,
-                'error': f"Error checking MyAI stack: {str(e)}"
+                'error': f"Error checking MyAI stack: {e!s}"
             }

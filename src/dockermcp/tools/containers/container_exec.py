@@ -183,7 +183,7 @@ async def execute_in_container(
                 message=stderr_data or "Command execution failed"
             )
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return ContainerExecResponse.error(
             error=error_msg,
@@ -192,7 +192,7 @@ async def execute_in_container(
         )
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return ContainerExecResponse.error(
             error=error_msg,
@@ -282,9 +282,9 @@ async def _stream_exec_output(
                 pass
 
     except Exception as e:
-        logger.error(f"Error in command output stream: {str(e)}")
+        logger.error(f"Error in command output stream: {e!s}")
         yield {
             'type': 'stderr',
-            'data': f'Error in command output stream: {str(e)}',
+            'data': f'Error in command output stream: {e!s}',
             'timestamp': datetime.utcnow().isoformat() + 'Z'
         }

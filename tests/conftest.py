@@ -1,17 +1,15 @@
 """
 Pytest configuration and fixtures for Docker MCP tests.
 """
-import os
-import sys
 import asyncio
 import logging
-import pytest
+import os
+import sys
 from pathlib import Path
-from typing import Dict, Any, AsyncGenerator, Optional
-from unittest.mock import MagicMock, patch, AsyncMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import docker
-import aiodocker
+import pytest
 import requests
 from dotenv import load_dotenv
 
@@ -35,7 +33,7 @@ class TestConfig:
     TEST_CONTAINER_PREFIX = 'test_dockermcp_'
     TEST_NETWORK_NAME = 'test_dockermcp_network'
     TEST_IMAGE = 'alpine:latest'  # Lightweight image for testing
-    
+
     # Test timeouts (in seconds)
     CONTAINER_START_TIMEOUT = 30
     TEST_TIMEOUT = 60
@@ -44,13 +42,13 @@ class TestConfig:
 def get_test_config() -> TestConfig:
     """Get test configuration with environment overrides."""
     config = TestConfig()
-    
+
     # Allow environment overrides
     if 'DOCKER_TEST_IMAGE' in os.environ:
         config.TEST_IMAGE = os.environ['DOCKER_TEST_IMAGE']
     if 'TEST_TIMEOUT' in os.environ:
         config.TEST_TIMEOUT = int(os.environ['TEST_TIMEOUT'])
-        
+
     return config
 
 # Session fixtures
@@ -104,19 +102,19 @@ if os.environ.get("MOCK_MODE", "0") == "1" or os.environ.get("SKIP_DOCKER_TESTS"
         """Fixture to mock the Docker client when in mock mode."""
         with patch('docker.from_env') as mock_from_env, \
              patch('aiodocker.Docker') as mock_async_docker:
-            
+
             # Set up sync client mock
             mock_client = MagicMock(spec=docker.DockerClient)
             mock_from_env.return_value = mock_client
-            
+
             # Set up async client mock
             mock_async_client = AsyncMock()
             mock_async_docker.return_value = mock_async_client
-            
+
             # Set up default mocks
             mock_container = MagicMock()
             mock_client.containers.get.return_value = mock_container
-            
+
             # Configure container attributes
             mock_container.attrs = {
                 'Id': 'test-container-id',
@@ -162,15 +160,15 @@ if os.environ.get("MOCK_MODE", "0") == "1" or os.environ.get("SKIP_DOCKER_TESTS"
                     }
                 }
             }
-            
+
             # Mock container logs
             mock_container.logs.return_value = b"2023-01-01T00:00:00Z Test log line 1\n2023-01-01T00:00:01Z Test log line 2\n"
-            
+
             # Mock exec_run
             mock_exec = MagicMock()
             mock_exec.output = [b'stdout output\n', b'stderr output\n']
             mock_container.exec_run.return_value = mock_exec
-            
+
             yield mock_client
 else:
     @pytest.fixture(scope="session")

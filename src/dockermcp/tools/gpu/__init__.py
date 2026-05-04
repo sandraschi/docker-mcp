@@ -48,5 +48,5 @@ try:
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning(
-        f"Failed to initialize GPU manager: {str(e)}"
+        f"Failed to initialize GPU manager: {e!s}"
     )

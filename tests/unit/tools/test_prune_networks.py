@@ -3,12 +3,12 @@ Tests for the prune_networks function.
 
 This module contains tests specifically for the prune_networks function.
 """
-import asyncio
 import os
 import sys
+from typing import Any
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from typing import Dict, Any, List
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -17,8 +17,8 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 def Tool(
     name: str,
     description: str,
-    parameters: Dict[str, Any],
-    returns: Dict[str, Any],
+    parameters: dict[str, Any],
+    returns: dict[str, Any],
     **kwargs
 ):
     """Mock Tool decorator for testing."""
@@ -60,7 +60,7 @@ def mock_run_docker_command(*args, **kwargs):
 # Test class for prune_networks
 class TestPruneNetworks:
     """Tests for the prune_networks function."""
-    
+
     @pytest.mark.asyncio
     @patch('dockermcp.tools.networks.network_tools.run_docker_command', side_effect=mock_run_docker_command)
     async def test_prune_networks_success(self, mock_run_docker):
@@ -71,13 +71,13 @@ class TestPruneNetworks:
             force=True,
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert len(result["networks_deleted"]) == 2
         assert result["space_reclaimed"] == 1024
         assert "Successfully pruned 2 networks" in result["message"]
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker.assert_called_once()
         args, kwargs = mock_run_docker.call_args
@@ -86,50 +86,50 @@ class TestPruneNetworks:
         assert "--force" in args[1]
         assert "--filter" in args[1]
         assert "until=24h" in args[1]
-    
+
     @pytest.mark.asyncio
     @patch('dockermcp.tools.networks.network_tools.run_docker_command', return_value={"NetworksDeleted": None, "SpaceReclaimed": 0})
     async def test_prune_networks_no_networks(self, mock_run_docker):
         """Test pruning when no networks are found."""
         # Call the function
         result = await prune_networks()
-        
+
         # Verify the result
         assert result["success"] is True
         assert len(result["networks_deleted"]) == 0
         assert result["space_reclaimed"] == 0
         assert "No networks were pruned" in result["message"]
-    
+
     @pytest.mark.asyncio
-    @patch('dockermcp.tools.networks.network_tools.run_docker_command', side_effect=asyncio.TimeoutError("Operation timed out"))
+    @patch('dockermcp.tools.networks.network_tools.run_docker_command', side_effect=TimeoutError("Operation timed out"))
     async def test_prune_networks_timeout(self, mock_run_docker):
         """Test network pruning with a timeout."""
         # Call the function and expect an exception
         with pytest.raises(Exception) as exc_info:
             await prune_networks(timeout=5)
-        
+
         # Verify the error message
         assert "timed out" in str(exc_info.value)
-    
+
     @pytest.mark.parametrize("invalid_timeout", [-1, 0, 301])
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_timeout(self, invalid_timeout):
         """Test network pruning with invalid timeout values."""
         with pytest.raises(ValueError):
             await prune_networks(timeout=invalid_timeout)
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_timeout_type(self):
         """Test network pruning with invalid timeout type."""
         with pytest.raises(TypeError):
             await prune_networks(timeout="not_an_int")
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_filters_type(self):
         """Test network pruning with invalid filters type."""
         with pytest.raises(TypeError):
             await prune_networks(filters="not_a_dict")
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_filter_values(self):
         """Test network pruning with invalid filter values."""

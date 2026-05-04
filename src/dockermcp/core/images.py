@@ -39,7 +39,7 @@ class ImageManager:
                 for img in images
             ]
         except Exception as e:
-            logger.error(f"Error listing images: {str(e)}")
+            logger.error(f"Error listing images: {e!s}")
             raise
 
     # Add other image operations here...

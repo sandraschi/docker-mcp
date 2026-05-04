@@ -8,20 +8,15 @@ import asyncio
 import json
 from datetime import datetime
 
-from dockermcp.tools.gpu import (
-    list_gpus,
-    get_gpu_info,
-    monitor_gpu_usage,
-    create_gpu_container,
-    get_container_gpu_info
-)
+from dockermcp.tools.gpu import create_gpu_container, get_container_gpu_info, get_gpu_info, list_gpus, monitor_gpu_usage
+
 
 async def main():
     """Run GPU tool examples."""
     print("=" * 80)
     print("DockerMCP GPU Tools Example")
     print("=" * 80)
-    
+
     # Example 1: List available GPUs
     print("\n1. Listing available GPUs...")
     gpus = await list_gpus(detailed=True)
@@ -31,11 +26,11 @@ async def main():
         print(f"     Memory: {gpu['memory_used']/1024**3:.1f}GB / {gpu['memory_total']/1024**3:.1f}GB used")
         print(f"     Utilization: {gpu['utilization_gpu']}% GPU, {gpu['utilization_memory']}% Memory")
         print(f"     Temperature: {gpu['temperature']}°C, Power: {gpu['power_draw']}W / {gpu['power_limit']}W")
-    
+
     if gpus['total_gpus'] == 0:
         print("No GPUs found. Exiting...")
         return
-    
+
     # Example 2: Get detailed info about the first GPU
     print("\n2. Getting detailed info for first GPU...")
     gpu_info = await get_gpu_info(gpu_id="0")
@@ -43,7 +38,7 @@ async def main():
         print(json.dumps(gpu_info['gpu'], indent=2, default=str))
     else:
         print(f"Error: {gpu_info.get('error', 'Unknown error')}")
-    
+
     # Example 3: Monitor GPU usage
     print("\n3. Monitoring GPU usage for 10 seconds... (press Ctrl+C to skip)")
     try:
@@ -58,7 +53,7 @@ async def main():
                 print(f"  ... and {len(monitor_result['samples']) - 3} more samples")
     except asyncio.CancelledError:
         print("\nMonitoring interrupted by user")
-    
+
     # Example 4: Run a GPU-accelerated container
     print("\n4. Running a GPU-accelerated container...")
     container = await create_gpu_container(
@@ -69,7 +64,7 @@ async def main():
         detach=False,
         auto_remove=True
     )
-    
+
     if container['status'] == 'success':
         if 'output' in container:
             print("Container output:")
@@ -78,7 +73,7 @@ async def main():
             print(f"Container started with ID: {container.get('container_id')}")
     else:
         print(f"Error: {container.get('error', 'Failed to start container')}")
-    
+
     # Example 5: Get container GPU info
     if container.get('container_id'):
         print("\n5. Getting container GPU info...")

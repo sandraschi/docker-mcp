@@ -251,14 +251,14 @@ async def get_system_info(
         )
 
     except DockerException as e:
-        error_msg = f"Docker error getting system info: {str(e)}"
+        error_msg = f"Docker error getting system info: {e!s}"
         logger.error(error_msg, exc_info=True)
         return SystemInfoResponse(
             status="error",
             error=error_msg
         )
     except Exception as e:
-        error_msg = f"Unexpected error getting system info: {str(e)}"
+        error_msg = f"Unexpected error getting system info: {e!s}"
         logger.error(error_msg, exc_info=True)
         return SystemInfoResponse(
             status="error",
@@ -376,14 +376,14 @@ async def get_disk_usage(
         )
 
     except DockerException as e:
-        error_msg = f"Docker error getting disk usage: {str(e)}"
+        error_msg = f"Docker error getting disk usage: {e!s}"
         logger.error(error_msg, exc_info=True)
         return DiskUsageResponse(
             status="error",
             error=error_msg
         )
     except Exception as e:
-        error_msg = f"Unexpected error getting disk usage: {str(e)}"
+        error_msg = f"Unexpected error getting disk usage: {e!s}"
         logger.error(error_msg, exc_info=True)
         return DiskUsageResponse(
             status="error",
@@ -480,14 +480,14 @@ async def prune_system(
         )
 
     except DockerException as e:
-        error_msg = f"Docker error during system prune: {str(e)}"
+        error_msg = f"Docker error during system prune: {e!s}"
         logger.error(error_msg, exc_info=True)
         return PruneSystemResponse(
             status="error",
             error=error_msg
         )
     except Exception as e:
-        error_msg = f"Unexpected error during system prune: {str(e)}"
+        error_msg = f"Unexpected error during system prune: {e!s}"
         logger.error(error_msg, exc_info=True)
         return PruneSystemResponse(
             status="error",
@@ -518,14 +518,14 @@ async def parse_duration(
         )
 
     except ValueError as e:
-        error_msg = f"Invalid duration format: {str(e)}"
+        error_msg = f"Invalid duration format: {e!s}"
         logger.error(error_msg)
         return ParseDurationResponse(
             status="error",
             error=error_msg
         )
     except Exception as e:
-        error_msg = f"Unexpected error parsing duration: {str(e)}"
+        error_msg = f"Unexpected error parsing duration: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ParseDurationResponse(
             status="error",
@@ -537,16 +537,16 @@ async def parse_duration(
 # ============================================================================
 
 __all__ = [
-    "get_system_info",
-    "get_disk_usage",
-    "prune_system",
-    "parse_duration",
-    "SystemInfoRequest",
-    "SystemInfoResponse",
     "DiskUsageRequest",
     "DiskUsageResponse",
+    "ParseDurationRequest",
+    "ParseDurationResponse",
     "PruneSystemRequest",
     "PruneSystemResponse",
-    "ParseDurationRequest",
-    "ParseDurationResponse"
+    "SystemInfoRequest",
+    "SystemInfoResponse",
+    "get_disk_usage",
+    "get_system_info",
+    "parse_duration",
+    "prune_system"
 ]

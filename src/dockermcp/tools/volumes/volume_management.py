@@ -159,7 +159,7 @@ async def list_volumes(
                 volume_list.append(volume_info)
 
             except Exception as e:
-                logger.warning(f"Error processing volume {volume.name}: {str(e)}")
+                logger.warning(f"Error processing volume {volume.name}: {e!s}")
                 continue
 
         return {
@@ -169,17 +169,17 @@ async def list_volumes(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error listing volumes: {str(e)}"
+        error_msg = f"Unexpected error listing volumes: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
@@ -265,7 +265,7 @@ async def create_volume(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -274,7 +274,7 @@ async def create_volume(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -283,7 +283,7 @@ async def create_volume(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error creating volume: {str(e)}"
+        error_msg = f"Unexpected error creating volume: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -380,7 +380,7 @@ async def inspect_volume(
                             break
                         total_size /= 1024.0
             except Exception as e:
-                logger.warning(f"Error calculating volume size: {str(e)}")
+                logger.warning(f"Error calculating volume size: {e!s}")
 
         return {
             'status': 'success',
@@ -388,7 +388,7 @@ async def inspect_volume(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -397,7 +397,7 @@ async def inspect_volume(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -406,7 +406,7 @@ async def inspect_volume(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error inspecting volume: {str(e)}"
+        error_msg = f"Unexpected error inspecting volume: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -470,7 +470,7 @@ async def remove_volume(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -479,7 +479,7 @@ async def remove_volume(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -488,7 +488,7 @@ async def remove_volume(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error removing volume: {str(e)}"
+        error_msg = f"Unexpected error removing volume: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -552,7 +552,7 @@ async def prune_volumes(
                     if not vol.attrs.get('UsageData', {}).get('RefCount', 0) > 0:
                         unused_volumes.append(vol)
                 except Exception as e:
-                    logger.warning(f"Error checking volume {vol.name}: {str(e)}")
+                    logger.warning(f"Error checking volume {vol.name}: {e!s}")
 
             # Calculate total size
             total_size = 0
@@ -568,7 +568,7 @@ async def prune_volumes(
                                 except OSError:
                                     continue
                 except Exception as e:
-                    logger.warning(f"Error calculating size for volume {vol.name}: {str(e)}")
+                    logger.warning(f"Error calculating size for volume {vol.name}: {e!s}")
 
             return {
                 'status': 'success',
@@ -599,7 +599,7 @@ async def prune_volumes(
                     'size': vol.attrs.get('UsageData', {}).get('Size', 0)
                 })
             except Exception as e:
-                logger.warning(f"Error getting details for deleted volume {vol_name}: {str(e)}")
+                logger.warning(f"Error getting details for deleted volume {vol_name}: {e!s}")
                 deleted_details.append({'deleted': vol_name})
 
         return {
@@ -611,7 +611,7 @@ async def prune_volumes(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -619,7 +619,7 @@ async def prune_volumes(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -627,7 +627,7 @@ async def prune_volumes(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error pruning volumes: {str(e)}"
+        error_msg = f"Unexpected error pruning volumes: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',

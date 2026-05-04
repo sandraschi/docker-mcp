@@ -145,7 +145,7 @@ class LokiHandler:
 
         except Exception as e:
             # Log the error but don't raise to avoid crashing the application
-            logging.error(f"Failed to send logs to Loki: {str(e)}")
+            logging.error(f"Failed to send logs to Loki: {e!s}")
 
     def __call__(self, message: str) -> None:
         """Handle a log message."""
@@ -163,7 +163,7 @@ class LokiHandler:
             self._send_batch(force=False)
 
         except Exception as e:
-            logging.error(f"Error in Loki handler: {str(e)}")
+            logging.error(f"Error in Loki handler: {e!s}")
 
     def flush(self) -> None:
         """Flush any buffered logs."""
@@ -211,6 +211,6 @@ def add_loki_handler(
         logger.info(f"Loki logging enabled. Sending logs to {url}")
         return handler_id
     except Exception as e:
-        logger.error(f"Failed to initialize Loki handler: {str(e)}")
+        logger.error(f"Failed to initialize Loki handler: {e!s}")
         return None
     return handler_id

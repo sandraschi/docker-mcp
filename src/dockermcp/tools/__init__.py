@@ -80,7 +80,7 @@ def discover_tools() -> set[str]:
                     discovered_tools.add(attr_name)
                     logger.info(f'Discovered tool: {attr_name} from {name}')
         except ImportError as e:
-            logger.warning(f'Failed to import module {name}: {str(e)}')
+            logger.warning(f'Failed to import module {name}: {e!s}')
             continue
 
     return discovered_tools
@@ -182,7 +182,7 @@ try:
 except ImportError as e:
     import logging
     logging.getLogger(__name__).warning(
-        f"Desktop tools not available: {str(e)}. "
+        f"Desktop tools not available: {e!s}. "
         "Desktop tools require Windows with Docker Desktop."
     )
     desktop_tools = []
@@ -207,13 +207,13 @@ try:
 except ImportError as e:
     import logging
     logging.getLogger(__name__).warning(
-        f"GPU tools not available: {str(e)}. "
+        f"GPU tools not available: {e!s}. "
         "Install GPU dependencies with: pip install -r requirements-gpu.txt"
     )
 except Exception as e:
     import logging
     logging.getLogger(__name__).warning(
-        f"Failed to initialize GPU tools: {str(e)}"
+        f"Failed to initialize GPU tools: {e!s}"
     )
 
 __all__ = [

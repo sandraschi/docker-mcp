@@ -4,16 +4,12 @@ DockerMCP Monitoring Stack Manager
 
 This script provides commands to manage the monitoring stack (Prometheus, Grafana, Loki, etc.).
 """
-import os
-import sys
 import subprocess
-import time
+import sys
 import webbrowser
 from pathlib import Path
-from typing import Optional, List, Dict, Any
 
 import click
-import yaml
 from docker import from_env
 from docker.errors import DockerException
 
@@ -31,10 +27,10 @@ except DockerException as e:
 
 class MonitoringManager:
     """Manages the monitoring stack."""
-    
+
     def __init__(self):
         self.compose_cmd = ["docker-compose", "-f", str(DOCKER_COMPOSE_FILE)]
-        
+
         # Load environment variables if .env exists
         self.env = {}
         if ENV_FILE.exists():
@@ -44,8 +40,8 @@ class MonitoringManager:
                     if line and not line.startswith('#'):
                         key, value = line.split('=', 1)
                         self.env[key] = value.strip('\'"')
-    
-    def run_command(self, cmd: List[str], **kwargs) -> int:
+
+    def run_command(self, cmd: list[str], **kwargs) -> int:
         """Run a shell command and return the exit code."""
         try:
             process = subprocess.run(
@@ -59,57 +55,57 @@ class MonitoringManager:
             print(f"Error running command: {' '.join(cmd)}")
             print(f"Error: {e}")
             return 1
-    
+
     def start(self, build: bool = False) -> int:
         """Start the monitoring stack."""
         cmd = self.compose_cmd + ["up", "-d"]
         if build:
             cmd.append("--build")
         return self.run_command(cmd)
-    
+
     def stop(self) -> int:
         """Stop the monitoring stack."""
         return self.run_command(self.compose_cmd + ["down"])
-    
+
     def restart(self) -> int:
         """Restart the monitoring stack."""
         self.stop()
         return self.start()
-    
+
     def status(self) -> int:
         """Show the status of monitoring services."""
         return self.run_command(self.compose_cmd + ["ps"])
-    
+
     def logs(self, follow: bool = False, tail: int = 100) -> int:
         """Show logs from monitoring services."""
         cmd = self.compose_cmd + ["logs", f"--tail={tail}"]
         if follow:
             cmd.append("-f")
         return self.run_command(cmd)
-    
+
     def open_grafana(self) -> None:
         """Open Grafana in the default web browser."""
         url = "http://localhost:3000"
         print(f"Opening Grafana at {url}")
         webbrowser.open(url)
-    
+
     def open_prometheus(self) -> None:
         """Open Prometheus in the default web browser."""
         url = "http://localhost:9090"
         print(f"Opening Prometheus at {url}")
         webbrowser.open(url)
-    
+
     def open_loki(self) -> None:
         """Open Loki in the default web browser."""
         url = "http://localhost:3100"
         print(f"Opening Loki at {url}")
         webbrowser.open(url)
-    
+
     def check_requirements(self) -> bool:
         """Check if all required tools are installed."""
         required_commands = ["docker", "docker-compose"]
         missing = []
-        
+
         for cmd in required_commands:
             try:
                 subprocess.run(
@@ -120,7 +116,7 @@ class MonitoringManager:
                 )
             except (subprocess.SubprocessError, FileNotFoundError):
                 missing.append(cmd)
-        
+
         if missing:
             print("The following required tools are missing:")
             for cmd in missing:
@@ -202,11 +198,11 @@ def setup(admin_user, admin_password, port, prometheus_port, loki_port, force):
     (MONITORING_DIR / "grafana").mkdir(exist_ok=True)
     (MONITORING_DIR / "loki").mkdir(exist_ok=True)
     (MONITORING_DIR / "promtail").mkdir(exist_ok=True)
-    
+
     # Create .env file if it doesn't exist or if force is True
     if not ENV_FILE.exists() or force:
         with open(ENV_FILE, 'w') as f:
-            f.write(f"# DockerMCP Monitoring Stack Configuration\n")
+            f.write("# DockerMCP Monitoring Stack Configuration\n")
             f.write(f"GRAFANA_ADMIN_USER={admin_user}\n")
             f.write(f"GRAFANA_ADMIN_PASSWORD={admin_password}\n")
             f.write(f"GRAFANA_PORT={port}\n")
@@ -215,7 +211,7 @@ def setup(admin_user, admin_password, port, prometheus_port, loki_port, force):
         print(f"Created {ENV_FILE}")
     else:
         print(f"{ENV_FILE} already exists. Use --force to overwrite.")
-    
+
     print("\nSetup complete. You can now start the monitoring stack with:")
     print("  python manage_monitoring.py start")
     print("\nAccess the services at:")

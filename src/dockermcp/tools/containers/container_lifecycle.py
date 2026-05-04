@@ -194,11 +194,11 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         }
 
     except docker.errors.APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg)
     except Exception as e:
-        error_msg = f"Error managing container {params.container_id}: {str(e)}"
+        error_msg = f"Error managing container {params.container_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg)
 

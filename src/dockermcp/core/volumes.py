@@ -38,7 +38,7 @@ class VolumeManager:
                 for vol in volumes['Volumes']
             ]
         except Exception as e:
-            logger.error(f"Error listing volumes: {str(e)}")
+            logger.error(f"Error listing volumes: {e!s}")
             raise
 
     # Add other volume operations here...

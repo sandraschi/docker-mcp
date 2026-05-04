@@ -4,8 +4,9 @@
 Quick verification script to check all imports that container_management.py expects.
 """
 
-import sys
 import os
+import sys
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
 def check_import(module_path, import_name):
@@ -26,7 +27,7 @@ def main():
     """Check all the imports that container_management.py expects."""
     print("🔍 Checking dockermcp container management imports...")
     print()
-    
+
     # Expected imports from container_management.py
     expected_imports = [
         ("dockermcp.tools.containers.list_containers", "list_containers"),
@@ -48,7 +49,7 @@ def main():
         ("dockermcp.tools.containers.container_images", "pull_image"),
         ("dockermcp.tools.containers.container_images", "build_image"),
     ]
-    
+
     # Expected parameter classes
     expected_params = [
         ("dockermcp.tools.containers.container_lifecycle", "ContainerLifecycleParams"),
@@ -69,25 +70,25 @@ def main():
         ("dockermcp.tools.containers.container_images", "PullImageParams"),
         ("dockermcp.tools.containers.container_images", "BuildImageParams"),
     ]
-    
+
     print("📋 Checking function imports...")
     missing_functions = 0
     for module_path, function_name in expected_imports:
         if not check_import(module_path, function_name):
             missing_functions += 1
-    
+
     print()
     print("📋 Checking parameter class imports...")
     missing_params = 0
     for module_path, param_name in expected_params:
         if not check_import(module_path, param_name):
             missing_params += 1
-            
+
     print()
-    print(f"📊 Summary:")
+    print("📊 Summary:")
     print(f"   Functions missing: {missing_functions}")
     print(f"   Parameters missing: {missing_params}")
-    
+
     if missing_functions == 0 and missing_params == 0:
         print("🎉 All imports are available!")
         return True

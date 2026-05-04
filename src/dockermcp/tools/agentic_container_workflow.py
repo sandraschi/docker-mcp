@@ -188,7 +188,7 @@ async def agentic_container_workflow(
         return build_error_response(
             error="Agentic container workflow execution failed",
             error_code="WORKFLOW_EXECUTION_ERROR",
-            message=f"An unexpected error occurred during the container workflow: {str(e)}",
+            message=f"An unexpected error occurred during the container workflow: {e!s}",
             recovery_options=[
                 "Check the workflow_prompt for clarity and valid container instructions",
                 "Ensure all container tools in available_tools are correctly implemented and registered",

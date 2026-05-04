@@ -3,10 +3,11 @@ Test script to verify Docker connection handling.
 """
 
 import asyncio
-import docker
 import logging
 import sys
 from pathlib import Path
+
+import docker
 
 # Add the project root to the Python path
 sys.path.append(str(Path(__file__).parent.parent))
@@ -27,14 +28,14 @@ async def test_docker_connection():
         print("✅ Docker is running")
         return True
     except Exception as e:
-        print(f"❌ Docker is not available: {str(e)}")
+        print(f"❌ Docker is not available: {e!s}")
         return False
 
 if __name__ == "__main__":
     # Run the test
     print("Testing Docker connection...")
     connected = asyncio.run(test_docker_connection())
-    
+
     if connected:
         print("\nTo test Docker down scenarios:")
         print("1. Stop Docker Desktop")

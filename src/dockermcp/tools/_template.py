@@ -75,7 +75,7 @@ async def example_tool(params: ExampleToolParams) -> dict[str, Any]:
         return result
 
     except Exception as e:
-        error_msg = f"Error in example_tool: {str(e)}"
+        error_msg = f"Error in example_tool: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

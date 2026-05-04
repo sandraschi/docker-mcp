@@ -39,7 +39,7 @@ class ContainerManager:
                 ]
             )
         except Exception as e:
-            logger.error(f"Error listing containers: {str(e)}")
+            logger.error(f"Error listing containers: {e!s}")
             raise
 
     # Add other container operations here...

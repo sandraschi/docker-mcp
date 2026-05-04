@@ -226,7 +226,7 @@ async def list_images(
                 image_list.append(image_info)
 
             except Exception as e:
-                logger.warning(f"Error processing image {image.id}: {str(e)}")
+                logger.warning(f"Error processing image {image.id}: {e!s}")
                 continue
 
         return {
@@ -236,17 +236,17 @@ async def list_images(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error listing images: {str(e)}"
+        error_msg = f"Unexpected error listing images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
@@ -326,17 +326,17 @@ async def get_image_history(image_id: str) -> dict[str, Any]:
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error getting image history: {str(e)}"
+        error_msg = f"Unexpected error getting image history: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
@@ -415,7 +415,7 @@ async def tag_image(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -425,7 +425,7 @@ async def tag_image(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -434,7 +434,7 @@ async def tag_image(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error tagging image: {str(e)}"
+        error_msg = f"Unexpected error tagging image: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -510,7 +510,7 @@ async def search_images(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -519,7 +519,7 @@ async def search_images(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -527,7 +527,7 @@ async def search_images(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error searching images: {str(e)}"
+        error_msg = f"Unexpected error searching images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',
@@ -606,7 +606,7 @@ async def prune_images(
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -614,7 +614,7 @@ async def prune_images(
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             'status': 'error',
@@ -622,7 +622,7 @@ async def prune_images(
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error pruning images: {str(e)}"
+        error_msg = f"Unexpected error pruning images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             'status': 'error',

@@ -320,7 +320,7 @@ async def remove_network(network_id: str, force: bool = False) -> dict[str, Any]
             "network_id": network_id
         }
     except Exception as e:
-        error_msg = f"Failed to remove network {network_id}: {str(e)}"
+        error_msg = f"Failed to remove network {network_id}: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",

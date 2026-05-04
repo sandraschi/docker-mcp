@@ -39,7 +39,7 @@ class NetworkManager:
                 for net in networks
             ]
         except Exception as e:
-            logger.error(f"Error listing networks: {str(e)}")
+            logger.error(f"Error listing networks: {e!s}")
             raise
 
     # Add other network operations here...

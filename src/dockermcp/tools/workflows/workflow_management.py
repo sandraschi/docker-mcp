@@ -96,7 +96,7 @@ class WorkflowManager:
             return workflow_state
 
         except Exception as e:
-            error_msg = f"Failed to create workflow: {str(e)}"
+            error_msg = f"Failed to create workflow: {e!s}"
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
@@ -134,7 +134,7 @@ class WorkflowManager:
             return workflow_state
 
         except Exception as e:
-            error_msg = f"Failed to start workflow {workflow_id}: {str(e)}"
+            error_msg = f"Failed to start workflow {workflow_id}: {e!s}"
             logger.error(error_msg, exc_info=True)
 
             # Update workflow state with error
@@ -176,7 +176,7 @@ class WorkflowManager:
             return workflow_state
 
         except Exception as e:
-            error_msg = f"Failed to stop workflow {workflow_id}: {str(e)}"
+            error_msg = f"Failed to stop workflow {workflow_id}: {e!s}"
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
@@ -202,7 +202,7 @@ class WorkflowManager:
             return self.workflows[workflow_id]
 
         except Exception as e:
-            error_msg = f"Failed to get status for workflow {workflow_id}: {str(e)}"
+            error_msg = f"Failed to get status for workflow {workflow_id}: {e!s}"
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
@@ -284,7 +284,7 @@ async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowRespons
         )
 
     except Exception as e:
-        error_msg = f"Failed to create workflow: {str(e)}"
+        error_msg = f"Failed to create workflow: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -340,7 +340,7 @@ async def start_workflow(params: StartWorkflowParams) -> StartWorkflowResponse:
             message="Workflow started successfully"
         )
     except Exception as e:
-        error_msg = f"Failed to start workflow: {str(e)}"
+        error_msg = f"Failed to start workflow: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -398,7 +398,7 @@ async def stop_workflow(
         )
 
     except Exception as e:
-        error_msg = f"Failed to stop workflow: {str(e)}"
+        error_msg = f"Failed to stop workflow: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -480,7 +480,7 @@ async def get_workflow_status(params: GetWorkflowStatusParams) -> WorkflowStatus
         )
 
     except Exception as e:
-        error_msg = f"Failed to get status for workflow {params.workflow_id}: {str(e)}"
+        error_msg = f"Failed to get status for workflow {params.workflow_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -567,6 +567,6 @@ async def list_workflows(
         )
 
     except Exception as e:
-        error_msg = f"Failed to list workflows: {str(e)}"
+        error_msg = f"Failed to list workflows: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e

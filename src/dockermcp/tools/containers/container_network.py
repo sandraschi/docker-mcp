@@ -224,14 +224,14 @@ async def list_networks(params: ListNetworksParams) -> dict[str, Any]:
         }
 
     except DockerException as e:
-        logger.error(f"Docker error listing networks: {str(e)}")
+        logger.error(f"Docker error listing networks: {e!s}")
         return {
             'status': 'error',
-            'message': f"Failed to list networks: {str(e)}",
+            'message': f"Failed to list networks: {e!s}",
             'error_type': 'docker_error'
         }
     except Exception as e:
-        logger.error(f"Unexpected error listing networks: {str(e)}", exc_info=True)
+        logger.error(f"Unexpected error listing networks: {e!s}", exc_info=True)
         return {
             'status': 'error',
             'message': 'An unexpected error occurred while listing networks',

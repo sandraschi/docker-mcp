@@ -193,7 +193,7 @@ async def list_volumes(params: ListVolumesParams) -> dict[str, Any]:
                 }
                 result.append(vol_info)
             except (KeyError, AttributeError) as e:
-                logger.warning(f"Error getting volume info: {str(e)}")
+                logger.warning(f"Error getting volume info: {e!s}")
                 vol_info['usage_data'] = None
                 result.append(vol_info)
 
@@ -208,12 +208,12 @@ async def list_volumes(params: ListVolumesParams) -> dict[str, Any]:
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -222,7 +222,7 @@ async def list_volumes(params: ListVolumesParams) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error listing volumes: {str(e)}"
+        error_msg = f"Unexpected error listing volumes: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -304,7 +304,7 @@ async def create_volume(params: CreateVolumeParams) -> dict[str, Any]:
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -313,7 +313,7 @@ async def create_volume(params: CreateVolumeParams) -> dict[str, Any]:
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -322,7 +322,7 @@ async def create_volume(params: CreateVolumeParams) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error creating volume: {str(e)}"
+        error_msg = f"Unexpected error creating volume: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -409,7 +409,7 @@ async def inspect_volume(params: InspectVolumeParams) -> dict[str, Any]:
         }
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -418,7 +418,7 @@ async def inspect_volume(params: InspectVolumeParams) -> dict[str, Any]:
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -427,7 +427,7 @@ async def inspect_volume(params: InspectVolumeParams) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f"Unexpected error inspecting volume: {str(e)}"
+        error_msg = f"Unexpected error inspecting volume: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -493,11 +493,11 @@ async def remove_volume(params: RemoveVolumeParams) -> dict[str, Any]:
             }
         return {
             "status": "error",
-            "message": f"Docker API error: {str(e)}",
+            "message": f"Docker API error: {e!s}",
             "error": "DOCKER_API_ERROR"
         }
     except Exception as e:
-        error_msg = f"Failed to remove volume '{params.name}': {str(e)}"
+        error_msg = f"Failed to remove volume '{params.name}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -557,7 +557,7 @@ async def prune_volumes(params: PruneVolumesParams) -> dict[str, Any]:
         }
 
     except docker.errors.APIError as e:
-        error_msg = f"Docker API error while pruning volumes: {str(e)}"
+        error_msg = f"Docker API error while pruning volumes: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -565,7 +565,7 @@ async def prune_volumes(params: PruneVolumesParams) -> dict[str, Any]:
             "error": "DOCKER_API_ERROR"
         }
     except docker.errors.DockerException as e:
-        error_msg = f"Docker error while pruning volumes: {str(e)}"
+        error_msg = f"Docker error while pruning volumes: {e!s}"
         logger.error(error_msg)
         return {
             "status": "error",
@@ -573,7 +573,7 @@ async def prune_volumes(params: PruneVolumesParams) -> dict[str, Any]:
             "error": "DOCKER_DAEMON_UNAVAILABLE"
         }
     except Exception as e:
-        error_msg = f"Unexpected error while pruning volumes: {str(e)}"
+        error_msg = f"Unexpected error while pruning volumes: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

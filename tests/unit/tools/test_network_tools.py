@@ -3,14 +3,13 @@ Tests for Docker network tools.
 
 This module contains tests for the network management functionality in the Docker MCP.
 """
-import asyncio
-import json
 import os
 import sys
+from collections.abc import Callable
+from typing import Any
+from unittest.mock import Mock, patch
+
 import pytest
-from datetime import datetime, timedelta, timezone
-from unittest.mock import AsyncMock, MagicMock, patch, Mock
-from typing import Dict, Any, List, Optional, Type, TypeVar, Generic, Callable
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
@@ -24,8 +23,8 @@ class ToolError(Exception):
 def Tool(
     name: str,
     description: str,
-    parameters: Dict[str, Any],
-    returns: Dict[str, Any],
+    parameters: dict[str, Any],
+    returns: dict[str, Any],
     **kwargs
 ) -> Callable:
     """Mock Tool decorator for testing."""
@@ -48,14 +47,14 @@ sys.modules['fastmcp.tools'] = Mock(Tool=Tool)
 # Now import the tools to test
 with patch('fastmcp.tools.Tool', Tool):
     from dockermcp.tools.networks.network_tools import (
-        prune_networks,
-        list_networks,
-        create_network,
-        remove_network,
         connect_container_to_network,
+        create_network,
         disconnect_container_from_network,
         get_network_stats,
-        inspect_network
+        inspect_network,
+        list_networks,
+        prune_networks,
+        remove_network,
     )
 
 # Test data
@@ -74,7 +73,7 @@ def mock_run_docker_command():
 # Test classes
 class TestPruneNetworks:
     """Tests for the prune_networks function."""
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_success(self, mock_run_docker_command):
         """Test successful network pruning."""
@@ -84,20 +83,20 @@ class TestPruneNetworks:
             "SpaceReclaimed": 1024
         }
         mock_run_docker_command.return_value = mock_response
-        
+
         # Call the function with a valid filter
         result = await prune_networks(
             filters={"until": "24h"},
             force=True,
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert len(result["networks_deleted"]) == 2
         assert result["space_reclaimed"] == 1024
         assert "Successfully pruned 2 networks" in result["message"]
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
         args, kwargs = mock_run_docker_command.await_args
@@ -106,54 +105,54 @@ class TestPruneNetworks:
         assert "--force" in args[1]
         assert "--filter" in args[1]
         assert "until=24h" in args[1]
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_no_networks(self, mock_run_docker_command):
         """Test pruning when no networks are found."""
         # Mock the Docker command response for no networks
         mock_run_docker_command.return_value = {"NetworksDeleted": None, "SpaceReclaimed": 0}
-        
+
         # Call the function
         result = await prune_networks()
-        
+
         # Verify the result
         assert result["success"] is True
         assert len(result["networks_deleted"]) == 0
         assert result["space_reclaimed"] == 0
         assert "No networks were pruned" in result["message"]
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_timeout(self, mock_run_docker_command):
         """Test network pruning with a timeout."""
         # Mock a timeout error
-        mock_run_docker_command.side_effect = asyncio.TimeoutError("Operation timed out")
-        
+        mock_run_docker_command.side_effect = TimeoutError("Operation timed out")
+
         # Call the function and expect an exception
         with pytest.raises(ToolError) as exc_info:
             await prune_networks(timeout=5)
-        
+
         # Verify the error message
         assert "timed out" in str(exc_info.value)
-    
+
     @pytest.mark.parametrize("invalid_timeout", [-1, 0, 301])
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_timeout(self, invalid_timeout):
         """Test network pruning with invalid timeout values."""
         with pytest.raises(ValueError):
             await prune_networks(timeout=invalid_timeout)
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_timeout_type(self):
         """Test network pruning with invalid timeout type."""
         with pytest.raises(TypeError):
             await prune_networks(timeout="not_an_int")
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_filters_type(self):
         """Test network pruning with invalid filters type."""
         with pytest.raises(TypeError):
             await prune_networks(filters="not_a_dict")
-    
+
     @pytest.mark.asyncio
     async def test_prune_networks_invalid_filter_values(self):
         """Test network pruning with invalid filter values."""
@@ -163,7 +162,7 @@ class TestPruneNetworks:
 # Add more test classes for other network tools
 class TestListNetworks:
     """Tests for the list_networks function."""
-    
+
     @pytest.mark.asyncio
     async def test_list_networks_success(self, mock_run_docker_command):
         """Test successful network listing."""
@@ -175,22 +174,22 @@ class TestListNetworks:
             "Scope": "local"
         }]
         mock_run_docker_command.return_value = mock_response
-        
+
         # Call the function
         result = await list_networks(verbose=True)
-        
+
         # Verify the result
         assert "networks" in result
         assert len(result["networks"]) == 1
         assert result["networks"][0]["Name"] == TEST_NETWORK_NAME
         assert result["success"] is True
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 class TestCreateNetwork:
     """Tests for the create_network function."""
-    
+
     @pytest.mark.asyncio
     async def test_create_network_success(self, mock_run_docker_command):
         """Test successful network creation."""
@@ -200,54 +199,54 @@ class TestCreateNetwork:
             "Warning": ""
         }
         mock_run_docker_command.return_value = mock_response
-        
+
         # Call the function
         result = await create_network(
             name=TEST_NETWORK_NAME,
             driver="bridge",
             enable_ipv6=False
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert "id" in result
         assert result["id"] == TEST_NETWORK_ID
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 class TestRemoveNetwork:
     """Tests for the remove_network function."""
-    
+
     @pytest.mark.asyncio
     async def test_remove_network_success(self, mock_run_docker_command):
         """Test successful network removal."""
         # Mock the Docker command response
         mock_run_docker_command.return_value = None  # No output on success
-        
+
         # Call the function
         result = await remove_network(
             network_id=TEST_NETWORK_ID,
             force=True,
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert "successfully removed" in result["message"].lower()
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 class TestConnectContainerToNetwork:
     """Tests for the connect_container_to_network function."""
-    
+
     @pytest.mark.asyncio
     async def test_connect_container_success(self, mock_run_docker_command):
         """Test successful container connection to network."""
         # Mock the Docker command response
         mock_run_docker_command.return_value = None  # No output on success
-        
+
         # Call the function
         result = await connect_container_to_network(
             container_id=TEST_CONTAINER_ID,
@@ -256,23 +255,23 @@ class TestConnectContainerToNetwork:
             aliases=["test-alias"],
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert "connected" in result["message"].lower()
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 class TestDisconnectContainerFromNetwork:
     """Tests for the disconnect_container_from_network function."""
-    
+
     @pytest.mark.asyncio
     async def test_disconnect_container_success(self, mock_run_docker_command):
         """Test successful container disconnection from network."""
         # Mock the Docker command response
         mock_run_docker_command.return_value = None  # No output on success
-        
+
         # Call the function
         result = await disconnect_container_from_network(
             container_id=TEST_CONTAINER_ID,
@@ -280,17 +279,17 @@ class TestDisconnectContainerFromNetwork:
             force=True,
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert "disconnected" in result["message"].lower()
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 class TestGetNetworkStats:
     """Tests for the get_network_stats function."""
-    
+
     @pytest.mark.asyncio
     async def test_get_network_stats_success(self, mock_run_docker_command):
         """Test successful retrieval of network statistics."""
@@ -313,7 +312,7 @@ class TestGetNetworkStats:
                 }
             }
         }]
-        
+
         mock_stats_response = {
             "networks": {
                 "eth0": {
@@ -324,33 +323,33 @@ class TestGetNetworkStats:
                 }
             }
         }
-        
+
         # Configure the mock to return different values on subsequent calls
         mock_run_docker_command.side_effect = [
             mock_inspect_response,  # network inspect
             mock_stats_response    # container stats
         ]
-        
+
         # Call the function
         result = await get_network_stats(
             network_id=TEST_NETWORK_ID,
             verbose=True,
             timeout=30
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert result["network_id"] == TEST_NETWORK_ID
         assert result["network_name"] == TEST_NETWORK_NAME
         assert len(result["containers"]) == 1
         assert "stats" in result["containers"][0]
-        
+
         # Verify the Docker commands were called correctly
         assert mock_run_docker_command.await_count == 2
 
 class TestInspectNetwork:
     """Tests for the inspect_network function."""
-    
+
     @pytest.mark.asyncio
     async def test_inspect_network_success(self, mock_run_docker_command):
         """Test successful network inspection."""
@@ -367,24 +366,24 @@ class TestInspectNetwork:
             "Options": {}
         }]
         mock_run_docker_command.return_value = mock_response
-        
+
         # Call the function
         result = await inspect_network(
             network_id=TEST_NETWORK_ID,
             verbose=True
         )
-        
+
         # Verify the result
         assert result["success"] is True
         assert result["id"] == TEST_NETWORK_ID
         assert result["name"] == TEST_NETWORK_NAME
         assert "ipam" in result
-        
+
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
 # Helper functions for testing
-def validate_network_response(response: Dict[str, Any]) -> None:
+def validate_network_response(response: dict[str, Any]) -> None:
     """
     Validate the structure of a network response.
     
@@ -398,7 +397,7 @@ def validate_network_response(response: Dict[str, Any]) -> None:
     assert "success" in response, "Response must contain 'success' key"
     assert "message" in response, "Response must contain 'message' key"
     assert isinstance(response["message"], str), "Message must be a string"
-    
+
     if response["success"]:
         assert "id" in response or "networks" in response, \
             "Successful response must contain 'id' or 'networks' key"

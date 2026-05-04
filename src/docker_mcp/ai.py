@@ -1,7 +1,7 @@
-from typing import List, Dict, Any, Optional
-from fastmcp import FastMCP
-import httpx
 import os
+from typing import Any
+
+from fastmcp import FastMCP
 
 
 class AIRouter:
@@ -13,7 +13,7 @@ class AIRouter:
         self.endpoint = os.getenv("AI_ENDPOINT", "http://localhost:11434")
         self.model = os.getenv("AI_MODEL", "gemini-2.0-flash-exp")
 
-    async def process_command(self, query: str) -> Dict[str, Any]:
+    async def process_command(self, query: str) -> dict[str, Any]:
         """Process natural language query and map to Docker MCP tools."""
         # Standard SOTA pattern: attempt to call tools via MCP
         try:
@@ -25,4 +25,4 @@ class AIRouter:
                 "status": "success",
             }
         except Exception as e:
-            return {"response": f"AI Routing Error: {str(e)}", "status": "error"}
+            return {"response": f"AI Routing Error: {e!s}", "status": "error"}

@@ -166,7 +166,7 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
             process.kill()
 
     except Exception as e:
-        result["issues"].append(f"Error checking daemon: {str(e)}")
+        result["issues"].append(f"Error checking daemon: {e!s}")
         check_result["status"] = "error"
         check_result["error"] = str(e)
 
@@ -439,7 +439,7 @@ def _add_recommendations(result: dict) -> None:
 
     # Check disk usage
     disk = result["checks"].get("disk_usage", {})
-    if "usage" in disk and disk["usage"]:
+    if disk.get("usage"):
         # Note: could parse to check for specific thresholds
         result["recommendations"].append(
             "Run periodic cleanup: docker system prune -a"

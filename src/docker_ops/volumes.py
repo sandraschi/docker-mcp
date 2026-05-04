@@ -4,7 +4,8 @@ Handles Docker volume operations with proper error handling and type hints.
 """
 import json
 import subprocess
-from typing import Dict, List, Any, Optional
+from typing import Any
+
 from dockermcp.logging_config import logger
 
 # Get a child logger for this module
@@ -14,8 +15,8 @@ class VolumeManager:
     """
     Handles Docker volume operations with proper error handling.
     """
-    
-    def list_volumes(self) -> Dict[str, Any]:
+
+    def list_volumes(self) -> dict[str, Any]:
         """
         List all Docker volumes.
         
@@ -29,19 +30,19 @@ class VolumeManager:
                 text=True,
                 check=True
             )
-            
+
             # Parse the JSON output
             volumes = []
             for line in result.stdout.strip().split('\n'):
                 if line:
                     volumes.append(json.loads(line))
-            
+
             return {
                 'success': True,
                 'volumes': volumes,
                 'count': len(volumes)
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to list volumes: {e.stderr}")
             return {
@@ -58,8 +59,8 @@ class VolumeManager:
                 'volumes': [],
                 'count': 0
             }
-    
-    def create_volume(self, name: str, driver: str = "local") -> Dict[str, Any]:
+
+    def create_volume(self, name: str, driver: str = "local") -> dict[str, Any]:
         """
         Create a new Docker volume.
         
@@ -77,13 +78,13 @@ class VolumeManager:
                 text=True,
                 check=True
             )
-            
+
             return {
                 'success': True,
                 'volume_name': result.stdout.strip(),
                 'driver': driver
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to create volume {name}: {e.stderr}")
             return {
@@ -92,8 +93,8 @@ class VolumeManager:
                 'volume_name': name,
                 'driver': driver
             }
-    
-    def remove_volume(self, volume_name: str, force: bool = False) -> Dict[str, Any]:
+
+    def remove_volume(self, volume_name: str, force: bool = False) -> dict[str, Any]:
         """
         Remove a Docker volume.
         
@@ -108,7 +109,7 @@ class VolumeManager:
         if force:
             cmd.append('--force')
         cmd.append(volume_name)
-        
+
         try:
             subprocess.run(
                 cmd,
@@ -116,13 +117,13 @@ class VolumeManager:
                 text=True,
                 check=True
             )
-            
+
             return {
                 'success': True,
                 'volume_name': volume_name,
                 'message': f"Volume {volume_name} removed successfully"
             }
-            
+
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove volume {volume_name}: {e.stderr}")
             return {

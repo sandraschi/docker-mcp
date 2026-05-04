@@ -1,10 +1,11 @@
 """Helper functions for managing environment variables in tests."""
 import os
+from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Dict, Iterator, Optional
+
 
 @contextmanager
-def set_env_vars(env_vars: Dict[str, str]) -> Iterator[None]:
+def set_env_vars(env_vars: dict[str, str]) -> Iterator[None]:
     """Temporarily set environment variables for testing.
     
     Args:
@@ -20,18 +21,18 @@ def set_env_vars(env_vars: Dict[str, str]) -> Iterator[None]:
         # Environment variable is restored here
     """
     old_env = {}
-    
+
     # Store old values
     for key, value in env_vars.items():
         old_env[key] = os.environ.get(key)
-        
+
         # Set new values
         if value is None:
             if key in os.environ:
                 del os.environ[key]
         else:
             os.environ[key] = value
-    
+
     try:
         yield
     finally:
@@ -43,7 +44,7 @@ def set_env_vars(env_vars: Dict[str, str]) -> Iterator[None]:
             else:
                 os.environ[key] = old_value
 
-def get_test_env() -> Dict[str, str]:
+def get_test_env() -> dict[str, str]:
     """Get a dictionary of test environment variables."""
     return {
         "DOCKER_HOST": os.environ.get("DOCKER_HOST", "unix:///var/run/docker.sock"),
@@ -76,9 +77,9 @@ def only_in_ci():
 
 def skip_if_no_docker():
     """Decorator to skip a test if Docker is not available."""
-    import pytest
     import docker
-    
+    import pytest
+
     try:
         docker.from_env().ping()
         return lambda func: func

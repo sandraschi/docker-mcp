@@ -1,25 +1,26 @@
 """Test helpers for monitoring stack tests."""
+from typing import Any
+from unittest.mock import MagicMock
+
 import pytest
-from typing import Dict, Any
-from unittest.mock import patch, MagicMock
 
 
 def mock_docker_client():
     """Create a mock Docker client for testing."""
     mock_client = MagicMock()
-    
+
     # Mock containers
     mock_container = MagicMock()
     mock_container.status = 'running'
     mock_container.labels = {'com.docker.compose.service': 'prometheus'}
     mock_container.ports = {'9090/tcp': [{'HostIp': '0.0.0.0', 'HostPort': '9091'}]}
-    
+
     mock_client.containers.list.return_value = [mock_container]
     return mock_client
 
 
 @pytest.fixture
-def monitoring_config() -> Dict[str, Any]:
+def monitoring_config() -> dict[str, Any]:
     """Return a sample monitoring configuration."""
     return {
         'services': {

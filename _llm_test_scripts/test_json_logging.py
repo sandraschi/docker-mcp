@@ -7,9 +7,10 @@ import logging
 import sys
 from datetime import datetime
 
+
 class JSONFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
-    
+
     def format(self, record):
         log_record = {
             'timestamp': datetime.utcnow().isoformat() + 'Z',
@@ -22,19 +23,19 @@ class JSONFormatter(logging.Formatter):
             'thread': record.thread,
             'process': record.process,
         }
-        
+
         # Add exception info if present
         if record.exc_info:
             log_record['exception'] = self.formatException(record.exc_info)
-        
+
         # Add any extra attributes
         for key, value in record.__dict__.items():
-            if key not in ('args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename', 'levelname', 
-                          'levelno', 'lineno', 'module', 'msecs', 'message', 'msg', 'name', 'pathname', 
+            if key not in ('args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename', 'levelname',
+                          'levelno', 'lineno', 'module', 'msecs', 'message', 'msg', 'name', 'pathname',
                           'process', 'processName', 'relativeCreated', 'stack_info', 'thread', 'threadName'):
                 if key not in log_record:  # Don't override existing fields
                     log_record[key] = value
-        
+
         return json.dumps(log_record, default=str)
 
 def setup_logging():
@@ -55,18 +56,18 @@ def setup_logging():
 def test_logging():
     """Test different log levels and structured logging."""
     logger = logging.getLogger("test_logger")
-    
+
     # Test different log levels
     logger.debug("This is a debug message", extra={"key1": "value1"})
     logger.info("This is an info message", extra={"key2": 123})
     logger.warning("This is a warning", extra={"key3": [1, 2, 3]})
-    
+
     try:
         # Generate an error with stack trace
         result = 1 / 0
-    except Exception as e:
+    except Exception:
         logger.error("An error occurred", exc_info=True, extra={"key4": {"nested": "value"}})
-    
+
     logger.critical("This is a critical message", extra={"key5": True})
 
 if __name__ == "__main__":

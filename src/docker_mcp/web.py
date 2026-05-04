@@ -1,19 +1,20 @@
-from fastapi import FastAPI, Body, Depends
+from fastapi import Body, Depends, FastAPI
 from fastmcp import FastMCP
-from .ai import AIRouter
-from .auth import authenticate
 
 from dockermcp.tools.containers.list_containers import (
-    list_containers,
     ListContainersParams,
-)
-from dockermcp.tools.system.system_management import (
-    get_system_info,
-    get_disk_usage,
-    SystemInfoRequest,
-    DiskUsageRequest,
+    list_containers,
 )
 from dockermcp.tools.images.image_management import list_images
+from dockermcp.tools.system.system_management import (
+    DiskUsageRequest,
+    SystemInfoRequest,
+    get_disk_usage,
+    get_system_info,
+)
+
+from .ai import AIRouter
+from .auth import authenticate
 
 
 def setup_webapp(app: FastAPI, mcp_app: FastMCP):
@@ -60,11 +61,11 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
         )
         disk_result = await get_disk_usage(DiskUsageRequest(detailed=False))
         images_result = await list_images()
-        
+
         # Ensure results are dictionaries for .get() access
         containers_dict = containers_result if isinstance(containers_result, dict) else {}
         images_dict = images_result if isinstance(images_result, dict) else {}
-        
+
         sys_info = (
             system_result.system_info
             if hasattr(system_result, "system_info")

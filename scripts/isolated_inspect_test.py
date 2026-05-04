@@ -1,10 +1,10 @@
 """
 Completely isolated test for the inspect_container function.
 """
-import sys
-import os
 import asyncio
-from unittest.mock import MagicMock, patch
+import os
+import sys
+from unittest.mock import MagicMock
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -16,6 +16,7 @@ sys.modules['docker'] = mock_docker
 # Now import the module we want to test
 from dockermcp.tools.containers.container_inspect import inspect_container
 
+
 async def test_inspect_container():
     """Test the inspect_container function with a mock Docker client."""
     # Create a mock container
@@ -26,20 +27,20 @@ async def test_inspect_container():
         'State': {'Status': 'running'},
         'Config': {'Image': 'test-image'},
     }
-    
+
     # Configure the mock Docker client
     mock_docker.from_env.return_value.containers.get.return_value = mock_container
-    
+
     # Call the function directly
     result = await inspect_container(container_id='test123')
-    
+
     # Verify the result
     assert 'container_id' in result
     assert result['status'] == 'success'
     assert 'data' in result
     assert result['data']['id'] == 'test123'
     assert result['data']['name'] == 'test-container'
-    
+
     print("✅ Test passed: inspect_container")
     return True
 

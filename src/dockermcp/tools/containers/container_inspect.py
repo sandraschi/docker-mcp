@@ -517,7 +517,7 @@ class ContainerInspectResponse(BaseModel):
             # Try to get the IP address from network settings
             networks = self.network_settings.get('Networks', {})
             for network in networks.values():
-                if 'IPAddress' in network and network['IPAddress']:
+                if network.get('IPAddress'):
                     return network['IPAddress']
             return None
         except Exception as e:
@@ -630,7 +630,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
         )
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return BaseResponse[ContainerInspectResponse].error(
             error="docker_api_error",
@@ -639,7 +639,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
         )
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return BaseResponse[ContainerInspectResponse].error(
             error="docker_error",
@@ -648,7 +648,7 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
         )
 
     except Exception as e:
-        error_msg = f"Error inspecting container {request.container_id}: {str(e)}"
+        error_msg = f"Error inspecting container {request.container_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
         return BaseResponse[ContainerInspectResponse].error(
             error="unexpected_error",

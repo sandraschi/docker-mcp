@@ -154,7 +154,7 @@ async def list_images(params: ImageListRequest) -> ContainerImageResponse:
                 image_list.append(image_info)
 
             except Exception as e:
-                logger.warning(f"Error processing image {getattr(image, 'id', 'unknown')}: {str(e)}")
+                logger.warning(f"Error processing image {getattr(image, 'id', 'unknown')}: {e!s}")
                 continue
 
         return ContainerImageResponse.success(
@@ -164,7 +164,7 @@ async def list_images(params: ImageListRequest) -> ContainerImageResponse:
         )
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -172,7 +172,7 @@ async def list_images(params: ImageListRequest) -> ContainerImageResponse:
         )
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -180,7 +180,7 @@ async def list_images(params: ImageListRequest) -> ContainerImageResponse:
         )
 
     except Exception as e:
-        error_msg = f"Unexpected error listing images: {str(e)}"
+        error_msg = f"Unexpected error listing images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -247,7 +247,7 @@ async def pull_image(params: ImagePullRequest) -> ContainerImageResponse:
         )
 
     except APIError as e:
-        error_msg = f"Failed to pull image {params.repository}:{params.tag}: {str(e)}"
+        error_msg = f"Failed to pull image {params.repository}:{params.tag}: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -255,7 +255,7 @@ async def pull_image(params: ImagePullRequest) -> ContainerImageResponse:
         )
 
     except Exception as e:
-        error_msg = f"Unexpected error pulling image: {str(e)}"
+        error_msg = f"Unexpected error pulling image: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -332,7 +332,7 @@ async def build_image(params: ImageBuildRequest) -> ContainerImageResponse:
                 )
 
         except BuildError as e:
-            error_msg = f"Build error: {str(e)}"
+            error_msg = f"Build error: {e!s}"
             logger.error(error_msg, exc_info=True)
             return ContainerImageResponse.error(
                 error=error_msg,
@@ -341,7 +341,7 @@ async def build_image(params: ImageBuildRequest) -> ContainerImageResponse:
             )
 
     except Exception as e:
-        error_msg = f"Unexpected error during build: {str(e)}"
+        error_msg = f"Unexpected error during build: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerImageResponse.error(
             error=error_msg,
@@ -383,7 +383,7 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
         )
 
     except APIError as e:
-        error_msg = f"Failed to remove image {params.image}: {str(e)}"
+        error_msg = f"Failed to remove image {params.image}: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerOperationResponse.error(
             error=error_msg,
@@ -391,7 +391,7 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
         )
 
     except Exception as e:
-        error_msg = f"Unexpected error removing image: {str(e)}"
+        error_msg = f"Unexpected error removing image: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerOperationResponse.error(
             error=error_msg,
@@ -400,14 +400,14 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
 
 # Register the tools with MCP
 __all__ = [
+    'ImageBuildRequest',
+    'ImageBuildStatus',
+    'ImageListRequest',
+    'ImagePullPolicy',
+    'ImagePullRequest',
+    'ImageRemoveRequest',
+    'build_image',
     'list_images',
     'pull_image',
-    'build_image',
-    'remove_image',
-    'ImageListRequest',
-    'ImagePullRequest',
-    'ImageBuildRequest',
-    'ImageRemoveRequest',
-    'ImagePullPolicy',
-    'ImageBuildStatus'
+    'remove_image'
 ]

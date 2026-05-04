@@ -42,7 +42,7 @@ class SystemManager:
                 'docker_root_dir': info['DockerRootDir']
             }
         except Exception as e:
-            logger.error(f"Error getting system info: {str(e)}")
+            logger.error(f"Error getting system info: {e!s}")
             raise
 
     # Add other system operations here...

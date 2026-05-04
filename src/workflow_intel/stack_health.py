@@ -3,9 +3,10 @@ Stack health checking functionality for Docker MCP.
 Provides tools to monitor and report on the health of Docker stacks.
 """
 import json
-from dockermcp.utils import run_docker_command
-from typing import Dict, Any, List, Optional
+from typing import Any
+
 from dockermcp.logging_config import logger
+from dockermcp.utils import run_docker_command
 
 # Get a child logger for this module
 logger = logger.getChild('health')
@@ -14,8 +15,8 @@ class StackHealthChecker:
     """
     Provides stack health checking functionality for Docker environments.
     """
-    
-    def check_stack_health(self, stack_name: str) -> Dict[str, Any]:
+
+    def check_stack_health(self, stack_name: str) -> dict[str, Any]:
         """
         Check the health of a Docker stack.
         
@@ -28,27 +29,27 @@ class StackHealthChecker:
         try:
             # Get stack services using the utility function
             services = run_docker_command('stack', ['ps', stack_name], format_json=True)
-            
+
             if result.returncode != 0:
                 return {
                     'success': False,
                     'error': f"Failed to get stack services: {result.stderr}",
                     'stack': stack_name
                 }
-            
+
             # Parse service information
             services = []
             for line in result.stdout.strip().split('\n'):
                 if line:
                     services.append(json.loads(line))
-            
+
             if not services:
                 return {
                     'success': False,
                     'error': f"No services found in stack: {stack_name}",
                     'stack': stack_name
                 }
-            
+
             # Check service status
             unhealthy_services = []
             for service in services:
@@ -58,9 +59,9 @@ class StackHealthChecker:
                         'state': service.get('CurrentState', 'unknown'),
                         'error': service.get('Error', '')
                     })
-            
+
             is_healthy = len(unhealthy_services) == 0
-            
+
             return {
                 'success': True,
                 'healthy': is_healthy,
@@ -69,7 +70,7 @@ class StackHealthChecker:
                 'unhealthy_services': unhealthy_services,
                 'unhealthy_count': len(unhealthy_services)
             }
-            
+
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse stack health data: {e}")
             return {
@@ -78,14 +79,14 @@ class StackHealthChecker:
                 'stack': stack_name
             }
         except Exception as e:
-            logger.error(f"Error checking stack health: {str(e)}")
+            logger.error(f"Error checking stack health: {e!s}")
             return {
                 'success': False,
-                'error': f"Error checking stack health: {str(e)}",
+                'error': f"Error checking stack health: {e!s}",
                 'stack': stack_name
             }
-    
-    def get_failed_containers(self, stack_name: str) -> Dict[str, Any]:
+
+    def get_failed_containers(self, stack_name: str) -> dict[str, Any]:
         """
         Get a list of failed containers in a stack.
         
@@ -98,19 +99,19 @@ class StackHealthChecker:
         try:
             # Get running stack services using the utility function
             services = run_docker_command('stack', ['ps', '--filter', 'desired-state=running', stack_name], format_json=True)
-            
+
             if result.returncode != 0:
                 return {
                     'success': False,
                     'error': f"Failed to get stack services: {result.stderr}",
                     'stack': stack_name
                 }
-            
+
             failed_containers = []
             for line in result.stdout.strip().split('\n'):
                 if not line:
                     continue
-                
+
                 try:
                     service = json.loads(line)
                     if service.get('CurrentState') != 'Running':
@@ -125,18 +126,18 @@ class StackHealthChecker:
                         })
                 except json.JSONDecodeError:
                     continue
-            
+
             return {
                 'success': True,
                 'stack': stack_name,
                 'failed_containers': failed_containers,
                 'failed_count': len(failed_containers)
             }
-            
+
         except Exception as e:
-            logger.error(f"Error getting failed containers: {str(e)}")
+            logger.error(f"Error getting failed containers: {e!s}")
             return {
                 'success': False,
-                'error': f"Error getting failed containers: {str(e)}",
+                'error': f"Error getting failed containers: {e!s}",
                 'stack': stack_name
             }

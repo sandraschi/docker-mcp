@@ -58,7 +58,7 @@ async def list_containers(all: bool = True) -> ContainerListResponse:
             data=[]  # Placeholder
         )
     except Exception as e:
-        logger.error(f"Error listing containers: {str(e)}")
+        logger.error(f"Error listing containers: {e!s}")
         return ContainerListResponse(
             success=False,
             message="Failed to list containers",

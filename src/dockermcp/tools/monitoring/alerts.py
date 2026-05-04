@@ -119,7 +119,7 @@ async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
             logger.error("Failed to parse alert rules file: %s", str(e))
             return {
                 "status": "error",
-                "error": f"Invalid alert rules file: {str(e)}"
+                "error": f"Invalid alert rules file: {e!s}"
             }
 
         # Format the output
@@ -148,7 +148,7 @@ async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
             "output": output if params.format != 'json' else json.loads(output)
         }
     except Exception as e:
-        error_msg = f"Failed to list alert rules: {str(e)}"
+        error_msg = f"Failed to list alert rules: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -247,7 +247,7 @@ async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
                 with open(alert_rules_dir) as f:
                     rules = yaml.safe_load(f) or rules
             except yaml.YAMLError as e:
-                error_msg = f"Failed to load existing alert rules: {str(e)}"
+                error_msg = f"Failed to load existing alert rules: {e!s}"
                 logger.error(error_msg)
                 return {
                     "status": "error",
@@ -279,14 +279,14 @@ async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
                 "updated": alert_updated
             }
         except OSError as e:
-            error_msg = f"Failed to save alert rules: {str(e)}"
+            error_msg = f"Failed to save alert rules: {e!s}"
             logger.error(error_msg)
             return {
                 "status": "error",
                 "error": error_msg
             }
     except Exception as e:
-        error_msg = f"Failed to add alert rule: {str(e)}"
+        error_msg = f"Failed to add alert rule: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -330,7 +330,7 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
             with open(alert_rules_dir) as f:
                 rules = yaml.safe_load(f) or {}
         except yaml.YAMLError as e:
-            error_msg = f"Failed to load alert rules: {str(e)}"
+            error_msg = f"Failed to load alert rules: {e!s}"
             logger.error(error_msg)
             return {
                 "status": "error",
@@ -366,14 +366,14 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
                 "removed_alert": params.name
             }
         except OSError as e:
-            error_msg = f"Failed to save alert rules: {str(e)}"
+            error_msg = f"Failed to save alert rules: {e!s}"
             logger.error(error_msg)
             return {
                 "status": "error",
                 "error": error_msg
             }
     except Exception as e:
-        error_msg = f"Failed to remove alert rule: {str(e)}"
+        error_msg = f"Failed to remove alert rule: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

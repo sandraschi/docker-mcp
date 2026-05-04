@@ -77,7 +77,7 @@ class MonitoringBackup:
         except Exception as e:
             return {
                 "status": "error",
-                "error": f"Failed to create backup: {str(e)}"
+                "error": f"Failed to create backup: {e!s}"
             }
 
     def restore_backup(self, backup_file: str | Path, target_dir: str | Path = "/") -> dict[str, Any]:
@@ -117,7 +117,7 @@ class MonitoringBackup:
         except Exception as e:
             return {
                 "status": "error",
-                "error": f"Failed to restore backup: {str(e)}"
+                "error": f"Failed to restore backup: {e!s}"
             }
 
     def list_backups(self) -> dict[str, Any]:
@@ -147,7 +147,7 @@ class MonitoringBackup:
         except Exception as e:
             return {
                 "status": "error",
-                "error": f"Failed to list backups: {str(e)}"
+                "error": f"Failed to list backups: {e!s}"
             }
 
 # Pydantic Models for Parameters
@@ -222,7 +222,7 @@ async def create_monitoring_backup(params: CreateBackupParams) -> dict[str, Any]
         manager = MonitoringBackup(params.backup_dir) if params.backup_dir else backup_manager
         return manager.create_backup(params.output_file)
     except Exception as e:
-        error_msg = f"Failed to create backup: {str(e)}"
+        error_msg = f"Failed to create backup: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -254,7 +254,7 @@ async def restore_monitoring_backup(params: RestoreBackupParams) -> dict[str, An
     try:
         return backup_manager.restore_backup(params.backup_file, params.target_dir)
     except Exception as e:
-        error_msg = f"Failed to restore backup: {str(e)}"
+        error_msg = f"Failed to restore backup: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -291,7 +291,7 @@ async def list_monitoring_backups(params: ListBackupsParams) -> dict[str, Any]:
         manager = MonitoringBackup(params.backup_dir) if params.backup_dir else backup_manager
         return manager.list_backups()
     except Exception as e:
-        error_msg = f"Failed to list backups: {str(e)}"
+        error_msg = f"Failed to list backups: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

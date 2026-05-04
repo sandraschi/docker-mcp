@@ -63,7 +63,7 @@ async def open_grafana(params: OpenGrafanaParams) -> dict[str, Any]:
             "url": url
         }
     except Exception as e:
-        error_msg = f"Failed to open Grafana: {str(e)}"
+        error_msg = f"Failed to open Grafana: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -114,7 +114,7 @@ async def open_prometheus(params: OpenPrometheusParams) -> dict[str, Any]:
             "url": url
         }
     except Exception as e:
-        error_msg = f"Failed to open Prometheus: {str(e)}"
+        error_msg = f"Failed to open Prometheus: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -165,7 +165,7 @@ async def open_loki(params: OpenLokiParams) -> dict[str, Any]:
             "url": url
         }
     except Exception as e:
-        error_msg = f"Failed to open Loki: {str(e)}"
+        error_msg = f"Failed to open Loki: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -258,7 +258,7 @@ async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> di
                 "dashboard": params.dashboard
             }
         except Exception as e:
-            error_msg = f"Failed to open {params.dashboard} dashboard: {str(e)}"
+            error_msg = f"Failed to open {params.dashboard} dashboard: {e!s}"
             logger.error(error_msg, exc_info=True)
             return {
                 "status": "error",
@@ -267,7 +267,7 @@ async def open_monitoring_dashboard(params: OpenMonitoringDashboardParams) -> di
                 "url": f"http://localhost:{params.port}"
             }
     except Exception as e:
-        error_msg = f"Failed to open {params.dashboard} dashboard: {str(e)}"
+        error_msg = f"Failed to open {params.dashboard} dashboard: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

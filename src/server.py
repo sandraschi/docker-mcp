@@ -7,11 +7,9 @@ Main entry point for the Docker MCP server using FastMCP 2.12 tool registration.
 
 import asyncio
 import logging
-import os
 import sys
 import warnings
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
 
 # Suppress all warnings
 warnings.filterwarnings("ignore")
@@ -26,12 +24,11 @@ for logger_name in ["fastmcp", "mcp", "uvicorn", "httpx", "httpcore", "h11", "as
     logging.getLogger(logger_name).setLevel(logging.CRITICAL)
 
 # Import our logging configuration
-from dockermcp.logging_config import configure_logging, logger
-from fastmcp import FastMCP
-from fastapi import FastAPI, Depends
-from docker_mcp.auth import authenticate
-from docker_mcp.web import setup_webapp
+from fastapi import FastAPI
+
 from docker_mcp.transport import run_server
+from docker_mcp.web import setup_webapp
+from dockermcp.logging_config import configure_logging, logger
 
 # Configure our specific logging
 configure_logging(
@@ -43,6 +40,7 @@ configure_logging(
 
 # Use the shared MCP instance that has all tools registered (from dockermcp)
 from dockermcp.mcp_instance import get_mcp
+
 mcp = get_mcp()
 
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
@@ -52,16 +50,16 @@ web_app = FastAPI(title="Docker Management Web Bridge")
 setup_webapp(web_app, mcp_app=mcp)
 
 
-def get_all_tools() -> List[callable]:
+def get_all_tools() -> list[callable]:
     """
     Discover all FastMCP 2.12+ tools by scanning for @Tool decorated functions.
 
     Returns:
         List of tool functions that have been decorated with @Tool
     """
-    from inspect import isfunction, getmembers
     import importlib
     import pkgutil
+    from inspect import getmembers, isfunction
     from pathlib import Path
 
     tools_dir = Path(__file__).parent / "dockermcp" / "tools"
@@ -134,10 +132,6 @@ def main():
         logs_dir = Path("logs")
         logs_dir.mkdir(exist_ok=True)
 
-        # Redirect stdout and stderr to log files
-        sys.stdout = open(logs_dir / "stdout.log", "w")
-        sys.stderr = open(logs_dir / "stderr.log", "w")
-
         # Create and run the event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
@@ -154,7 +148,7 @@ def main():
             loop.close()
 
     except Exception as e:
-        logger.error(f"Error starting Docker MCP server: {str(e)}", exc_info=True)
+        logger.error(f"Error starting Docker MCP server: {e!s}", exc_info=True)
         return 1
 
     return 0

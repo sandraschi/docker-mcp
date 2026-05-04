@@ -1,8 +1,10 @@
 """Tests for the mock MCP server."""
+
 import pytest
 import requests
-import json
+
 from tests.mocks.mock_mcp_server import MockMCPServer
+
 
 def test_mock_server_basic():
     """Test basic functionality of the mock MCP server."""
@@ -11,7 +13,7 @@ def test_mock_server_basic():
         response = requests.get("http://localhost:8001/health")
         assert response.status_code == 200
         assert response.json() == {"status": "ok", "version": "1.0.0"}
-        
+
         # Test listing containers (should be empty initially)
         response = requests.get("http://localhost:8001/containers")
         assert response.status_code == 200
@@ -28,16 +30,16 @@ def test_container_lifecycle():
             "Image": "alpine:latest",
             "State": {"Status": "created", "Running": False}
         }
-        
+
         # Test getting container logs
         response = requests.get(f"http://localhost:8001/containers/{container_id}/logs")
         assert response.status_code == 200
         assert response.text == f"Mock logs for container {container_id}\n"
-        
+
         # Test starting the container
         response = requests.post(f"http://localhost:8001/containers/{container_id}/start")
         assert response.status_code == 204
-        
+
         # Verify container is running
         response = requests.get(f"http://localhost:8001/containers/{container_id}")
         assert response.status_code == 200
@@ -52,14 +54,14 @@ def test_image_operations():
         response = requests.get("http://localhost:8001/images")
         assert response.status_code == 200
         initial_image_count = len(response.json())
-        
+
         # Test pulling an image
         response = requests.post(
             "http://localhost:8001/images/pull",
             json={"fromImage": "nginx:latest"}
         )
         assert response.status_code == 200
-        
+
         # Verify the image was added
         response = requests.get("http://localhost:8001/images")
         assert len(response.json()) == initial_image_count + 1
@@ -68,5 +70,6 @@ def test_image_operations():
 if __name__ == "__main__":
     # Run the tests
     import sys
+
     import pytest
     sys.exit(pytest.main([__file__] + sys.argv[1:]))

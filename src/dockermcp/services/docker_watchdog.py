@@ -90,7 +90,7 @@ class DockerWatchdog:
             return {'success': False, 'error': error_msg}
 
         except Exception as e:
-            error_msg = f"Error restarting Docker service: {str(e)}"
+            error_msg = f"Error restarting Docker service: {e!s}"
             logger.error(error_msg)
             return {'success': False, 'error': error_msg}
 

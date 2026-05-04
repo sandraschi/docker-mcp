@@ -84,7 +84,7 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
         except NotFound as e:
             return ContainerLogsResponse.error(
                 container_id=params.container_id,
-                error=f"Container not found: {str(e)}",
+                error=f"Container not found: {e!s}",
                 message=f"Container {params.container_id} not found"
             )
 
@@ -139,10 +139,10 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
                     message=f"Retrieved {len(logs)} log entries"
                 )
             except APIError as e:
-                raise ToolError(f"Failed to get logs: {str(e)}") from e
+                raise ToolError(f"Failed to get logs: {e!s}") from e
 
     except (DockerException, APIError) as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerLogsResponse.error(
             container_id=params.container_id,
@@ -150,7 +150,7 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
             message="Failed to retrieve container logs"
         )
     except Exception as e:
-        error_msg = f"Unexpected error: {str(e)}"
+        error_msg = f"Unexpected error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerLogsResponse.error(
             container_id=params.container_id,
@@ -198,10 +198,10 @@ async def _stream_logs(
                             "line": log_line
                         }
             except Exception as e:
-                logger.error(f"Error parsing log chunk: {str(e)}", exc_info=True)
+                logger.error(f"Error parsing log chunk: {e!s}", exc_info=True)
 
     except Exception as e:
-        logger.error(f"Error in log stream: {str(e)}", exc_info=True)
+        logger.error(f"Error in log stream: {e!s}", exc_info=True)
         raise
     finally:
         # Ensure the log stream is properly closed
@@ -209,7 +209,7 @@ async def _stream_logs(
             try:
                 log_stream.close()
             except Exception as e:
-                logger.warning(f"Error closing log stream: {str(e)}")
+                logger.warning(f"Error closing log stream: {e!s}")
 
 
 # Register the tool with MCP

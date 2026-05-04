@@ -1,10 +1,10 @@
 """
 Minimal test for the inspect_container function.
 """
-import sys
-import os
 import asyncio
-from unittest.mock import MagicMock, patch
+import os
+import sys
+from unittest.mock import MagicMock
 
 # Add the project root to the Python path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
@@ -25,20 +25,20 @@ async def test_inspect_container():
         'State': {'Status': 'running'},
         'Config': {'Image': 'test-image'},
     }
-    
+
     # Configure the mock Docker client
     container_inspect.docker.from_env.return_value.containers.get.return_value = mock_container
-    
+
     # Call the function directly
     result = await container_inspect.inspect_container(container_id='test123')
-    
+
     # Verify the result
     assert 'container_id' in result
     assert result['status'] == 'success'
     assert 'data' in result
     assert result['data']['id'] == 'test123'
     assert result['data']['name'] == 'test-container'
-    
+
     print("✅ Test passed: inspect_container")
     return True
 

@@ -1,16 +1,17 @@
 """Helper functions for Docker-related tests."""
-import asyncio
 import logging
-from typing import Dict, Optional, Any, AsyncGenerator
-import docker
-import aiodocker
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Any
+
+import aiodocker
+import docker
 
 logger = logging.getLogger(__name__)
 
 class DockerTestHelper:
     """Helper class for Docker-related test operations."""
-    
+
     def __init__(self, test_config):
         self.test_config = test_config
         self.docker_client = docker.from_env()
@@ -41,16 +42,16 @@ class DockerTestHelper:
 
     @asynccontextmanager
     async def temporary_container(
-        self, 
-        image: str, 
+        self,
+        image: str,
         command: str = "sleep 3600",
-        environment: Optional[Dict[str, str]] = None,
-        network: Optional[str] = None,
+        environment: dict[str, str] | None = None,
+        network: str | None = None,
         **kwargs
-    ) -> AsyncGenerator[Dict[str, Any], None]:
+    ) -> AsyncGenerator[dict[str, Any], None]:
         """Create a temporary container that's automatically removed after the test."""
         await self.ensure_image_exists(image)
-        
+
         container = await self.async_docker.containers.create_or_replace(
             name=f"{self.test_config.TEST_CONTAINER_PREFIX}{self._random_suffix()}",
             config={
@@ -64,9 +65,9 @@ class DockerTestHelper:
                 **kwargs
             }
         )
-        
+
         self._test_containers.append(container.id)
-        
+
         try:
             await container.start()
             container_info = await container.show()
@@ -91,7 +92,7 @@ class DockerTestHelper:
     async def cleanup(self) -> None:
         """Clean up all test resources."""
         errors = []
-        
+
         # Clean up containers
         for container_id in self._test_containers[:]:
             try:
@@ -100,7 +101,7 @@ class DockerTestHelper:
                 self._test_containers.remove(container_id)
             except Exception as e:
                 errors.append(f"Failed to remove container {container_id}: {e}")
-        
+
         # Clean up networks
         for network_id in self._test_networks[:]:
             try:
@@ -109,7 +110,7 @@ class DockerTestHelper:
                 self._test_networks.remove(network_id)
             except Exception as e:
                 errors.append(f"Failed to remove network {network_id}: {e}")
-        
+
         if errors:
             logger.warning("Errors during cleanup:\n" + "\n".join(errors))
 

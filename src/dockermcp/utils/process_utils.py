@@ -159,7 +159,7 @@ def run_command(
         logger.error(f"Unexpected error running command: {e}", exc_info=True)
         if check:
             raise ProcessError(
-                f"Unexpected error: {str(e)}",
+                f"Unexpected error: {e!s}",
                 cmd=cmd,
                 returncode=getattr(e, 'returncode', -1)
             ) from e
@@ -238,6 +238,6 @@ def run_docker_command(
     except Exception as e:
         logger.error(f"Unexpected error running docker command: {e}", exc_info=True)
         raise ProcessError(
-            f"Failed to execute docker {subcommand}: {str(e)}",
+            f"Failed to execute docker {subcommand}: {e!s}",
             cmd=cmd
         ) from e

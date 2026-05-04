@@ -4,31 +4,27 @@ Test suite for container inspection tools.
 This module contains tests for container inspection and monitoring functionality.
 """
 import unittest
-import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
-from fastmcp import FastMCP
-from fastmcp.exceptions import ToolError
-from pydantic import ValidationError
+from unittest.mock import MagicMock, patch
+
 import docker
+from fastmcp.exceptions import ToolError
 
 # Import the tools we want to test
 from dockermcp.tools.containers.container_inspect import (
     inspect_container,
-    ContainerInspectRequest,
-    ContainerInspectResponse,
-    BaseResponse
 )
+
 
 class TestContainerInspect(unittest.TestCase):
     """Test cases for container inspection tools."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         # Create a mock Docker client
         self.docker_client = MagicMock(spec=docker.DockerClient)
         self.mock_container = MagicMock()
         self.docker_client.containers.get.return_value = self.mock_container
-        
+
         # Set up return values for container inspection
         self.mock_container.attrs = {
             'Id': 'a1b2c3d4e5f6',
@@ -75,7 +71,7 @@ class TestContainerInspect(unittest.TestCase):
                 }
             }
         }
-        
+
         # Mock stats generator
         self.mock_stats = iter([{
             'cpu_stats': {
@@ -120,18 +116,18 @@ class TestContainerInspect(unittest.TestCase):
                 }
             }
         }])
-        
+
         # Set up the stats method to return the mock stats
         self.mock_container.stats.return_value = self.mock_stats
-        
+
         # Patch the Docker client
         self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
-    
+
     def tearDown(self):
         """Clean up after each test."""
         self.docker_patcher.stop()
-    
+
     async def test_inspect_container_basic(self):
         """Test basic container inspection."""
         # Execute
@@ -140,7 +136,7 @@ class TestContainerInspect(unittest.TestCase):
             show_stats=False,
             show_logs=False
         )
-        
+
         # Assert
         self.assertIsInstance(response, dict)
         self.assertEqual(response["id"], "a1b2c3d4e5f6")
@@ -148,7 +144,7 @@ class TestContainerInspect(unittest.TestCase):
         self.assertEqual(response["status"], "running")
         self.assertIsNone(response.get("stats"))
         self.assertIsNone(response.get("logs"))
-    
+
     async def test_inspect_container_with_stats(self):
         """Test container inspection with stats."""
         # Execute
@@ -157,19 +153,19 @@ class TestContainerInspect(unittest.TestCase):
             show_stats=True,
             show_logs=False
         )
-        
+
         # Assert
         self.assertIsInstance(response, dict)
         self.assertIsNotNone(response.get("stats"))
         self.assertIn("cpu_percent", response["stats"])
         self.assertIn("memory_usage", response["stats"])
         self.assertIn("network_io", response["stats"])
-    
+
     async def test_inspect_container_with_logs(self):
         """Test container inspection with logs."""
         # Setup
         self.mock_container.logs.return_value = b"Log line 1\nLog line 2\n"
-        
+
         # Execute
         response = await inspect_container(
             container_id="test-container",
@@ -177,22 +173,22 @@ class TestContainerInspect(unittest.TestCase):
             show_logs=True,
             log_tail=10
         )
-        
+
         # Assert
         self.assertIsInstance(response, dict)
         self.assertIsNotNone(response.get("logs"))
         self.assertEqual(len(response["logs"]), 2)
         self.mock_container.logs.assert_called_once_with(tail=10, timestamps=False)
-    
+
     async def test_container_not_found(self):
         """Test handling of non-existent container."""
         # Setup
         self.docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
-        
+
         # Execute and assert
         with self.assertRaises(ToolError) as context:
             await inspect_container(request)
-        
+
         self.assertIn("not found", str(context.exception).lower())
 
 # Helper function to run async tests

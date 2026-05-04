@@ -4,9 +4,6 @@ Basic Usage Examples for DockerMCP
 This script demonstrates how to use the DockerMCP API to perform common Docker operations.
 """
 import asyncio
-import json
-from datetime import datetime
-from typing import Dict, Any, List, Optional
 
 from fastmcp import MCPClient
 
@@ -41,11 +38,11 @@ async def create_container() -> None:
         "environment": {"ENV": "development"},
         "labels": {"app": "demo"}
     }
-    
+
     response = await client.create_container(**container_config)
     if response.get("status") == "success":
         print(f"Container created with ID: {response['container_id']}")
-        
+
         # Start the container
         start_response = await client.start_container(response['container_id'])
         if start_response.get("status") == "success":
@@ -58,7 +55,7 @@ async def create_container() -> None:
 async def manage_images() -> None:
     """Demonstrate image management operations."""
     print("\n=== Managing Images ===")
-    
+
     # List all images
     print("\nListing all images:")
     response = await client.list_images(all=True)
@@ -67,7 +64,7 @@ async def manage_images() -> None:
             print(f"- {image.get('repo_tags', ['<none>'])[0]} (Size: {image.get('size', 0) / (1024*1024):.2f} MB)")
     else:
         print(f"Error: {response.get('error')}")
-    
+
     # Pull a new image
     print("\nPulling Redis image:")
     pull_response = await client.pull_image("redis:alpine")
@@ -79,7 +76,7 @@ async def manage_images() -> None:
 async def network_operations() -> None:
     """Demonstrate network operations."""
     print("\n=== Network Operations ===")
-    
+
     # List all networks
     print("\nListing all networks:")
     response = await client.list_networks()
@@ -88,7 +85,7 @@ async def network_operations() -> None:
             print(f"- {network['name']} ({network['driver']})")
     else:
         print(f"Error: {response.get('error')}")
-    
+
     # Create a new network
     print("\nCreating a new network:")
     network_config = {
@@ -105,7 +102,7 @@ async def network_operations() -> None:
 async def volume_operations() -> None:
     """Demonstrate volume operations."""
     print("\n=== Volume Operations ===")
-    
+
     # List all volumes
     print("\nListing all volumes:")
     response = await client.list_volumes()
@@ -114,7 +111,7 @@ async def volume_operations() -> None:
             print(f"- {volume['name']} ({volume['driver']})")
     else:
         print(f"Error: {response.get('error')}")
-    
+
     # Create a new volume
     print("\nCreating a new volume:")
     volume_config = {
@@ -131,7 +128,7 @@ async def volume_operations() -> None:
 async def system_info() -> None:
     """Display system information."""
     print("\n=== System Information ===")
-    
+
     # Get Docker system info
     response = await client.system_info()
     if response.get("status") == "success":
@@ -144,7 +141,7 @@ async def system_info() -> None:
         print(f"Total Memory: {info.get('mem_total', 0) / (1024*1024*1024):.2f} GB")
     else:
         print(f"Error: {response.get('error')}")
-    
+
     # Get disk usage
     print("\nDisk Usage:")
     usage_response = await client.disk_usage()
@@ -159,7 +156,7 @@ async def system_info() -> None:
 async def workflow_example() -> None:
     """Demonstrate workflow operations."""
     print("\n=== Workflow Example ===")
-    
+
     # Define a simple workflow
     workflow_definition = {
         "name": "web-app",
@@ -182,26 +179,26 @@ async def workflow_example() -> None:
             "postgres_data": {}
         }
     }
-    
+
     # Create the workflow
     print("Creating workflow...")
     create_response = await client.create_workflow(workflow_definition)
     if create_response.get("status") != "success":
         print(f"Failed to create workflow: {create_response.get('error')}")
         return
-    
+
     workflow_id = create_response["workflow_id"]
     print(f"Workflow created with ID: {workflow_id}")
-    
+
     # Start the workflow
     print("Starting workflow...")
     start_response = await client.start_workflow(workflow_id)
     if start_response.get("status") != "success":
         print(f"Failed to start workflow: {start_response.get('error')}")
         return
-    
+
     print("Workflow started successfully")
-    
+
     # Monitor workflow status
     print("\nMonitoring workflow status (press Ctrl+C to stop):")
     try:
@@ -210,15 +207,15 @@ async def workflow_example() -> None:
             if status_response.get("status") == "success":
                 status = status_response["workflow"]
                 print(f"\rStatus: {status['status']}", end="", flush=True)
-                
+
                 if status["status"] in ["completed", "failed"]:
                     print("\n")
                     break
-            
+
             await asyncio.sleep(2)
     except KeyboardInterrupt:
         print("\nStopping monitoring...")
-    
+
     # Clean up
     print("\nCleaning up...")
     stop_response = await client.stop_workflow(workflow_id)
@@ -231,7 +228,7 @@ async def main() -> None:
     """Run all examples."""
     try:
         print("=== DockerMCP Examples ===")
-        
+
         # Run examples
         await list_containers()
         await create_container()
@@ -240,10 +237,10 @@ async def main() -> None:
         await volume_operations()
         await system_info()
         await workflow_example()
-        
+
         print("\nAll examples completed!")
     except Exception as e:
-        print(f"An error occurred: {str(e)}")
+        print(f"An error occurred: {e!s}")
 
 if __name__ == "__main__":
     asyncio.run(main())

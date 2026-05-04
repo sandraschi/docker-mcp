@@ -173,7 +173,7 @@ class JsonFormatter(logging.Formatter):
                 'timestamp': datetime.now(UTC).isoformat() + 'Z',
                 'level': 'error',
                 'name': 'logging',
-                'message': f'Failed to serialize log record: {str(e)}',
+                'message': f'Failed to serialize log record: {e!s}',
                 'original_message': str(record.msg)
             }, default=str)
 

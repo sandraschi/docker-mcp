@@ -77,7 +77,7 @@ class MonitoringManager:
             return cmd_result
 
         except Exception as e:
-            error_msg = f"Error executing command: {str(e)}"
+            error_msg = f"Error executing command: {e!s}"
             logger.exception(error_msg)
             raise DockerOperationError(error_msg) from e
 
@@ -389,7 +389,7 @@ async def monitoring_status(params: MonitoringStatusParams) -> MonitoringRespons
             # Parse the standard output
             services = []
             for line in result.stdout.splitlines():
-                if not line.strip() or 'NAME' in line and 'STATUS' in line:
+                if not line.strip() or ('NAME' in line and 'STATUS' in line):
                     continue
 
                 parts = line.split()

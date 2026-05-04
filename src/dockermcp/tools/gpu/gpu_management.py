@@ -179,7 +179,7 @@ class GPUManager:
             return gpu_data.get("gpu", [])
 
         except (subprocess.SubprocessError, json.JSONDecodeError) as e:
-            logger.debug(f"Failed to get GPU info from nvidia-smi: {str(e)}")
+            logger.debug(f"Failed to get GPU info from nvidia-smi: {e!s}")
             return {}
 
     def get_gpu_devices(self, refresh: bool = False) -> list[GPUDevice]:
@@ -265,7 +265,7 @@ class GPUManager:
                 gpu_info.append(device)
 
             except Exception as e:
-                logger.error(f"Error parsing GPU info: {str(e)}", exc_info=True)
+                logger.error(f"Error parsing GPU info: {e!s}", exc_info=True)
 
         self._gpu_info = gpu_info
         return gpu_info
@@ -388,7 +388,7 @@ async def list_gpus(request: ListGPUsRequest) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f"Failed to list GPUs: {str(e)}"
+        error_msg = f"Failed to list GPUs: {e!s}"
         logger.debug(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -457,7 +457,7 @@ async def get_gpu_info(request: GetGPUInfoRequest) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f'Failed to get GPU info: {str(e)}'
+        error_msg = f'Failed to get GPU info: {e!s}'
         logger.debug(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -587,7 +587,7 @@ async def monitor_gpu_usage(request: MonitorGPUUsageRequest) -> dict[str, Any]:
                 samples.append(sample)
 
             except Exception as e:
-                logger.error(f"Error during GPU monitoring: {str(e)}", exc_info=True)
+                logger.error(f"Error during GPU monitoring: {e!s}", exc_info=True)
                 # Continue monitoring even if one sample fails
                 continue
 
@@ -600,7 +600,7 @@ async def monitor_gpu_usage(request: MonitorGPUUsageRequest) -> dict[str, Any]:
         }
 
     except Exception as e:
-        error_msg = f"Failed to monitor GPU usage: {str(e)}"
+        error_msg = f"Failed to monitor GPU usage: {e!s}"
         logger.debug(error_msg, exc_info=True)
         return {
             "status": "error",

@@ -1,7 +1,7 @@
 """Run the FastMCP import fix script"""
+import os
 import subprocess
 import sys
-import os
 
 os.chdir(r"D:\Dev\repos\dockermcp")
 result = subprocess.run([sys.executable, "fix_fastmcp_imports.py"], capture_output=True, text=True)

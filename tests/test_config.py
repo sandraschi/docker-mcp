@@ -2,6 +2,7 @@
 import os
 import sys
 from pathlib import Path
+
 import pytest
 from dotenv import load_dotenv
 
@@ -18,7 +19,7 @@ class TestConfig:
     TEST_CONTAINER_PREFIX = 'test_dockermcp_'
     TEST_NETWORK_NAME = 'test_dockermcp_network'
     TEST_IMAGE = 'alpine:latest'  # Lightweight image for testing
-    
+
     # Test timeouts (in seconds)
     CONTAINER_START_TIMEOUT = 30
     TEST_TIMEOUT = 60
@@ -27,13 +28,13 @@ class TestConfig:
 def get_test_config() -> TestConfig:
     """Get test configuration with environment overrides."""
     config = TestConfig()
-    
+
     # Allow environment overrides
     if 'DOCKER_TEST_IMAGE' in os.environ:
         config.TEST_IMAGE = os.environ['DOCKER_TEST_IMAGE']
     if 'TEST_TIMEOUT' in os.environ:
         config.TEST_TIMEOUT = int(os.environ['TEST_TIMEOUT'])
-        
+
     return config
 
 # Common fixtures

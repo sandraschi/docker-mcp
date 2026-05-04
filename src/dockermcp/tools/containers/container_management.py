@@ -254,7 +254,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
             )
 
     except (DockerException, APIError) as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerOperationResponse.error(
             container_id=params.container_id,
@@ -263,7 +263,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
         )
 
     except Exception as e:
-        error_msg = f"Error managing container: {str(e)}"
+        error_msg = f"Error managing container: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerOperationResponse.error(
             container_id=params.container_id,
@@ -273,7 +273,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
 
 # Register the tool with MCP
 __all__ = [
-    'manage_container',
+    'ContainerAction',
     'ContainerRequest',
-    'ContainerAction'
+    'manage_container'
 ]

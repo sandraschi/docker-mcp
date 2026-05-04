@@ -4,36 +4,33 @@ Test suite for container execution tools.
 This module contains tests for executing commands inside containers.
 """
 import unittest
-import asyncio
-from unittest.mock import MagicMock, patch, AsyncMock
-from fastmcp import FastMCP
+from unittest.mock import AsyncMock, MagicMock, patch
+
+import docker
+from dockermcp.tools.containers.container_models import ContainerExecRequest
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
-import docker
 
 # Import the tools we want to test
 from dockermcp.tools.containers.container_exec import execute_in_container
-from dockermcp.tools.containers.container_models import (
-    ContainerExecRequest,
-    ContainerExecResponse
-)
+
 
 class TestContainerExec(unittest.TestCase):
     """Test cases for container execution tools."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         # Create a mock Docker client
         self.docker_client = MagicMock(spec=docker.DockerClient)
         self.mock_container = MagicMock()
         self.docker_client.containers.get.return_value = self.mock_container
-        
+
         # Mock exec_create and exec_start
         self.mock_exec = MagicMock()
         self.mock_exec_output = b"Command output\nMultiple lines\n"
         self.mock_exec.start = AsyncMock(return_value=self.mock_exec_output)
         self.mock_container.exec_run.return_value = self.mock_exec
-        
+
         # Mock for streaming
         self.mock_stream = [
             b'stdout output\n',
@@ -41,15 +38,15 @@ class TestContainerExec(unittest.TestCase):
             b'final output\n'
         ]
         self.mock_container.exec_run.return_value.output = self.mock_stream
-        
+
         # Patch the Docker client
         self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
-    
+
     def tearDown(self):
         """Clean up after each test."""
         self.docker_patcher.stop()
-    
+
     async def test_execute_command(self):
         """Test executing a command in a container."""
         # Setup
@@ -62,16 +59,16 @@ class TestContainerExec(unittest.TestCase):
             privileged=False,
             tty=False
         )
-        
+
         # Execute
         response = await execute_in_container(request)
-        
+
         # Assert
         self.assertIsInstance(response, dict)
         self.assertEqual(response["exit_code"], 0)
         self.assertEqual(response["stdout"], "Command output\nMultiple lines")
         self.assertEqual(response["stderr"], "")
-        
+
         # Verify exec_run was called with correct parameters
         self.mock_container.exec_run.assert_called_once()
         args, kwargs = self.mock_container.exec_run.call_args
@@ -82,7 +79,7 @@ class TestContainerExec(unittest.TestCase):
         self.assertFalse(kwargs["tty"])
         self.assertIn("VAR1=value1", kwargs["environment"])
         self.assertIn("VAR2=value2", kwargs["environment"])
-    
+
     async def test_execute_command_with_streaming(self):
         """Test executing a command with streaming output."""
         # Setup
@@ -92,39 +89,39 @@ class TestContainerExec(unittest.TestCase):
             stream=True,
             stream_timeout=5
         )
-        
+
         # Mock the generator for streaming
         async def mock_stream():
             for chunk in self.mock_stream:
                 yield chunk
-        
+
         self.mock_container.exec_run.return_value.output = mock_stream()
-        
+
         # Execute and collect output
         response = await execute_in_container(request)
-        
+
         # Assert
         self.assertIsInstance(response, dict)
         self.assertEqual(response["exit_code"], 0)
         self.assertTrue(response["streaming"])
         self.assertIsNotNone(response["stream_id"])
-    
+
     async def test_execute_command_with_error(self):
         """Test handling of command execution errors."""
         # Setup
         self.mock_container.exec_run.side_effect = docker.errors.APIError("Command failed")
-        
+
         request = ContainerExecRequest(
             container_id="test-container",
             command="invalid-command"
         )
-        
+
         # Execute and assert
         with self.assertRaises(ToolError) as context:
             await execute_in_container(request)
-        
+
         self.assertIn("failed to execute command", str(context.exception).lower())
-    
+
     async def test_container_not_found(self):
         """Test handling of non-existent container."""
         # Setup
@@ -133,13 +130,13 @@ class TestContainerExec(unittest.TestCase):
             container_id="nonexistent-container",
             command="echo test"
         )
-        
+
         # Execute and assert
         with self.assertRaises(ToolError) as context:
             await execute_in_container(request)
-        
+
         self.assertIn("not found", str(context.exception).lower())
-    
+
     def test_request_validation(self):
         """Test validation of request parameters."""
         # Test missing required field
@@ -148,14 +145,14 @@ class TestContainerExec(unittest.TestCase):
                 container_id="test-container"
                 # Missing command
             )
-        
+
         # Test invalid command type
         with self.assertRaises(ValidationError):
             ContainerExecRequest(
                 container_id="test-container",
                 command=["ls", "-la"]  # Should be a string
             )
-        
+
         # Test valid request
         request = ContainerExecRequest(
             container_id="test-container",

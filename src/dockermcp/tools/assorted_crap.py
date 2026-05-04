@@ -40,10 +40,10 @@ class SafeFastMCP(FastMCP):
         try:
             return await super()._handle_request(method, params, request_id)
         except Exception as e:
-            logger.error(f"Error handling request {method}: {str(e)}", exc_info=True)
+            logger.error(f"Error handling request {method}: {e!s}", exc_info=True)
             return self._create_error_response(
                 code=-32603,  # Internal error
-                message=f"Internal error: {str(e)}",
+                message=f"Internal error: {e!s}",
                 request_id=request_id
             )
 

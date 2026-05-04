@@ -250,7 +250,7 @@ async def get_container_stats(params: ContainerStatsParams) -> dict[str, Any] | 
         try:
             return _stream_stats(container, params.interval, params.timeout)
         except Exception as e:
-            error_msg = f"Failed to start stats stream: {str(e)}"
+            error_msg = f"Failed to start stats stream: {e!s}"
             logger.error(error_msg, exc_info=True)
             return {
                 "status": "error",
@@ -260,7 +260,7 @@ async def get_container_stats(params: ContainerStatsParams) -> dict[str, Any] | 
             }
 
     except Exception as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -315,7 +315,7 @@ async def _stream_stats(
                 yield ContainerStatsResponse(**parsed_stats.model_dump())
 
             except (DockerException, APIError) as e:
-                error_msg = f"Failed to get container stats: {str(e)}"
+                error_msg = f"Failed to get container stats: {e!s}"
                 logger.error(error_msg, exc_info=True)
                 yield ContainerStatsResponse(
                     container_id=container.id,
@@ -331,7 +331,7 @@ async def _stream_stats(
                 break
 
     except Exception as e:
-        error_msg = f"Unexpected error in stats stream: {str(e)}"
+        error_msg = f"Unexpected error in stats stream: {e!s}"
         logger.error(error_msg, exc_info=True)
         yield ContainerStatsResponse(
             container_id=container.id,
@@ -473,7 +473,7 @@ def _parse_stats(
         )
 
     except Exception as e:
-        logger.error(f"Error parsing container stats: {str(e)}", exc_info=True)
+        logger.error(f"Error parsing container stats: {e!s}", exc_info=True)
         # Return a minimal error response that matches the ContainerStats model
         return ContainerStats(
             container_id=container.id,
@@ -506,5 +506,5 @@ def _parse_stats(
                 write_ops=0
             ),
             pids=0,
-            error=f"Error parsing stats: {str(e)}"
+            error=f"Error parsing stats: {e!s}"
         )

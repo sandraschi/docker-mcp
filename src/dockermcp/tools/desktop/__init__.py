@@ -10,8 +10,8 @@ from .desktop_status import docker_desktop_status
 from .desktop_update import docker_desktop_update
 
 __all__ = [
-    "docker_desktop_status",
     "docker_daemon_recover",
     "docker_daemon_restart",
+    "docker_desktop_status",
     "docker_desktop_update",
 ]

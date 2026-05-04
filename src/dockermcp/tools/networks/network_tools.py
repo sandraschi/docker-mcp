@@ -55,7 +55,7 @@ def prune_networks() -> NetworkOperationResponse:
         )
 
     except docker.errors.APIError as e:
-        error_msg = f"Failed to prune networks: {str(e)}"
+        error_msg = f"Failed to prune networks: {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkOperationResponse.error(
             error=error_msg,
@@ -90,7 +90,7 @@ def list_networks() -> NetworkListResponse:
         )
 
     except docker.errors.APIError as e:
-        error_msg = f"Failed to list networks: {str(e)}"
+        error_msg = f"Failed to list networks: {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkListResponse.error(
             error=error_msg,
@@ -137,7 +137,7 @@ def create_network(
         )
 
     except docker.errors.APIError as e:
-        error_msg = f"Failed to create network '{params.name}': {str(e)}"
+        error_msg = f"Failed to create network '{params.name}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkOperationResponse.error(
             error=error_msg,
@@ -176,7 +176,7 @@ def remove_network(network_id: str) -> NetworkOperationResponse:
         )
 
     except docker.errors.NotFound as e:
-        error_msg = f"Network '{network_id}' not found: {str(e)}"
+        error_msg = f"Network '{network_id}' not found: {e!s}"
         logger.warning(error_msg)
         return NetworkOperationResponse.error(
             error=error_msg,
@@ -185,7 +185,7 @@ def remove_network(network_id: str) -> NetworkOperationResponse:
         )
 
     except docker.errors.APIError as e:
-        error_msg = f"Failed to remove network '{network_id}': {str(e)}"
+        error_msg = f"Failed to remove network '{network_id}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkOperationResponse.error(
             error=error_msg,
@@ -248,7 +248,7 @@ def connect_container_to_network(
         }
 
     except (docker.errors.NotFound, docker.errors.APIError) as e:
-        error_msg = f"Failed to connect container to network: {str(e)}"
+        error_msg = f"Failed to connect container to network: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -288,7 +288,7 @@ def disconnect_container_from_network(
         }
 
     except (docker.errors.NotFound, docker.errors.APIError) as e:
-        error_msg = f"Failed to disconnect container from network: {str(e)}"
+        error_msg = f"Failed to disconnect container from network: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -329,7 +329,7 @@ def get_network_stats(network_id: str) -> dict[str, Any]:
         return stats
 
     except (docker.errors.NotFound, docker.errors.APIError) as e:
-        error_msg = f"Failed to get stats for network '{network_id}': {str(e)}"
+        error_msg = f"Failed to get stats for network '{network_id}': {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
@@ -393,7 +393,7 @@ def inspect_network(network_id: str) -> NetworkInspectResponse:
         )
 
     except docker.errors.NotFound as e:
-        error_msg = f"Network '{network_id}' not found: {str(e)}"
+        error_msg = f"Network '{network_id}' not found: {e!s}"
         logger.warning(error_msg)
         return NetworkInspectResponse.error(
             error=error_msg,
@@ -401,7 +401,7 @@ def inspect_network(network_id: str) -> NetworkInspectResponse:
         )
 
     except docker.errors.APIError as e:
-        error_msg = f"Failed to inspect network '{network_id}': {str(e)}"
+        error_msg = f"Failed to inspect network '{network_id}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkInspectResponse.error(
             error=error_msg,

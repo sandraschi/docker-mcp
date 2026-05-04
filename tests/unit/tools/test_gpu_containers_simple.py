@@ -4,8 +4,8 @@ Simplified test suite for GPU-accelerated container management.
 This module contains basic tests for GPU container operations.
 """
 import unittest
-import json
-from unittest.mock import MagicMock, patch, Mock, ANY
+from unittest.mock import MagicMock
+
 
 class GPUContainerConfig:
     """Simple configuration class for GPU containers."""
@@ -25,7 +25,7 @@ class GPUContainerConfig:
 
 class TestGPUContainerConfig(unittest.TestCase):
     """Test cases for GPUContainerConfig model."""
-    
+
     def test_config_creation(self):
         """Test creating a basic GPU container configuration."""
         config = GPUContainerConfig(gpu_ids=[0, 1], count=2)
@@ -34,7 +34,7 @@ class TestGPUContainerConfig(unittest.TestCase):
         self.assertEqual(config.runtime, "nvidia")
         self.assertEqual(config.capabilities, [["gpu"]])
         self.assertEqual(len(config.device_requests), 0)
-    
+
     def test_config_with_environment(self):
         """Test container config with custom environment variables."""
         env_vars = {
@@ -45,7 +45,7 @@ class TestGPUContainerConfig(unittest.TestCase):
         config = GPUContainerConfig(environment=env_vars)
         self.assertEqual(config.environment["NVIDIA_VISIBLE_DEVICES"], "0,1")
         self.assertEqual(config.environment["TEST_ENV"], "test_value")
-    
+
     def test_config_with_volumes_and_ports(self):
         """Test container config with volumes and ports."""
         volumes = {
@@ -63,11 +63,11 @@ class GPUContainerManager:
     """Simple manager for GPU containers."""
     def __init__(self, docker_client):
         self.docker = docker_client
-    
+
     def create_gpu_container(self, config, **kwargs):
         """Create a container with GPU support."""
         device_requests = []
-        
+
         if config.gpu_ids:
             if config.gpu_ids == 'all':
                 device_request = {
@@ -82,12 +82,12 @@ class GPUContainerManager:
                     'DeviceIDs': [str(gpu_id) for gpu_id in config.gpu_ids]
                 }
             device_requests.append(device_request)
-        
+
         # Merge environment variables
         environment = config.environment.copy()
         if 'environment' in kwargs:
             environment.update(kwargs.pop('environment'))
-        
+
         # Create container
         container = self.docker.containers.run(
             **kwargs,
@@ -96,13 +96,13 @@ class GPUContainerManager:
             runtime=config.runtime,
             detach=True
         )
-        
+
         return container
 
 
 class TestGPUContainerManager(unittest.TestCase):
     """Test cases for GPUContainerManager class."""
-    
+
     def setUp(self):
         """Set up test fixtures."""
         self.mock_docker = MagicMock()
@@ -118,32 +118,32 @@ class TestGPUContainerManager(unittest.TestCase):
         }
         self.mock_docker.containers.run.return_value = self.mock_container
         self.manager = GPUContainerManager(self.mock_docker)
-    
+
     def test_container_creation_basic(self):
         """Test basic GPU container creation."""
         # Test data
         config = GPUContainerConfig(gpu_ids=[0])
         image = "nvidia/cuda:11.0-base"
         command = "nvidia-smi"
-        
+
         # Create container
         container = self.manager.create_gpu_container(
             config=config,
             image=image,
             command=command
         )
-        
+
         # Verify
         self.assertEqual(container.id, "test-container-id")
         self.mock_docker.containers.run.assert_called_once()
-        
+
         # Check call arguments
         call_args = self.mock_docker.containers.run.call_args[1]
         self.assertEqual(call_args['image'], image)
         self.assertEqual(call_args['command'], command)
         self.assertEqual(call_args['runtime'], "nvidia")
         self.assertEqual(call_args['device_requests'][0]['DeviceIDs'], ['0'])
-    
+
     def test_container_with_custom_environment(self):
         """Test container creation with custom environment variables."""
         # Test data
@@ -153,45 +153,45 @@ class TestGPUContainerManager(unittest.TestCase):
             "CUSTOM_VAR": "test_value"
         }
         config = GPUContainerConfig(gpu_ids=[0], environment=env_vars)
-        
+
         # Create container
         self.manager.create_gpu_container(
             config=config,
             image="nvidia/cuda:11.0-base"
         )
-        
+
         # Verify environment variables
         call_args = self.mock_docker.containers.run.call_args[1]
         self.assertEqual(call_args['environment']['NVIDIA_VISIBLE_DEVICES'], "0")
         self.assertEqual(call_args['environment']['CUSTOM_VAR'], "test_value")
-    
+
     def test_container_with_all_gpus(self):
         """Test container creation with all GPUs."""
         # Test data
         config = GPUContainerConfig(gpu_ids="all")
-        
+
         # Create container
         self.manager.create_gpu_container(
             config=config,
             image="nvidia/cuda:11.0-base"
         )
-        
+
         # Verify all GPUs are requested
         call_args = self.mock_docker.containers.run.call_args[1]
         self.assertEqual(call_args['device_requests'][0]['Count'], -1)  # -1 means all devices
         self.assertNotIn('DeviceIDs', call_args['device_requests'][0])  # Should not specify device IDs for 'all'
-    
+
     def test_container_with_multiple_gpus(self):
         """Test container creation with multiple specific GPUs."""
         # Test data
         config = GPUContainerConfig(gpu_ids=[0, 1, 2])
-        
+
         # Create container
         self.manager.create_gpu_container(
             config=config,
             image="nvidia/cuda:11.0-base"
         )
-        
+
         # Verify multiple GPUs are requested
         call_args = self.mock_docker.containers.run.call_args[1]
         self.assertEqual(call_args['device_requests'][0]['DeviceIDs'], ['0', '1', '2'])

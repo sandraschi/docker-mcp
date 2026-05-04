@@ -313,17 +313,17 @@ async def list_container_directory(params: ListDirectoryParams) -> dict[str, Any
             raise
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error listing container directory: {str(e)}"
+        error_msg = f"Unexpected error listing container directory: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
@@ -647,17 +647,17 @@ async def read_container_file(
             raise
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error reading container file: {str(e)}"
+        error_msg = f"Unexpected error reading container file: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -737,7 +737,7 @@ async def write_container_file(params: WriteFileParams) -> dict[str, Any]:
                 "status": "error",
                 "container_id": params.container_id,
                 "path": params.path,
-                "error": f"Failed to decode content: {str(e)}"
+                "error": f"Failed to decode content: {e!s}"
             }
 
         # Create parent directories if needed
@@ -807,17 +807,17 @@ async def write_container_file(params: WriteFileParams) -> dict[str, Any]:
                 pass
 
     except APIError as e:
-        error_msg = f"Docker API error: {str(e)}"
+        error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": error_msg}
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
         return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
-        error_msg = f"Unexpected error writing container file: {str(e)}"
+        error_msg = f"Unexpected error writing container file: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",

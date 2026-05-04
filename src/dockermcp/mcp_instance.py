@@ -50,7 +50,7 @@ class FastMCPSingleton:
                 self._initialized = True
 
             except Exception as e:
-                logger.error(f"Failed to initialize FastMCP: {str(e)}")
+                logger.error(f"Failed to initialize FastMCP: {e!s}")
                 logger.debug(f"Error details: {traceback.format_exc()}")
                 raise
 
@@ -106,7 +106,7 @@ class FastMCPSingleton:
                     return await original_handler(transport, message)
 
                 except Exception as e:
-                    logger.error(f"Error in message handler: {str(e)}")
+                    logger.error(f"Error in message handler: {e!s}")
                     logger.debug(f"Error details: {traceback.format_exc()}")
                     raise
 
@@ -115,7 +115,7 @@ class FastMCPSingleton:
             logger.debug("Successfully patched FastMCP message handler")
 
         except Exception as e:
-            logger.error(f"Failed to patch message handler: {str(e)}")
+            logger.error(f"Failed to patch message handler: {e!s}")
             logger.debug(f"Error details: {traceback.format_exc()}")
 
 # Create the singleton instance

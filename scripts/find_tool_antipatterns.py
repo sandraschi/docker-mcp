@@ -6,10 +6,10 @@ Anti-patterns to find and remove:
 2. @Tool - Direct Tool class usage as decorator
 3. @tool - Lowercase tool decorator
 """
+import json
 import re
 from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple
-import json
+from typing import Any
 
 # Define anti-patterns to search for
 ANTI_PATTERNS = {
@@ -29,20 +29,20 @@ EXCLUDE_DIRS = {
     'docs',  # Documentation might have example code
 }
 
-def find_antipatterns(root_dir: str) -> Dict[str, Dict[str, List[Dict[str, Any]]]]:
+def find_antipatterns(root_dir: str) -> dict[str, dict[str, list[dict[str, Any]]]]:
     """Find all Python files containing tool decorator anti-patterns."""
     results = {pattern_name: {} for pattern_name in ANTI_PATTERNS}
     root_path = Path(root_dir)
-    
+
     for file_path in root_path.rglob('*.py'):
         # Skip excluded directories
         if any(part in EXCLUDE_DIRS for part in file_path.parts):
             continue
-            
+
         try:
             content = file_path.read_text(encoding='utf-8')
             relative_path = str(file_path.relative_to(root_dir))
-            
+
             for pattern_name, pattern in ANTI_PATTERNS.items():
                 matches = list(re.finditer(pattern, content, re.MULTILINE))
                 if matches:
@@ -59,10 +59,10 @@ def find_antipatterns(root_dir: str) -> Dict[str, Dict[str, List[Dict[str, Any]]
                     ]
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
-    
+
     return results
 
-def save_results(results: Dict[str, Any], output_file: str):
+def save_results(results: dict[str, Any], output_file: str):
     """Save the analysis results to a JSON file."""
     with open(output_file, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=2)
@@ -70,18 +70,18 @@ def save_results(results: Dict[str, Any], output_file: str):
 def main():
     root_dir = r'd:\Dev\repos\dockermcp'
     output_file = 'tool_antipattern_report.json'
-    
+
     print(f"Scanning for tool decorator anti-patterns in {root_dir}...")
     results = find_antipatterns(root_dir)
-    
+
     # Count total matches
     total_matches = sum(len(files) for pattern in results.values() for files in pattern.values())
     print(f"Found {total_matches} total anti-pattern matches")
-    
+
     # Save results
     save_results(results, output_file)
     print(f"Report saved to {output_file}")
-    
+
     # Print summary
     print("\nSummary of anti-patterns found:")
     for pattern, files in results.items():

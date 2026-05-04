@@ -1,16 +1,18 @@
 """Unit tests for monitoring tools."""
-import pytest
-import sys
-from unittest.mock import patch, MagicMock, AsyncMock, ANY
-from pathlib import Path
 import json
+import sys
+from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
+
 
 # Mock the FastMCP Tool decorator
 class MockTool:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
-    
+
     def __call__(self, func):
         func._is_tool = True
         return func
@@ -22,7 +24,7 @@ sys.modules['fastmcp.tools.tool'] = MagicMock()
 sys.modules['fastmcp.tools.tool'].Tool = MockTool
 
 # Import the modules after setting up mocks
-from dockermcp.tools.monitoring import start_monitoring, get_monitoring_status
+from dockermcp.tools.monitoring import get_monitoring_status, start_monitoring
 from dockermcp.tools.monitoring.alerts import add_alert_rule, list_alert_rules
 from dockermcp.tools.monitoring.backup import create_backup
 from dockermcp.tools.monitoring.web_interfaces import open_grafana
@@ -61,7 +63,7 @@ def mock_path():
 async def test_start_monitoring(mock_subprocess):
     """Test starting the monitoring stack."""
     result = await start_monitoring()
-    
+
     assert result["status"] == "success"
     assert "started" in result["message"].lower()
     mock_subprocess.assert_called_once()
@@ -74,10 +76,10 @@ async def test_get_monitoring_status(mock_docker):
     mock_container.name = "prometheus"
     mock_container.status = "running"
     mock_container.ports = ["0.0.0.0:9091->9090/tcp"]
-    
+
     mock_docker.return_value.containers.list.return_value = [mock_container]
     result = await get_monitoring_status()
-    
+
     assert result["status"] == "success"
     assert len(result.get("containers", [])) > 0
     assert any(c.get("name") == "prometheus" for c in result["containers"])
@@ -86,17 +88,17 @@ async def test_get_monitoring_status(mock_docker):
 async def test_add_alert_rule(tmp_path):
     """Test adding an alert rule."""
     test_rule = TEST_ALERT_RULE.copy()
-    
+
     with patch('pathlib.Path.write_text') as mock_write, \
          patch('pathlib.Path.mkdir') as mock_mkdir:
-        
+
         result = await add_alert_rule(
             name=test_rule["name"],
             condition=test_rule["condition"],
             duration=test_rule["duration"],
             severity=test_rule["severity"]
         )
-        
+
         assert result["status"] == "success"
         assert "added" in result["message"].lower()
         mock_write.assert_called_once()
@@ -105,15 +107,15 @@ async def test_add_alert_rule(tmp_path):
 async def test_list_alert_rules():
     """Test listing alert rules."""
     test_rule = {"name": "test_rule", "condition": "up == 0", "severity": "critical"}
-    
+
     with patch('pathlib.Path.glob') as mock_glob, \
          patch('pathlib.Path.read_text') as mock_read:
-        
+
         mock_glob.return_value = [Path("/path/to/rule1.json")]
         mock_read.return_value = json.dumps(test_rule)
-        
+
         result = await list_alert_rules()
-        
+
         assert result["status"] == "success"
         assert len(result.get("rules", [])) > 0
         assert result["rules"][0]["name"] == "test_rule"
@@ -124,12 +126,12 @@ async def test_create_backup():
     with patch('tarfile.open') as mock_tar, \
          patch('pathlib.Path.mkdir'), \
          patch('datetime.datetime') as mock_dt:
-        
+
         mock_dt.now.return_value.strftime.return_value = "20230912_123456"
         mock_tar.return_value.__enter__.return_value = MagicMock()
-        
+
         result = await create_backup()
-        
+
         assert result["status"] == "success"
         assert "backup" in result
         assert "20230912_123456" in result["backup"]
@@ -139,7 +141,7 @@ async def test_open_grafana():
     """Test opening Grafana in browser."""
     with patch('webbrowser.open') as mock_browser:
         result = await open_grafana()
-        
+
         assert result["status"] == "success"
         assert "grafana" in result["url"]
         assert ":3001" in result["url"]

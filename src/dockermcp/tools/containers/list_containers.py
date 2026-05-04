@@ -118,7 +118,7 @@ async def list_containers(params: ListContainersParams) -> dict[str, Any]:
         }
 
     except DockerException as e:
-        error_msg = f"Docker error: {str(e)}"
+        error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
@@ -126,7 +126,7 @@ async def list_containers(params: ListContainersParams) -> dict[str, Any]:
             "error": error_msg
         }
     except Exception as e:
-        error_msg = f"Unexpected error listing containers: {str(e)}"
+        error_msg = f"Unexpected error listing containers: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {
             "status": "error",
