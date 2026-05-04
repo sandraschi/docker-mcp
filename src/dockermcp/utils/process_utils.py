@@ -22,8 +22,8 @@ except ImportError:
 
 class ProcessError(subprocess.SubprocessError):
     """Custom exception for process-related errors."""
-    def __init__(self, message: str, cmd: list[str], returncode: int = None,
-                 stdout: str = None, stderr: str = None):
+    def __init__(self, message: str, cmd: list[str], returncode: int | None = None,
+                 stdout: str | None = None, stderr: str | None = None):
         super().__init__(returncode, cmd, stdout, stderr)
         self.message = message
         self.cmd = cmd
@@ -87,13 +87,13 @@ def run_command(
 
     try:
         # Run the command with a timeout
-        result = subprocess.run(
+        result = subprocess.run(  # noqa: S603
             cmd,
             cwd=str(cwd) if cwd else None,
             env=env,
             capture_output=capture_output,
             text=True,
-            shell=False,  # Explicitly disable shell for safety (S603)
+            shell=False,
             timeout=timeout,
             **kwargs
         )

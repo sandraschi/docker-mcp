@@ -38,16 +38,28 @@ class ExecUser(StrEnum):
 async def execute_in_container(
     container_id: Annotated[str, Field(description="ID or name of the container")],
     command: Annotated[str | list[str], Field(description="Command to execute (string or list of arguments)")],
-    user: Annotated[str, Field(description="User to run the command as (empty for container default, 'root' for root)", default="")],
+    user: Annotated[str, Field(
+        description="User to run the command as (empty for container default, 'root' for root)",
+        default=""
+    )],
     workdir: Annotated[str | None, Field(description="Working directory inside the container", default=None)],
     environment: Annotated[dict[str, str], Field(description="Environment variables for the command", default={})],
     privileged: Annotated[bool, Field(description="Run with extended privileges (use with caution)", default=False)],
     tty: Annotated[bool, Field(description="Allocate a pseudo-TTY (required for interactive commands)", default=False)],
     stream: Annotated[bool, Field(description="Stream command output in real-time", default=False)],
-    stream_type: Annotated[str, Field(description="Which streams to capture (stdout, stderr, or both)", default="both")],
+    stream_type: Annotated[str, Field(
+        description="Which streams to capture (stdout, stderr, or both)",
+        default="both"
+    )],
     detach: Annotated[bool, Field(description="Run command in background (returns immediately)", default=False)],
-    stdin: Annotated[bool, Field(description="Open stdin for the command (required for interactive input)", default=False)],
-    timeout: Annotated[int, Field(description="Timeout in seconds for command execution (1-3600)", default=60, ge=1, le=3600)]
+    stdin: Annotated[bool, Field(
+        description="Open stdin for the command (required for interactive input)",
+        default=False
+    )],
+    timeout: Annotated[int, Field(
+        description="Timeout in seconds for command execution (1-3600)",
+        default=60, ge=1, le=3600
+    )]
 ) -> ContainerExecResponse:
     """
     Execute a command in a running Docker container.
@@ -101,7 +113,7 @@ async def execute_in_container(
         except ValueError:
             valid_types = [e.value for e in StreamType]
             error_msg = f"Invalid stream_type: {stream_type}. Must be one of: {', '.join(valid_types)}"
-            return ContainerExecResponse.error(
+            return ContainerExecResponse.error_response(
                 error=error_msg,
                 container_id=container_id,
                 message=error_msg
@@ -114,7 +126,7 @@ async def execute_in_container(
         except NotFound:
             error_msg = f"Container not found: {container_id}"
             logger.error(error_msg)
-            return ContainerExecResponse.error(
+            return ContainerExecResponse.error_response(
                 error=error_msg,
                 container_id=container_id,
                 message=error_msg
@@ -176,7 +188,7 @@ async def execute_in_container(
                     exit_code=exit_code,
                     message="Command executed successfully"
                 )
-            return ContainerExecResponse.error(
+            return ContainerExecResponse.error_response(
                 error=f"Command failed with exit code {exit_code}",
                 container_id=container_id,
                 exec_id=exec_id['Id'],
@@ -185,7 +197,7 @@ async def execute_in_container(
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
-        return ContainerExecResponse.error(
+        return ContainerExecResponse.error_response(
             error=error_msg,
             container_id=container_id,
             message="Docker API error"
@@ -194,7 +206,7 @@ async def execute_in_container(
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
-        return ContainerExecResponse.error(
+        return ContainerExecResponse.error_response(
             error=error_msg,
             container_id=container_id,
             message="Docker daemon not available"
@@ -203,7 +215,7 @@ async def execute_in_container(
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error executing command in container {container_id}: {error_msg}")
-        return ContainerExecResponse.error(
+        return ContainerExecResponse.error_response(
             error=error_msg,
             container_id=container_id,
             message=f"Failed to execute command: {error_msg}"
@@ -278,7 +290,7 @@ async def _stream_exec_output(
             # Clean up the socket
             try:
                 socket.close()
-            except:
+            except Exception:  # noqa: S110
                 pass
 
     except Exception as e:

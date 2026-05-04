@@ -84,7 +84,10 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
             "containers_status": containers_dict.get("status"),
             "containers_message": containers_dict.get("message"),
             "system_info": sys_info,
-            "system_status": getattr(system_result, "status", system_result.get("status") if isinstance(system_result, dict) else None),
+            "system_status": getattr(
+                system_result, "status",
+                system_result.get("status") if isinstance(system_result, dict) else None
+            ),
             "disk_summary": disk_summary,
             "images": images_dict.get("images", []),
             "images_count": images_dict.get("count", 0),

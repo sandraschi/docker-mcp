@@ -5,12 +5,15 @@ This module provides functionality to attempt reconnection to the Docker daemon
 if the connection is lost.
 """
 import asyncio
+import logging
 
 from pydantic import BaseModel, Field
 
 from dockermcp import docker_available, retry_docker_connection
 from dockermcp.mcp_instance import mcp
 from dockermcp.tools import ToolResponse
+
+logger = logging.getLogger(__name__)
 
 
 class ReconnectDockerParams(BaseModel):

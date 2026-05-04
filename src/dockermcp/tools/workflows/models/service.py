@@ -2,7 +2,7 @@
 Service-related models for the workflow system.
 """
 from enum import StrEnum
-from typing import Any
+from typing import Any, ClassVar
 
 from pydantic import Field
 
@@ -62,7 +62,7 @@ class ServiceDefinition(BaseModel):
         description="Services that this service depends on"
     )
 
-    model_config = {
+    model_config: ClassVar[dict] = {
         "json_schema_extra": {
             "example": {
                 "name": "web",

@@ -20,7 +20,7 @@ class ProblemDetector:
     def detect_common_issues(self) -> dict[str, Any]:
         """
         Detect common Docker issues across the system.
-        
+
         Returns:
             Dict containing detected issues and recommendations
         """
@@ -63,7 +63,7 @@ class ProblemDetector:
 
         try:
             # Check if Docker is running using the utility function
-            docker_info = run_docker_command('info', format_json=False)
+            result = run_docker_command('info', format_json=False)
 
             if result.returncode != 0:
                 issues.append({
@@ -75,7 +75,7 @@ class ProblemDetector:
                 })
 
             # Check for low disk space using the utility function
-            df_info = run_docker_command('system', ['df'], format_json=True)
+            df_result = run_docker_command('system', ['df'], format_json=True)
 
             if df_result.returncode == 0:
                 try:
@@ -86,7 +86,8 @@ class ProblemDetector:
                                 'type': 'resource',
                                 'severity': 'warning',
                                 'title': 'Reclaimable disk space in images',
-                                'description': f"{item.get('Reclaimable')} of disk space can be reclaimed from unused images.",
+                                'description': f"{item.get('Reclaimable')} of disk space "
+                                "can be reclaimed from unused images.",
                                 'recommendation': 'Run "docker image prune -a" to clean up unused images.'
                             })
                 except json.JSONDecodeError:
@@ -103,7 +104,7 @@ class ProblemDetector:
 
         try:
             # Get all containers (including stopped ones) using the utility function
-            containers = run_docker_command('ps', ['-a'], format_json=True)
+            result = run_docker_command('ps', ['-a'], format_json=True)
 
             if result.returncode != 0:
                 return issues
@@ -164,7 +165,7 @@ class ProblemDetector:
 
         try:
             # Check for dangling images using the utility function
-            dangling_images = run_docker_command('images', ['-f', 'dangling=true', '--format', '{{.ID}}'], format_json=False)
+            result = run_docker_command('images', ['-f', 'dangling=true', '--format', '{{.ID}}'], format_json=False)
 
             if result.returncode == 0 and result.stdout.strip():
                 dangling_count = len([i for i in result.stdout.split('\n') if i.strip()])
@@ -178,7 +179,10 @@ class ProblemDetector:
                     })
 
             # Check for large images using the utility function
-            images = run_docker_command('images', ['--format', '{{.Size}}	{{.Repository}}:{{.Tag}}'], format_json=False)
+            result = run_docker_command(
+                'images', ['--format', '{{.Size}}	{{.Repository}}:{{.Tag}}'],
+                format_json=False
+            )
 
             if result.returncode == 0:
                 large_images = []
@@ -209,7 +213,8 @@ class ProblemDetector:
                         'type': 'image',
                         'severity': 'info',
                         'title': f'{len(large_images)} large images found',
-                        'description': 'The following images are larger than 500MB and may be using significant disk space.',
+                        'description': 'The following images are larger than 500MB '
+                        'and may be using significant disk space.',
                         'details': large_images,
                         'recommendation': 'Consider optimizing or removing unused large images.'
                     })
@@ -225,7 +230,7 @@ class ProblemDetector:
 
         try:
             # Check for networks with no containers using the utility function
-            networks = run_docker_command('network', ['ls', '--format', '{{.Name}}'], format_json=False)
+            result = run_docker_command('network', ['ls', '--format', '{{.Name}}'], format_json=False)
 
             if result.returncode != 0:
                 return issues
@@ -237,7 +242,10 @@ class ProblemDetector:
                     continue
 
                 # Check if network has any containers using the utility function
-                network_info = run_docker_command('network', ['inspect', '--format', '{{.Containers}}', network], format_json=False)
+                containers_result = run_docker_command(
+                    'network', ['inspect', '--format', '{{.Containers}}', network],
+                    format_json=False
+                )
 
                 if containers_result.returncode == 0 and not containers_result.stdout.strip():
                     issues.append({
@@ -259,7 +267,7 @@ class ProblemDetector:
 
         try:
             # Check for volumes not used by any container using the utility function
-            volumes = run_docker_command('volume', ['ls', '--format', '{{.Name}}'], format_json=False)
+            result = run_docker_command('volume', ['ls', '--format', '{{.Name}}'], format_json=False)
 
             if result.returncode != 0:
                 return issues
@@ -268,7 +276,10 @@ class ProblemDetector:
 
             for volume in volumes:
                 # Check if volume is in use using the utility function
-                in_use_containers = run_docker_command('ps', ['-a', '--filter', f'volume={volume}', '--format', '{{.ID}}'], format_json=False)
+                in_use_result = run_docker_command(
+                    'ps', ['-a', '--filter', f'volume={volume}', '--format', '{{.ID}}'],
+                    format_json=False
+                )
 
                 if in_use_result.returncode == 0 and not in_use_result.stdout.strip():
                     issues.append({

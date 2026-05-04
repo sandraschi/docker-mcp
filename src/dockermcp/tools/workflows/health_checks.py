@@ -20,7 +20,6 @@ import httpx
 from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 from .models import (
-    BaseModel,
     ServiceDefinition,
     ServiceHealth,
 )
@@ -274,7 +273,7 @@ class TCPHealthCheck(BaseHealthCheck):
         """Execute a TCP health check."""
         try:
             # Use asyncio's open_connection with a timeout
-            reader, writer = await asyncio.wait_for(
+            _reader, writer = await asyncio.wait_for(
                 asyncio.open_connection(self.host, self.port),
                 timeout=self.timeout
             )

@@ -306,7 +306,7 @@ class ContainerInspectResponse(BaseModel):
         )
 
     @classmethod
-    def error(cls, error: str, message: str = "An error occurred") -> ContainerInspectResponse:
+    def error_response(cls, error: str, message: str = "An error occurred") -> ContainerInspectResponse:
         """Create an error response."""
         return cls(
             status="error",
@@ -339,7 +339,7 @@ class ContainerListResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         error: str,
         message: str = "An error occurred"
@@ -378,7 +378,7 @@ class ContainerOperationResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         error: str,
         container_id: str | None = None,
@@ -419,7 +419,7 @@ class ContainerLogsResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         container_id: str,
         error: str,
@@ -459,7 +459,7 @@ class ContainerStatsResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         container_id: str,
         error: str,
@@ -505,7 +505,7 @@ class ContainerExecResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         error: str,
         container_id: str | None = None,

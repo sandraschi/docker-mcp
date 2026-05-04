@@ -3,10 +3,9 @@ Pydantic models for request/response validation.
 
 This package contains all data models used for API request/response validation.
 """
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel
 
 
 class BaseResponse(BaseModel):

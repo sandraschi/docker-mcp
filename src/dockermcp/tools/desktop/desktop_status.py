@@ -110,7 +110,7 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
+            _stdout, _stderr = await asyncio.wait_for(
                 process.communicate(), timeout=5.0
             )
 
@@ -188,8 +188,8 @@ async def _attempt_daemon_recovery() -> bool:
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
-            except Exception:
-                pass  # Process might not be running
+            except Exception:  # noqa: S110
+                pass
 
         await asyncio.sleep(3)
 
@@ -215,7 +215,7 @@ async def _attempt_daemon_recovery() -> bool:
                     )
 
                     try:
-                        stdout, stderr = await asyncio.wait_for(
+                        _stdout, _stderr = await asyncio.wait_for(
                             process.communicate(), timeout=5.0
                         )
                         if process.returncode == 0:
@@ -223,14 +223,14 @@ async def _attempt_daemon_recovery() -> bool:
                     except TimeoutError:
                         process.kill()
 
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
 
                 await asyncio.sleep(2)
 
             return False
 
-    except Exception:
+    except Exception:  # noqa: S110
         pass
 
     return False

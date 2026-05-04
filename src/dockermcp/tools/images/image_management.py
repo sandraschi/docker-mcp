@@ -143,7 +143,10 @@ class ImagePruneResult(BaseModel):
 async def list_images(
     name: str | None = Field(default=None, description="Filter by image name or name:tag"),
     all: bool = Field(default=False, description="Show all images (default hides intermediate images)"),
-    filters: dict[str, str] = Field(default_factory=dict, description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"),
+    filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"
+    ),
     digests: bool = Field(default=False, description="Show image digests")
 ) -> dict[str, Any]:
     """
@@ -446,7 +449,10 @@ async def tag_image(
 async def search_images(
     term: str = Field(..., description="Search term"),
     limit: int = Field(default=25, ge=1, le=100, description="Maximum number of results to return (1-100)"),
-    filters: dict[str, str] = Field(default_factory=dict, description="Additional filters (e.g., {'is-official': 'true'}")
+    filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Additional filters (e.g., {'is-official': 'true'}"
+    )
 ) -> dict[str, Any]:
     """
     Search Docker Hub for images.
@@ -538,7 +544,10 @@ async def search_images(
 @mcp.tool
 @check_docker_available
 async def prune_images(
-    filters: dict[str, str] = Field(default_factory=dict, description="Filters to process on the prune (e.g., {'dangling': ['true']}"),
+    filters: dict[str, str] = Field(
+        default_factory=dict,
+        description="Filters to process on the prune (e.g., {'dangling': ['true']}"
+    ),
     dry_run: bool = Field(default=False, description="If true, only show what would be deleted")
 ) -> dict[str, Any]:
     """

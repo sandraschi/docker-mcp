@@ -93,7 +93,10 @@ def create_app() -> FastAPI:
                 "disk_summary": {
                     "total_containers_size": sum(c.get("SizeRw", 0) for c in disk_info.get("Containers", [])),
                     "total_images_size": sum(i.get("Size", 0) for i in disk_info.get("Images", [])),
-                    "total_volumes_size": sum(v.get("UsageData", {}).get("Size", 0) for v in disk_info.get("Volumes", [])),
+                    "total_volumes_size": sum(
+                        v.get("UsageData", {}).get("Size", 0)
+                        for v in disk_info.get("Volumes", [])
+                    ),
                     "total_size": total_size,
                 },
                 "images": [
@@ -111,7 +114,7 @@ def create_app() -> FastAPI:
             }
         except Exception as e:
             logger.error(f"Error getting dashboard: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     # Containers endpoint
     @app.get("/api/containers")
@@ -138,7 +141,7 @@ def create_app() -> FastAPI:
             }
         except Exception as e:
             logger.error(f"Error getting containers: {e}")
-            raise HTTPException(status_code=500, detail=str(e))
+            raise HTTPException(status_code=500, detail=str(e)) from e
 
     # Tools endpoint
     @app.get("/api/tools")
@@ -169,6 +172,9 @@ def create_app() -> FastAPI:
     return app
 
 if __name__ == "__main__":
+    import os
+
     import uvicorn
     app = create_app()
-    uvicorn.run(app, host="0.0.0.0", port=10807)
+    host = os.environ.get("HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=10807)

@@ -11,6 +11,12 @@ import sys
 import warnings
 from pathlib import Path
 
+from fastapi import FastAPI
+
+from docker_mcp.web import setup_webapp
+from dockermcp.logging_config import configure_logging, logger
+from dockermcp.mcp_instance import get_mcp
+
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 
@@ -23,13 +29,6 @@ logging.basicConfig(
 for logger_name in ["fastmcp", "mcp", "uvicorn", "httpx", "httpcore", "h11", "asyncio"]:
     logging.getLogger(logger_name).setLevel(logging.CRITICAL)
 
-# Import our logging configuration
-from fastapi import FastAPI
-
-from docker_mcp.transport import run_server
-from docker_mcp.web import setup_webapp
-from dockermcp.logging_config import configure_logging, logger
-
 # Configure our specific logging
 configure_logging(
     enable_console=True,
@@ -39,8 +38,6 @@ configure_logging(
 )
 
 # Use the shared MCP instance that has all tools registered (from dockermcp)
-from dockermcp.mcp_instance import get_mcp
-
 mcp = get_mcp()
 
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
@@ -81,7 +78,7 @@ def get_all_tools() -> list[callable]:
             logger.debug(f"Imported module: dockermcp.tools.{name}")
 
             # Find all functions with _tool attribute (added by @Tool decorator)
-            for func_name, func in getmembers(module, isfunction):
+            for _func_name, func in getmembers(module, isfunction):
                 if hasattr(func, "_tool"):
                     tools.append(func)
                     logger.debug(f"Discovered tool: {name}.{func.__name__}")
@@ -95,30 +92,27 @@ def get_all_tools() -> list[callable]:
     return tools
 
 
-async def run_server():
+async def run_mcp_server():
     """Run the FastMCP server with all tools."""
-    # Get the singleton FastMCP instance
-    from dockermcp.mcp_instance import get_mcp
-
-    mcp = get_mcp()
+    mcp_instance = get_mcp()
 
     # Get all tools
     tools = get_all_tools()
 
     # Register all tools
     for tool in tools:
-        mcp.register_tool(tool)
+        mcp_instance.register_tool(tool)
 
     # Log startup information
     logger.info(f"Starting Docker MCP server with {len(tools)} tools")
     logger.info("Registered tools: " + ", ".join([t.__name__ for t in tools]))
 
     # Configure logging for FastMCP
-    mcp.logger.setLevel("CRITICAL")  # Only show critical errors
+    mcp_instance.logger.setLevel("CRITICAL")  # Only show critical errors
 
     # Run the server with stdio transport and proper logging config
     logger.info("Starting FastMCP server with stdio transport...")
-    await mcp.run_async(
+    await mcp_instance.run_async(
         transport="stdio",
         log_level="CRITICAL",  # Ensure minimal logging
         json_response=True,  # Set JSON response formatting
@@ -137,7 +131,7 @@ def main():
         asyncio.set_event_loop(loop)
 
         try:
-            loop.run_until_complete(run_server())
+            loop.run_until_complete(run_mcp_server())
         except KeyboardInterrupt:
             logger.info("Shutting down server...")
         except Exception as e:

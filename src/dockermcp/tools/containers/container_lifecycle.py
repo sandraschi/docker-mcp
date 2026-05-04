@@ -141,7 +141,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         try:
             container = client.containers.get(params.container_id)
         except docker.errors.NotFound:
-            raise ToolError(f"Container {params.container_id} not found")
+            raise ToolError(f"Container {params.container_id} not found") from None
 
         # Execute the requested action
         if params.action == "start":
@@ -196,11 +196,11 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
     except docker.errors.APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg)
+        raise ToolError(error_msg) from e
     except Exception as e:
         error_msg = f"Error managing container {params.container_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
-        raise ToolError(error_msg)
+        raise ToolError(error_msg) from e
 
 @mcp.tool
 async def manage_container_lifecycle(params: ContainerLifecycleParams) -> dict[str, Any]:

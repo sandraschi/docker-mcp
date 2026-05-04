@@ -6,7 +6,7 @@ service dependencies, resource constraints, and workflow state transitions.
 """
 import re
 from datetime import datetime
-from typing import Any, TypeVar
+from typing import Any, ClassVar, TypeVar
 
 from .models import ServiceDefinition, WorkflowResponse, WorkflowStatus
 
@@ -86,7 +86,7 @@ class ServiceDependencyValidator(WorkflowValidator[dict[str, ServiceDefinition]]
 
         def visit(service_name: str, path: list[str]) -> None:
             if service_name in recursion_stack:
-                cycle = ' -> '.join(path[path.index(service_name):] + [service_name])
+                cycle = ' -> '.join([*path[path.index(service_name):], service_name])
                 raise DependencyError(f"Circular dependency detected: {cycle}")
 
             if service_name in visited:
@@ -97,7 +97,7 @@ class ServiceDependencyValidator(WorkflowValidator[dict[str, ServiceDefinition]]
 
             service = services[service_name]
             for dep in service.depends_on:
-                visit(dep, path + [service_name])
+                visit(dep, [*path, service_name])
 
             recursion_stack.remove(service_name)
 
@@ -259,7 +259,7 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
     @staticmethod
     def _format_memory(bytes_val: int) -> str:
         """Format bytes to human-readable string."""
-        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei']:
+        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei']:  # noqa: B007
             if bytes_val < 1024:
                 break
             bytes_val /= 1024
@@ -275,7 +275,7 @@ class WorkflowStateValidator(WorkflowValidator[WorkflowResponse]):
     """
 
     # Valid state transitions: {from_state: {to_state1, to_state2, ...}}
-    VALID_TRANSITIONS = {
+    VALID_TRANSITIONS: ClassVar[dict] = {
         WorkflowStatus.PENDING: {
             WorkflowStatus.RUNNING,
             WorkflowStatus.PAUSED,

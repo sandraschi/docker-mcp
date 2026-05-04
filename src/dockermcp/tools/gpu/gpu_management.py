@@ -6,6 +6,7 @@ This module provides tools for managing NVIDIA GPU resources in Docker container
 
 import asyncio
 import json
+import shutil
 import subprocess
 from datetime import datetime, timedelta
 from enum import StrEnum
@@ -141,13 +142,17 @@ class GPUManager:
             self.docker_client = None
 
         self._gpu_info: list[GPUDevice] | None = None
+        self._nvidia_smi_bin = shutil.which("nvidia-smi")
         self._nvidia_smi_available = self._check_nvidia_smi()
 
     def _check_nvidia_smi(self) -> bool:
         """Check if nvidia-smi is available."""
+        if not self._nvidia_smi_bin:
+            logger.info("nvidia-smi not found. GPU monitoring will be disabled.")
+            return False
         try:
-            subprocess.run(
-                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            subprocess.run(  # noqa: S603
+                [self._nvidia_smi_bin, "--query-gpu=name", "--format=csv,noheader"],
                 check=True,
                 capture_output=True,
                 text=True
@@ -164,10 +169,12 @@ class GPUManager:
 
         try:
             # Get basic GPU info
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 [
-                    "nvidia-smi",
-                    "--query-gpu=index,name,memory.total,memory.used,memory.free,utilization.gpu,utilization.memory,temperature.gpu,power.draw,power.limit,driver_version,pci.bus_id,uuid",
+                    self._nvidia_smi_bin,
+                    "--query-gpu=index,name,memory.total,memory.used,memory.free,"
+                    "utilization.gpu,utilization.memory,temperature.gpu,power.draw,"
+                    "power.limit,driver_version,pci.bus_id,uuid",
                     "--format=json"
                 ],
                 check=True,

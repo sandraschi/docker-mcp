@@ -137,7 +137,13 @@ class ContainerRequest(BaseModel):
         return self
 
 @mcp.tool
-async def manage_container(params: ContainerRequest) -> ContainerOperationResponse | ContainerListResponse | ContainerInspectResponse | ContainerLogsResponse | ContainerStatsResponse | ContainerExecResponse | ContainerFileResponse | ContainerVolumeResponse | ContainerImageResponse:
+async def manage_container(
+    params: ContainerRequest
+) -> (
+    ContainerOperationResponse | ContainerListResponse | ContainerInspectResponse
+    | ContainerLogsResponse | ContainerStatsResponse | ContainerExecResponse
+    | ContainerFileResponse | ContainerVolumeResponse | ContainerImageResponse
+):
     """
     Unified interface for managing Docker containers and related resources.
 
@@ -247,7 +253,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
         else:
             error_msg = f"Unsupported action: {action}"
             logger.error(error_msg)
-            return ContainerOperationResponse.error(
+            return ContainerOperationResponse.error_response(
                 container_id=container_id,
                 error=error_msg,
                 message=f"Unsupported action: {action}"
@@ -256,7 +262,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
     except (DockerException, APIError) as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerOperationResponse.error(
+        return ContainerOperationResponse.error_response(
             container_id=params.container_id,
             error=error_msg,
             message="Docker API error occurred"
@@ -265,7 +271,7 @@ async def manage_container(params: ContainerRequest) -> ContainerOperationRespon
     except Exception as e:
         error_msg = f"Error managing container: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerOperationResponse.error(
+        return ContainerOperationResponse.error_response(
             container_id=params.container_id,
             error=error_msg,
             message="An unexpected error occurred"

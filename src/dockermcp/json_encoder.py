@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
 
@@ -16,7 +16,7 @@ class DockerJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles Docker SDK objects and other non-serializable types."""
 
     # Cache for type handlers to improve performance
-    _type_handlers: dict[type, Callable[[Any], Any]] = {}
+    _type_handlers: ClassVar[dict[type, Callable[[Any], Any]]] = {}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)

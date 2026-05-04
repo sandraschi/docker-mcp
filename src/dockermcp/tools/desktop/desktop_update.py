@@ -174,7 +174,7 @@ async def _verify_daemon_startup() -> dict:
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
+                _stdout, _stderr = await asyncio.wait_for(
                     process.communicate(), timeout=5.0
                 )
                 if process.returncode == 0:
@@ -185,7 +185,7 @@ async def _verify_daemon_startup() -> dict:
             except TimeoutError:
                 process.kill()
 
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         if attempt < 9:

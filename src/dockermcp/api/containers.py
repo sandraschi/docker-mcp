@@ -5,6 +5,8 @@ This module provides FastMCP tool endpoints for container operations.
 """
 import logging
 
+from pydantic import Field
+
 from ...mcp_instance import get_mcp
 from ...models import BaseResponse, ContainerInfo
 
@@ -15,7 +17,7 @@ mcp = get_mcp()
 
 class ContainerListResponse(BaseResponse):
     """Response model for listing containers."""
-    data: list[ContainerInfo] = []
+    data: list[ContainerInfo] = Field(default_factory=list)
 
 @mcp.tool(
     name="list_containers",

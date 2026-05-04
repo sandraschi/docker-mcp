@@ -123,7 +123,7 @@ async def docker_daemon_restart() -> dict[str, Any]:
                 )
 
                 try:
-                    stdout, stderr = await asyncio.wait_for(
+                    _stdout, _stderr = await asyncio.wait_for(
                         process.communicate(), timeout=5.0
                     )
                     if process.returncode == 0:
@@ -133,7 +133,7 @@ async def docker_daemon_restart() -> dict[str, Any]:
                 except TimeoutError:
                     process.kill()
 
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
 
             await asyncio.sleep(2)
@@ -223,7 +223,7 @@ async def _verify_daemon_responsiveness(max_attempts: int = 5) -> dict:
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
+                _stdout, _stderr = await asyncio.wait_for(
                     process.communicate(), timeout=5.0
                 )
                 if process.returncode == 0:
@@ -234,7 +234,7 @@ async def _verify_daemon_responsiveness(max_attempts: int = 5) -> dict:
             except TimeoutError:
                 process.kill()
 
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
         if attempt < max_attempts - 1:

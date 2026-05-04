@@ -17,12 +17,13 @@ from fastmcp import FastMCP
 from fastmcp.exceptions import ToolError
 from pydantic import BaseModel, ConfigDict, Field
 
-# Initialize FastMCP instance
-mcp = FastMCP("Workflow Management Tools")
 from dockermcp.logging_config import logger
 
+# Initialize FastMCP instance
+mcp = FastMCP("Workflow Management Tools")
+
 # Import models from models.py to avoid circular imports
-from .models import (
+from .models import (  # noqa: E402
     CreateWorkflowRequest,
     CreateWorkflowResponse,
     ListWorkflowsRequest,

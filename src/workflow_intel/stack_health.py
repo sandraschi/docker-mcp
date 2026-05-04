@@ -19,16 +19,16 @@ class StackHealthChecker:
     def check_stack_health(self, stack_name: str) -> dict[str, Any]:
         """
         Check the health of a Docker stack.
-        
+
         Args:
             stack_name: Name of the stack to check
-            
+
         Returns:
             Dict containing health status and details
         """
         try:
             # Get stack services using the utility function
-            services = run_docker_command('stack', ['ps', stack_name], format_json=True)
+            result = run_docker_command('stack', ['ps', stack_name], format_json=True)
 
             if result.returncode != 0:
                 return {
@@ -89,16 +89,19 @@ class StackHealthChecker:
     def get_failed_containers(self, stack_name: str) -> dict[str, Any]:
         """
         Get a list of failed containers in a stack.
-        
+
         Args:
             stack_name: Name of the stack to check
-            
+
         Returns:
             Dict containing failed container information
         """
         try:
             # Get running stack services using the utility function
-            services = run_docker_command('stack', ['ps', '--filter', 'desired-state=running', stack_name], format_json=True)
+            result = run_docker_command(
+                'stack', ['ps', '--filter', 'desired-state=running', stack_name],
+                format_json=True
+            )
 
             if result.returncode != 0:
                 return {

@@ -126,7 +126,7 @@ class RPCHandler:
 
         # Handle notifications (no response needed)
         if request.is_notification():
-            asyncio.create_task(self._execute_method(request, request.id))
+            self._notification_task = asyncio.ensure_future(self._execute_method(request, request.id))
             return None
 
         # Execute the method and return the response
@@ -189,7 +189,9 @@ handler = RPCHandler()
 method = handler.method
 
 # Main entry point for handling messages
-async def handle_message(message: str | bytes | dict[str, Any] | list[dict[str, Any]]) -> dict[str, Any] | list[dict[str, Any]]:
+async def handle_message(
+    message: str | bytes | dict[str, Any] | list[dict[str, Any]]
+) -> dict[str, Any] | list[dict[str, Any]]:
     """Handle a JSON-RPC message.
 
     This is the main entry point for the RPC handler.

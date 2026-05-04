@@ -193,25 +193,16 @@ class BaseResponse[T](BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         error: str,
-        message: str | None = None,
-        data: Any | None = None
+        message: str = "An error occurred",
+        data: Any = None
     ) -> BaseResponse[T]:
-        """Create an error response.
-
-        Args:
-            error: Error message or code
-            message: Optional human-readable message
-            data: Optional error details
-
-        Returns:
-            BaseResponse with status 'error' and the provided error details
-        """
+        """Create an error response."""
         return cls(
-            status="error",
-            message=message or "An error occurred",
+            status='error',
+            message=message,
             error=error,
             data=data
         )

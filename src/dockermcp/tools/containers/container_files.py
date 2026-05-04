@@ -161,7 +161,7 @@ class WriteFileParams(BaseModel):
             int(v, 8)
             return v
         except ValueError:
-            raise ValueError("Mode must be a valid octal string (e.g., '644', '755')")
+            raise ValueError("Mode must be a valid octal string (e.g., '644', '755')") from None
 
     @field_validator('path')
     @classmethod
@@ -610,8 +610,9 @@ async def read_container_file(
                 user = user_result.output[0].decode('utf-8').split(':')[0] if user_result.exit_code == 0 else str(uid)
 
                 group_result = container.exec_run(['getent', 'group', str(gid)], demux=True)
-                group = group_result.output[0].decode('utf-8').split(':')[0] if group_result.exit_code == 0 else str(gid)
-            except:
+                group = group_result.output[0].decode('utf-8').split(':')[0] \
+                    if group_result.exit_code == 0 else str(gid)
+            except Exception:
                 user = str(uid)
                 group = str(gid)
 
@@ -787,7 +788,8 @@ async def write_container_file(params: WriteFileParams) -> dict[str, Any]:
                     "status": "error",
                     "container_id": params.container_id,
                     "path": params.path,
-                    "warning": f"Failed to set file ownership: {error_output.decode('utf-8', errors='replace').strip()}",
+                    "warning": f"Failed to set file ownership: "
+                    f"{error_output.decode('utf-8', errors='replace').strip()}",
                     "wrote_bytes": len(file_content)
                 }
 
@@ -803,7 +805,7 @@ async def write_container_file(params: WriteFileParams) -> dict[str, Any]:
             # Clean up the temporary file
             try:
                 os.unlink(tmp_file_path)
-            except:
+            except Exception:  # noqa: S110
                 pass
 
     except APIError as e:

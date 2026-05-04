@@ -15,16 +15,13 @@ import sys
 import time
 from pathlib import Path
 
+from dockermcp.logging_config import configure_logging, logger
+from dockermcp.mcp_instance import get_mcp
+
 # Add the parent directory to the Python path
 src_dir = str(Path(__file__).parent.absolute())
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
-
-# Configure logging early to capture startup issues
-from .logging_config import (
-    configure_logging,
-    logger,
-)
 
 # Configure logging with JSON format and proper stream handling
 # Disable JSON for RPC logs to prevent parsing issues
@@ -66,20 +63,20 @@ class DockerMCPServer:
 
             # Import API endpoints to register them
             try:
-                from dockermcp.api import containers
+                from dockermcp.api import containers as _containers
                 self.logger.debug("Successfully imported API endpoints")
             except ImportError as e:
                 self.logger.warning(f"Failed to import API endpoints: {e}")
                 # Fallback for direct script execution
                 try:
-                    from api import containers
+                    from api import containers as _containers  # noqa: F401
                     self.logger.debug("Successfully imported API endpoints (fallback)")
                 except ImportError:
                     self.logger.warning("Failed to import API endpoints (fallback)")
 
             # Import tools to ensure they're registered with the MCP instance
             try:
-                from dockermcp import tools  # This will register all tools via the import
+                from dockermcp import tools as _tools  # noqa: F401
                 self.logger.info("Successfully imported tools")
             except ImportError as e:
                 self.logger.error(f"Failed to import tools: {e}", exc_info=True)
@@ -126,7 +123,7 @@ class DockerMCPServer:
 
         # Schedule the shutdown in the event loop
         if asyncio.get_running_loop().is_running():
-            asyncio.create_task(self.shutdown())
+            self._shutdown_task = asyncio.ensure_future(self.shutdown())
 
     def cleanup(self) -> None:
         """Clean up resources during application exit."""

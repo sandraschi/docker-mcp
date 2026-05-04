@@ -488,7 +488,8 @@ async def remove_volume(params: RemoveVolumeParams) -> dict[str, Any]:
         if "volume is in use" in str(e):
             return {
                 "status": "error",
-                "message": f"Cannot remove volume '{params.name}': volume is in use. Use force=True to remove it anyway.",
+                "message": f"Cannot remove volume '{params.name}': "
+                "volume is in use. Use force=True to remove it anyway.",
                 "error": "VOLUME_IN_USE"
             }
         return {

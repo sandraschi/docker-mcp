@@ -30,17 +30,17 @@ class ImageManager:
     def _run_docker_command(self, args: list[str], timeout: int = 30) -> dict[str, Any]:
         """
         Execute Docker command with proper error handling.
-        
+
         Args:
             args: Docker command arguments
             timeout: Command timeout in seconds
-            
+
         Returns:
             Result dictionary with success/error information
         """
         try:
             cmd = self.docker_cmd + args
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 capture_output=True,
                 text=True,
@@ -70,10 +70,10 @@ class ImageManager:
     def _parse_size(self, size_str: str) -> int:
         """
         Parse Docker size string to bytes.
-        
+
         Args:
             size_str: Size string like "1.2GB", "345MB", "12.3kB"
-            
+
         Returns:
             Size in bytes
         """
@@ -101,10 +101,10 @@ class ImageManager:
     def _format_size(self, bytes_size: int) -> str:
         """
         Format bytes to human readable size.
-        
+
         Args:
             bytes_size: Size in bytes
-            
+
         Returns:
             Formatted size string
         """
@@ -127,7 +127,7 @@ class ImageManager:
     def _get_container_images(self) -> dict[str, list[str]]:
         """
         Get mapping of images to containers that use them.
-        
+
         Returns:
             Dictionary mapping image IDs to container names
         """
@@ -157,10 +157,10 @@ class ImageManager:
         """
         List all Docker images with size and usage information.
         THE MISSING FUNCTION that broke our current tool!
-        
+
         Args:
             include_unused: Include images not used by any container
-            
+
         Returns:
             Image list with size, age, and usage status
         """
@@ -250,7 +250,7 @@ class ImageManager:
                         if created_time.tzinfo is None:
                             created_time = created_time.replace(tzinfo=UTC)
                         age_days = (datetime.now(UTC) - created_time).days
-                except:
+                except Exception:
                     age_days = None
 
                 # Determine if it's a zombie (old and unused)
@@ -297,10 +297,10 @@ class ImageManager:
         """
         Get detailed status of a specific image.
         Sandra's insight: "weed out the year old zombies"
-        
+
         Args:
             image_name: Image name or ID
-            
+
         Returns:
             Image details with age, size, usage, and cleanup recommendation
         """
@@ -336,7 +336,7 @@ class ImageManager:
             try:
                 created_time = datetime.fromisoformat(created.replace('Z', '+00:00'))
                 age_days = (datetime.now(UTC) - created_time).days
-            except:
+            except Exception:
                 age_days = None
 
             # Check usage
@@ -413,11 +413,11 @@ class ImageManager:
     def pull_image(self, image_name: str, tag: str = "latest") -> dict[str, Any]:
         """
         Pull an image from Docker registry.
-        
+
         Args:
             image_name: Image name (e.g., "nginx")
             tag: Image tag (default: "latest")
-            
+
         Returns:
             Pull operation result with size and layers info
         """
@@ -446,11 +446,11 @@ class ImageManager:
     def remove_image(self, image_name: str, force: bool = False) -> dict[str, Any]:
         """
         Remove a Docker image.
-        
+
         Args:
             image_name: Image name or ID
             force: Force removal even if used by containers
-            
+
         Returns:
             Remove operation result
         """
@@ -477,11 +477,11 @@ class ImageManager:
     def tag_image(self, source_image: str, target_tag: str) -> dict[str, Any]:
         """
         Tag an image with a new name/tag.
-        
+
         Args:
             source_image: Source image name or ID
             target_tag: New tag (e.g., "myapp:v1.0")
-            
+
         Returns:
             Tag operation result
         """
@@ -505,10 +505,10 @@ class ImageManager:
         """
         Find old, unused images eating disk space.
         Sandra's insight: "weed out the year old zombies"
-        
+
         Args:
             age_threshold_days: Age threshold for zombie detection
-            
+
         Returns:
             Zombie image report with cleanup recommendations
         """

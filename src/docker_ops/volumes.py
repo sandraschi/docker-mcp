@@ -19,13 +19,13 @@ class VolumeManager:
     def list_volumes(self) -> dict[str, Any]:
         """
         List all Docker volumes.
-        
+
         Returns:
             Dict containing volume information or error details
         """
         try:
             result = subprocess.run(
-                ['docker', 'volume', 'ls', '--format', '{{json .}}'],
+                ['docker', 'volume', 'ls', '--format', '{{json .}}'],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -63,17 +63,17 @@ class VolumeManager:
     def create_volume(self, name: str, driver: str = "local") -> dict[str, Any]:
         """
         Create a new Docker volume.
-        
+
         Args:
             name: Name of the volume
             driver: Volume driver (default: local)
-            
+
         Returns:
             Dict containing creation result or error details
         """
         try:
-            result = subprocess.run(
-                ['docker', 'volume', 'create', '--driver', driver, name],
+            result = subprocess.run(  # noqa: S603
+                ['docker', 'volume', 'create', '--driver', driver, name],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -97,11 +97,11 @@ class VolumeManager:
     def remove_volume(self, volume_name: str, force: bool = False) -> dict[str, Any]:
         """
         Remove a Docker volume.
-        
+
         Args:
             volume_name: Name of the volume to remove
             force: Force removal even if in use (default: False)
-            
+
         Returns:
             Dict containing removal result or error details
         """
@@ -111,7 +111,7 @@ class VolumeManager:
         cmd.append(volume_name)
 
         try:
-            subprocess.run(
+            subprocess.run(  # noqa: S603
                 cmd,
                 capture_output=True,
                 text=True,

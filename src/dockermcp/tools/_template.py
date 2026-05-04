@@ -11,11 +11,10 @@ from typing import Any
 from fastmcp import FastMCP
 from pydantic import BaseModel, Field
 
+from dockermcp.logging_config import logger
+
 # Initialize MCP instance
 mcp = FastMCP("Docker MCP")
-
-# Local imports
-from dockermcp.logging_config import logger
 
 
 class ExampleToolParams(BaseModel):

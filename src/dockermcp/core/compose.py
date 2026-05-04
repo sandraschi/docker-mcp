@@ -48,7 +48,7 @@ class ComposeManager:
         # Try 'docker compose' (newer versions)
         try:
             subprocess.run(
-                ["docker", "compose", "version"],
+                ["docker", "compose", "version"],  # noqa: S607
                 capture_output=True,
                 check=True,
             )
@@ -59,7 +59,7 @@ class ComposeManager:
         # Fall back to 'docker-compose' (older versions)
         try:
             subprocess.run(
-                ["docker-compose", "version"],
+                ["docker-compose", "version"],  # noqa: S607
                 capture_output=True,
                 check=True,
             )

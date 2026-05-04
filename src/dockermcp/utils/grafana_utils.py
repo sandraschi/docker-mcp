@@ -5,6 +5,7 @@ This module provides functionality to interact with Grafana instances running in
 including setup instructions, dashboard management, and monitoring.
 """
 import logging
+import os
 from typing import Any
 from urllib.parse import urljoin
 
@@ -18,7 +19,7 @@ class GrafanaManager:
     GRAFANA_IMAGE = "grafana/grafana:latest"
     GRAFANA_PORT = 13000  # Changed from 3000 to avoid conflicts
     DEFAULT_USER = "admin"
-    DEFAULT_PASSWORD = "admin"  # Should be changed after first login
+    DEFAULT_PASSWORD = os.environ.get("GRAFANA_PASSWORD", "admin")  # Should be changed after first login
 
     def __init__(self, docker_client=None):
         """Initialize the Grafana manager.
@@ -131,8 +132,8 @@ class GrafanaManager:
                 "details": str(e)
             }
 
-    async def get_grafana_dashboard(self, dashboard_uid: str, host: str = None,
-                                 auth: tuple = None) -> dict[str, Any]:
+    async def get_grafana_dashboard(self, dashboard_uid: str, host: str | None = None,
+                                 auth: tuple | None = None) -> dict[str, Any]:
         """Get a Grafana dashboard by UID.
 
         Args:
@@ -154,7 +155,7 @@ class GrafanaManager:
                 auth = (self.DEFAULT_USER, self.DEFAULT_PASSWORD)
 
             url = urljoin(host, f"/api/dashboards/uid/{dashboard_uid}")
-            response = requests.get(url, auth=auth)
+            response = requests.get(url, auth=auth, timeout=30)
             response.raise_for_status()
 
             return {

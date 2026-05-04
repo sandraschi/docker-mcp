@@ -50,7 +50,7 @@ if os.environ.get('ENABLE_LOGURU', 'false').lower() == 'true':
         pass
 
 # Local imports
-from .loki_handler import add_loki_handler
+from .loki_handler import add_loki_handler  # noqa: E402
 
 # Configure the log directory
 LOG_DIR = Path("logs")

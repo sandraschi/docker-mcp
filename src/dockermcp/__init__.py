@@ -15,7 +15,7 @@ import sys
 from collections.abc import Callable
 from functools import wraps
 from pathlib import Path
-from typing import Any, Dict, Optional, TypeVar, cast
+from typing import Any, TypeVar, cast
 
 # Add the src directory to the Python path
 src_dir = str(Path(__file__).parent.parent)
@@ -23,7 +23,7 @@ if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
 # Configure logging before importing other modules
-from .logging_config import configure_logging, logger
+from .logging_config import configure_logging, logger  # noqa: E402
 
 # Set up logging with minimal output by default
 configure_logging(level=os.getenv("LOG_LEVEL", "WARNING"))
@@ -33,14 +33,14 @@ for logger_name in ['fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore', 'h11', 'as
     logging.getLogger(logger_name).setLevel(logging.CRITICAL)
 
 # Import core components after logging is configured
-import docker
+import docker  # noqa: E402
 
-from .core.containers import ContainerManager
-from .core.images import ImageManager
-from .core.networks import NetworkManager
-from .core.system import SystemManager
-from .core.volumes import VolumeManager
-from .mcp_instance import get_mcp
+from .core.containers import ContainerManager  # noqa: E402
+from .core.images import ImageManager  # noqa: E402
+from .core.networks import NetworkManager  # noqa: E402
+from .core.system import SystemManager  # noqa: E402
+from .core.volumes import VolumeManager  # noqa: E402
+from .mcp_instance import get_mcp  # noqa: E402
 
 # Get the shared FastMCP instance
 mcp = get_mcp()
@@ -113,7 +113,7 @@ def check_docker_service_windows() -> str:
     """Check Docker service status on Windows."""
     try:
         result = subprocess.run(
-            ['sc', 'query', 'Docker Desktop Service'],
+            ['sc', 'query', 'Docker Desktop Service'],  # noqa: S607
             capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW

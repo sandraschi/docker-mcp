@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 """
 Docker Network Management for FastMCP 3.1+
 
@@ -10,6 +8,7 @@ This module provides comprehensive tools for managing Docker networks including:
 - Listing and filtering networks
 - Managing IPAM (IP Address Management) configurations
 """
+from __future__ import annotations
 
 from datetime import datetime
 from enum import StrEnum
@@ -17,8 +16,6 @@ from ipaddress import IPv4Network, IPv6Network
 from typing import Any, Literal, TypeVar
 
 from docker.errors import DockerException
-
-# Import the mcp instance for tool registration
 from pydantic import BaseModel, ConfigDict, Field, IPvAnyAddress, ValidationInfo, field_validator
 
 from dockermcp import check_docker_available, docker_client
@@ -98,7 +95,7 @@ class BaseResponse[T](BaseModel):
     def error_response(
         cls: type[BaseResponse[T]],
         error: str,
-        message: str = None,
+        message: str | None = None,
         data: Any = None
     ) -> BaseResponse[T]:
         """Create an error response."""
@@ -213,7 +210,7 @@ class NetworkSummary(BaseModel):
                 iso_str = created_str.split('.')[0] + 'Z'
                 created_dt = datetime.fromisoformat(iso_str.replace('Z', '+00:00'))
             except Exception:
-                pass
+                logger.debug("Failed to parse creation timestamp, ignoring")
 
         return cls(
             id=network.id,
@@ -415,11 +412,16 @@ async def connect_container_to_network(params: NetworkConnectRequest) -> Network
                 ipv6_address=str(params.ipv6_address) if params.ipv6_address else None
             )
 
-        if params.aliases: endpoint_config['aliases'] = params.aliases
-        if params.links: endpoint_config['links'] = params.links
-        if params.link_local_ips: endpoint_config['link_local_ips'] = params.link_local_ips
-        if params.driver_opt: endpoint_config['driver_opt'] = params.driver_opt
-        if params.mac_address: endpoint_config['mac_address'] = params.mac_address
+        if params.aliases:
+            endpoint_config['aliases'] = params.aliases
+        if params.links:
+            endpoint_config['links'] = params.links
+        if params.link_local_ips:
+            endpoint_config['link_local_ips'] = params.link_local_ips
+        if params.driver_opt:
+            endpoint_config['driver_opt'] = params.driver_opt
+        if params.mac_address:
+            endpoint_config['mac_address'] = params.mac_address
 
         network.connect(container, **endpoint_config)
 

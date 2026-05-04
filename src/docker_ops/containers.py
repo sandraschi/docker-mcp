@@ -30,11 +30,11 @@ class ContainerManager:
     def _run_docker_command(self, args: list[str], timeout: int = 30) -> dict[str, Any]:
         """
         Execute Docker command with proper error handling.
-        
+
         Args:
             args: Docker command arguments
             timeout: Command timeout in seconds
-            
+
         Returns:
             Result dictionary with success/error information
         """
@@ -65,10 +65,10 @@ class ContainerManager:
     def list_containers(self, all_states: bool = True) -> dict[str, Any]:
         """
         List all Docker containers with enhanced formatting.
-        
+
         Args:
             all_states: Include stopped containers
-            
+
         Returns:
             Formatted container list with summary statistics
         """
@@ -141,10 +141,10 @@ class ContainerManager:
     def get_container_info(self, container_name: str) -> dict[str, Any]:
         """
         Get detailed information about a specific container.
-        
+
         Args:
             container_name: Container name or ID
-            
+
         Returns:
             Detailed container information
         """
@@ -205,7 +205,7 @@ class ContainerManager:
                     started_time = datetime.fromisoformat(info["started"].replace('Z', '+00:00'))
                     uptime_seconds = (datetime.now(UTC) - started_time).total_seconds()
                     info["uptime_seconds"] = int(uptime_seconds)
-                except:
+                except Exception:
                     info["uptime_seconds"] = None
 
             return info
@@ -227,7 +227,7 @@ class ContainerManager:
     ) -> dict[str, Any]:
         """
         Create a new Docker container with intelligent defaults.
-        
+
         Args:
             image: Docker image name
             name: Container name
@@ -235,7 +235,7 @@ class ContainerManager:
             environment: Environment variables
             volumes: Volume mounts {"host_path": "container_path"}
             network: Network to connect to
-            
+
         Returns:
             Container creation result
         """
@@ -284,10 +284,10 @@ class ContainerManager:
     def start_container(self, container_name: str) -> dict[str, Any]:
         """
         Start a stopped container.
-        
+
         Args:
             container_name: Container name or ID
-            
+
         Returns:
             Start operation result
         """
@@ -309,11 +309,11 @@ class ContainerManager:
     def stop_container(self, container_name: str, timeout: int = 10) -> dict[str, Any]:
         """
         Stop a running container gracefully.
-        
+
         Args:
             container_name: Container name or ID
             timeout: Seconds to wait before force killing
-            
+
         Returns:
             Stop operation result
         """
@@ -340,10 +340,10 @@ class ContainerManager:
     def restart_container(self, container_name: str) -> dict[str, Any]:
         """
         Restart a container (stop + start).
-        
+
         Args:
             container_name: Container name or ID
-            
+
         Returns:
             Restart operation result
         """
@@ -365,11 +365,11 @@ class ContainerManager:
     def remove_container(self, container_name: str, force: bool = False) -> dict[str, Any]:
         """
         Remove a container.
-        
+
         Args:
             container_name: Container name or ID
             force: Force removal of running container
-            
+
         Returns:
             Remove operation result
         """
@@ -402,13 +402,13 @@ class ContainerManager:
     ) -> dict[str, Any]:
         """
         Get container logs with formatting and error highlighting.
-        
+
         Args:
             container_name: Container name or ID
             lines: Number of recent lines to retrieve
             follow: Stream logs (not recommended for MCP)
             timestamps: Include timestamps
-            
+
         Returns:
             Container logs with metadata
         """
@@ -461,7 +461,7 @@ class ContainerManager:
                 "error_count": error_count,
                 "warning_count": warning_count,
                 "recent_errors": recent_errors,
-                "has_recent_activity": len([l for l in log_lines[-10:] if l.strip()]) > 0
+                "has_recent_activity": len([_l for _l in log_lines[-10:] if _l.strip()]) > 0
             },
             "timestamp": datetime.now(UTC).isoformat()
         }

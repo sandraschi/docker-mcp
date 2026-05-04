@@ -19,13 +19,13 @@ class SystemManager:
     def system_info(self) -> dict[str, Any]:
         """
         Get Docker system information.
-        
+
         Returns:
             Dict containing system information or error details
         """
         try:
             result = subprocess.run(
-                ['docker', 'system', 'info', '--format', '{{json .}}'],
+                ['docker', 'system', 'info', '--format', '{{json .}}'],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -52,13 +52,13 @@ class SystemManager:
     def version_info(self) -> dict[str, Any]:
         """
         Get Docker version information.
-        
+
         Returns:
             Dict containing version information or error details
         """
         try:
             result = subprocess.run(
-                ['docker', 'version', '--format', '{{json .}}'],
+                ['docker', 'version', '--format', '{{json .}}'],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -85,13 +85,13 @@ class SystemManager:
     def disk_usage(self) -> dict[str, Any]:
         """
         Get Docker disk usage information.
-        
+
         Returns:
             Dict containing disk usage information or error details
         """
         try:
             result = subprocess.run(
-                ['docker', 'system', 'df', '--format', '{{json .}}'],
+                ['docker', 'system', 'df', '--format', '{{json .}}'],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -118,12 +118,12 @@ class SystemManager:
     def system_prune(self, volumes: bool = False, networks: bool = False, force: bool = False) -> dict[str, Any]:
         """
         Remove unused Docker data.
-        
+
         Args:
             volumes: Prune volumes (default: False)
             networks: Prune networks (default: False)
             force: Do not prompt for confirmation (default: False)
-            
+
         Returns:
             Dict containing prune results or error details
         """
@@ -135,7 +135,7 @@ class SystemManager:
             cmd.append('--networks')
 
         try:
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 capture_output=True,
                 text=True,

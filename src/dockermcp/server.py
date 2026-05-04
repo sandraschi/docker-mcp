@@ -17,8 +17,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic"
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
 # Import local modules
-from dockermcp.logging_config import configure_logging, logger
-from dockermcp.tools.assorted_crap import SafeJSONEncoder, warn_with_log
+from dockermcp.logging_config import configure_logging, logger  # noqa: E402
+from dockermcp.mcp_instance import get_mcp  # noqa: E402
+from dockermcp.tools.assorted_crap import SafeJSONEncoder, warn_with_log  # noqa: E402
+from dockermcp.transport import run_server  # noqa: E402
 
 # Configure logging with JSON format and proper stream handling
 # Disable JSON for RPC logs to prevent parsing issues
@@ -30,14 +32,10 @@ configure_logging(
 )
 
 # Get logger for this module
-logger = logging.getLogger('dockermcp.server')
+server_logger = logging.getLogger('dockermcp.server')
 
 # Redirect warnings to the logger
 warnings.showwarning = warn_with_log
-
-# Get the singleton FastMCP instance
-from .mcp_instance import get_mcp
-from .transport import run_server
 
 mcp = get_mcp()
 
@@ -50,20 +48,20 @@ logger.info("Using singleton FastMCP instance from mcp_instance.py")
 # Import tool modules to register them with @mcp.tool decorators
 try:
     # Import tool modules - these will be registered via @mcp.tool decorators
-    from dockermcp.tools import agentic_container_workflow  # SEP-1577 agentic workflows
-    from dockermcp.tools.containers import list_containers
+    from dockermcp.tools import agentic_container_workflow as _aw  # noqa: F401
+    from dockermcp.tools.containers import list_containers as _lc  # noqa: F401
 
     # Import desktop tools
-    from dockermcp.tools.desktop import (
+    from dockermcp.tools.desktop import (  # noqa: F401
         docker_daemon_recover,
         docker_daemon_restart,
         docker_desktop_status,
         docker_desktop_update,
     )
-    from dockermcp.tools.networks import network_management
-    from dockermcp.tools.system import system_management
-    from dockermcp.tools.volumes import volume_management
-    from dockermcp.tools.workflows import workflow_management
+    from dockermcp.tools.networks import network_management as _nm  # noqa: F401
+    from dockermcp.tools.system import system_management as _sm  # noqa: F401
+    from dockermcp.tools.volumes import volume_management as _vm  # noqa: F401
+    from dockermcp.tools.workflows import workflow_management as _wm  # noqa: F401
 
     # Log successful imports
     logger.info("Successfully imported all tool modules including Docker Desktop tools and SEP-1577 agentic workflows")

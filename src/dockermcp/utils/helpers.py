@@ -63,7 +63,7 @@ def run_command(
         cmd = [str(arg) for arg in cmd]
 
     try:
-        return subprocess.run(
+        return subprocess.run(  # noqa: S603
             cmd,
             cwd=str(cwd) if cwd else None,
             env=env,

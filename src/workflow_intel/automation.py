@@ -20,16 +20,16 @@ class AutomationManager:
     def restart_failed_containers(self, max_attempts: int = 3) -> dict[str, Any]:
         """
         Automatically restart containers that have failed.
-        
+
         Args:
             max_attempts: Maximum number of restart attempts (default: 3)
-            
+
         Returns:
             Dict containing restart results
         """
         try:
             # Get all containers using the utility function
-            containers = run_docker_command('ps', ['-a'], format_json=True)
+            result = run_docker_command('ps', ['-a'], format_json=True)
 
             if result.returncode != 0:
                 return {
@@ -74,16 +74,23 @@ class AutomationManager:
                         time.sleep(2)  # Give it a moment to start
 
                         # Check container status using the utility function
-                        check_result = run_docker_command('inspect', ['--format', '{{.State.Running}}', container_id], format_json=False)
+                        check_result = run_docker_command(
+                            'inspect', ['--format', '{{.State.Running}}', container_id],
+                            format_json=False
+                        )
 
                         is_running = check_result.stdout.strip() == 'true'
 
+                        rst_msg = (
+                            restart_result.stderr or 'Successfully restarted'
+                            if is_running else 'Failed to start'
+                        )
                         restart_results.append({
                             'container_id': container_id,
                             'container_name': container_name,
                             'status': 'restarted' if is_running else 'failed',
                             'attempts': attempt,
-                            'message': restart_result.stderr or 'Successfully restarted' if is_running else 'Failed to start'
+                            'message': rst_msg
                         })
                         break
 
@@ -116,10 +123,10 @@ class AutomationManager:
     def cleanup_unused_resources(self, prune_volumes: bool = False) -> dict[str, Any]:
         """
         Clean up unused Docker resources.
-        
+
         Args:
             prune_volumes: Whether to also prune volumes (default: False)
-            
+
         Returns:
             Dict containing cleanup results
         """
@@ -159,13 +166,13 @@ class AutomationManager:
                 'error': f"Error cleaning up resources: {e!s}"
             }
 
-    def update_containers(self, container_names: list[str] = None) -> dict[str, Any]:
+    def update_containers(self, container_names: list[str] | None = None) -> dict[str, Any]:
         """
         Update containers by pulling the latest images and recreating them.
-        
+
         Args:
             container_names: List of container names to update (None for all)
-            
+
         Returns:
             Dict containing update results
         """
@@ -186,7 +193,7 @@ class AutomationManager:
 
             for container_name in container_names:
                 # Get container info using the utility function
-                container_info = run_docker_command('inspect', [container_name], format_json=True)
+                inspect_result = run_docker_command('inspect', [container_name], format_json=True)
 
                 if inspect_result.returncode != 0:
                     update_results.append({

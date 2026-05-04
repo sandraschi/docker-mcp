@@ -19,13 +19,13 @@ class NetworkManager:
     def list_networks(self) -> dict[str, Any]:
         """
         List all Docker networks.
-        
+
         Returns:
             Dict containing network information or error details
         """
         try:
             result = subprocess.run(
-                ['docker', 'network', 'ls', '--format', '{{json .}}'],
+                ['docker', 'network', 'ls', '--format', '{{json .}}'],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -63,17 +63,17 @@ class NetworkManager:
     def create_network(self, name: str, driver: str = "bridge") -> dict[str, Any]:
         """
         Create a new Docker network.
-        
+
         Args:
             name: Name of the network
             driver: Network driver (default: bridge)
-            
+
         Returns:
             Dict containing creation result or error details
         """
         try:
-            result = subprocess.run(
-                ['docker', 'network', 'create', '--driver', driver, name],
+            result = subprocess.run(  # noqa: S603
+                ['docker', 'network', 'create', '--driver', driver, name],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True
@@ -98,16 +98,16 @@ class NetworkManager:
     def remove_network(self, network_id: str) -> dict[str, Any]:
         """
         Remove a Docker network.
-        
+
         Args:
             network_id: ID or name of the network to remove
-            
+
         Returns:
             Dict containing removal result or error details
         """
         try:
-            subprocess.run(
-                ['docker', 'network', 'rm', network_id],
+            subprocess.run(  # noqa: S603
+                ['docker', 'network', 'rm', network_id],  # noqa: S607
                 capture_output=True,
                 text=True,
                 check=True

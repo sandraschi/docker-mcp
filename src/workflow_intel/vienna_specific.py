@@ -20,7 +20,7 @@ class ViennaEnvironment:
     def get_environment_status(self) -> dict[str, Any]:
         """
         Get the status of the Vienna development environment.
-        
+
         Returns:
             Dict containing environment status information
         """
@@ -83,7 +83,7 @@ class ViennaEnvironment:
     def _check_known_stacks(self) -> dict[str, dict[str, Any]]:
         """
         Check the status of known Vienna stacks.
-        
+
         Returns:
             Dict containing status of known stacks
         """
@@ -95,7 +95,7 @@ class ViennaEnvironment:
 
         try:
             # Get all containers using the utility function
-            containers = run_docker_command('ps', ['-a'])
+            result = run_docker_command('ps', ['-a'])
 
             if result.returncode != 0:
                 return stacks
@@ -153,7 +153,7 @@ class ViennaEnvironment:
     def check_veogen_stack(self) -> dict[str, Any]:
         """
         Check the status of the Veogen stack.
-        
+
         Returns:
             Dict containing Veogen stack status
         """
@@ -184,7 +184,7 @@ class ViennaEnvironment:
     def check_immich_stack(self) -> dict[str, Any]:
         """
         Check the status of the Immich stack.
-        
+
         Returns:
             Dict containing Immich stack status
         """
@@ -215,7 +215,7 @@ class ViennaEnvironment:
     def check_myai_stack(self) -> dict[str, Any]:
         """
         Check the status of the MyAI stack.
-        
+
         Returns:
             Dict containing MyAI stack status
         """

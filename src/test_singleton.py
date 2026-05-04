@@ -10,7 +10,7 @@ src_dir = str(Path(__file__).parent)
 if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
-from dockermcp.mcp_instance import FastMCPSingleton, get_mcp
+from dockermcp.mcp_instance import FastMCPSingleton, get_mcp  # noqa: E402
 
 
 def test_singleton():

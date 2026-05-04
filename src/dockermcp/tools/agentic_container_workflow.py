@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 # Conditional imports for advanced_memory integration
 try:
-    from advanced_memory.mcp.inter_server import SamplingResult, create_tool_spec, sample_with_tools
+    from advanced_memory.mcp.inter_server import SamplingResult, create_tool_spec, sample_with_tools  # noqa: F401
     from advanced_memory.mcp.mcp_instance import mcp
     from advanced_memory.mcp.tools.content_manager import (
         build_error_response,
@@ -156,10 +156,16 @@ async def agentic_container_workflow(
 
         # Simulate tool execution
         # In a real scenario, you would dynamically call the tool function
-        # tool_result = await getattr(mcp.tools, simulated_tool_call["tool_name"]).fn(**simulated_tool_call["parameters"])
+        # tool_result = await getattr(mcp.tools, simulated_tool_call["tool_name"]).fn(
+        #     **simulated_tool_call["parameters"]
+        # )
         tool_result = {"status": "created", "container_id": "abc123", "name": "web-server"}
 
-        final_content = f"Container workflow completed. Executed {simulated_tool_call['tool_name']} with result: Container {tool_result['name']} ({tool_result['container_id']}) created and running"
+        final_content = (
+            f"Container workflow completed. Executed {simulated_tool_call['tool_name']} "
+            f"with result: Container {tool_result['name']} "
+            f"({tool_result['container_id']}) created and running"
+        )
 
         return build_success_response(
             operation="agentic_container_workflow",
@@ -178,7 +184,10 @@ async def agentic_container_workflow(
                 "Set up monitoring and logging for the stack"
             ],
             suggestions=[
-                "Try 'agentic_container_workflow(workflow_prompt=\"Deploy database cluster\", available_tools=[\"create_postgres\", \"setup_replication\"])'",
+                "Try 'agentic_container_workflow("
+                'workflow_prompt="Deploy database cluster", '
+                'available_tools=["create_postgres", "setup_replication"])'
+                "'",
                 "Explore multi-service orchestration workflows",
                 "Consider using Docker Compose for complex deployments"
             ]

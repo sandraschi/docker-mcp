@@ -134,7 +134,7 @@ class JSONRPCResponse[T](BaseModel):
         )
 
     @classmethod
-    def error(
+    def from_error(
         cls,
         code: int,
         message: str,
@@ -173,7 +173,7 @@ class JSONRPCResponse[T](BaseModel):
         id: str | int | None | None = None
     ) -> JSONRPCResponse[None]:
         """Create a parse error response."""
-        return cls.error(
+        return cls.from_error(
             code=-32700,
             message="Parse error",
             data=data,
@@ -187,7 +187,7 @@ class JSONRPCResponse[T](BaseModel):
         id: str | int | None | None = None
     ) -> JSONRPCResponse[None]:
         """Create an invalid request error response."""
-        return cls.error(
+        return cls.from_error(
             code=-32600,
             message="Invalid Request",
             data=data,
@@ -201,7 +201,7 @@ class JSONRPCResponse[T](BaseModel):
         id: str | int | None | None = None
     ) -> JSONRPCResponse[None]:
         """Create a method not found error response."""
-        return cls.error(
+        return cls.from_error(
             code=-32601,
             message="Method not found",
             data={"method": method} if method else None,
@@ -215,7 +215,7 @@ class JSONRPCResponse[T](BaseModel):
         id: str | int | None | None = None
     ) -> JSONRPCResponse[None]:
         """Create an invalid params error response."""
-        return cls.error(
+        return cls.from_error(
             code=-32602,
             message="Invalid params",
             data=data,
@@ -234,7 +234,7 @@ class JSONRPCResponse[T](BaseModel):
             "message": str(error) if error else None
         } if error else None
 
-        return cls.error(
+        return cls.from_error(
             code=-32603,
             message="Internal error",
             data=data,

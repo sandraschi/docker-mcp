@@ -110,7 +110,7 @@ class NetworkListResponse(BaseModel):
         )
 
     @classmethod
-    def error(cls, error: str, message: str = "An error occurred") -> NetworkListResponse:
+    def error_response(cls, error: str, message: str = "An error occurred") -> NetworkListResponse:
         """Create an error response."""
         return cls(
             status="error",
@@ -138,7 +138,7 @@ class NetworkInspectResponse(BaseModel):
         )
 
     @classmethod
-    def error(cls, error: str, message: str = "An error occurred") -> NetworkInspectResponse:
+    def error_response(cls, error: str, message: str = "An error occurred") -> NetworkInspectResponse:
         """Create an error response."""
         return cls(
             status="error",
@@ -169,7 +169,7 @@ class NetworkOperationResponse(BaseModel):
         )
 
     @classmethod
-    def error(
+    def error_response(
         cls,
         error: str,
         network_id: str | None = None,

@@ -3,12 +3,11 @@ Monitoring Tools for DockerMCP
 
 This module provides tools for managing the monitoring stack (Prometheus, Grafana, Loki, etc.).
 """
-import logging
 import subprocess
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional
+from typing import Annotated, Any, Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 
 from dockermcp.exceptions import DockerOperationError
 from dockermcp.logging_config import logger
@@ -53,7 +52,7 @@ class MonitoringManager:
         """
         try:
             logger.debug(f"Executing command: {' '.join(cmd)}")
-            result = subprocess.run(
+            result = subprocess.run(  # noqa: S603
                 cmd,
                 cwd=str(self.monitoring_dir),
                 capture_output=True,
@@ -91,7 +90,7 @@ class MonitoringManager:
         Returns:
             CommandResult with the command execution details
         """
-        cmd = self.compose_cmd + ["up", "--detach"]
+        cmd = [*self.compose_cmd, "up", "--detach"]
         if build:
             cmd.append("--build")
         return self.run_command(cmd)
@@ -107,7 +106,7 @@ class MonitoringManager:
         Returns:
             CommandResult with the command execution details
         """
-        cmd = self.compose_cmd + ["down", f"--timeout={timeout}"]
+        cmd = [*self.compose_cmd, "down", f"--timeout={timeout}"]
         if remove_volumes:
             cmd.append("--volumes")
         return self.run_command(cmd)
@@ -135,7 +134,7 @@ class MonitoringManager:
         Returns:
             CommandResult with the command execution details
         """
-        cmd = self.compose_cmd + ["ps", "--all"] if all_containers else self.compose_cmd + ["ps"]
+        cmd = [*self.compose_cmd, "ps", "--all"] if all_containers else [*self.compose_cmd, "ps"]
         return self.run_command(cmd)
 
     def get_logs(
@@ -157,7 +156,7 @@ class MonitoringManager:
         Returns:
             CommandResult with the command execution details
         """
-        cmd = self.compose_cmd + ["logs", f"--tail={tail}"]
+        cmd = [*self.compose_cmd, "logs", f"--tail={tail}"]
 
         if follow:
             cmd.append("--follow")

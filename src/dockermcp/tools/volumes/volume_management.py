@@ -64,7 +64,10 @@ class VolumeInspectResult(BaseModel):
 async def list_volumes(
     names: Annotated[list[str], Field(default_factory=list, description="Filter by volume names")],
     drivers: Annotated[list[str], Field(default_factory=list, description="Filter by volume drivers")],
-    labels: Annotated[dict[str, str], Field(default_factory=dict, description="Filter by labels (e.g., {'environment': 'production'})")],
+    labels: Annotated[dict[str, str], Field(
+        default_factory=dict,
+        description="Filter by labels (e.g., {'environment': 'production'})"
+    )],
     dangling: Annotated[bool | None, Field(None, description="Filter for dangling volumes (true/false)")] = None,
     driver: Annotated[str | None, Field(None, description="Filter by driver name (alias for drivers)")] = None,
     name: Annotated[str | None, Field(None, description="Filter by volume name (alias for names)")] = None

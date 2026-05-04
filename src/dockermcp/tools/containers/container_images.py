@@ -203,7 +203,8 @@ async def pull_image(params: ImagePullRequest) -> ContainerImageResponse:
         client = docker.from_env()
 
         # Check if image already exists
-        image_tag = f"{params.repository}:{params.tag}" if params.tag and ':' not in params.repository else params.repository
+        image_tag = f"{params.repository}:{params.tag}" \
+            if params.tag and ':' not in params.repository else params.repository
 
         if params.policy == ImagePullPolicy.IF_NOT_PRESENT:
             try:
@@ -377,7 +378,7 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
     except ImageNotFound:
         error_msg = f"Image not found: {params.image}"
         logger.warning(error_msg)
-        return ContainerOperationResponse.error(
+        return ContainerOperationResponse.error_response(
             error=error_msg,
             message=f"Image {params.image} not found"
         )
@@ -385,7 +386,7 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
     except APIError as e:
         error_msg = f"Failed to remove image {params.image}: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerOperationResponse.error(
+        return ContainerOperationResponse.error_response(
             error=error_msg,
             message="Failed to remove image"
         )
@@ -393,7 +394,7 @@ async def remove_image(params: ImageRemoveRequest) -> ContainerOperationResponse
     except Exception as e:
         error_msg = f"Unexpected error removing image: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerOperationResponse.error(
+        return ContainerOperationResponse.error_response(
             error=error_msg,
             message="An unexpected error occurred"
         )

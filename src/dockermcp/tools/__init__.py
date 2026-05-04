@@ -7,12 +7,9 @@ import importlib
 import logging
 import pkgutil
 import sys
-from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Dict, Generic, List, Optional, Set, Type, TypeVar
+from typing import Any, TypeVar
 
-from fastmcp import FastMCP  # Correct import for FastMCP 2.12
-from fastmcp.exceptions import ToolError
 from pydantic import BaseModel
 
 # Add the src directory to the Python path
@@ -21,7 +18,7 @@ if src_dir not in sys.path:
     sys.path.insert(0, src_dir)
 
 # Configure logging first to ensure all modules use the same config
-from dockermcp.logging_config import configure_logging, logger
+from dockermcp.logging_config import configure_logging, logger  # noqa: E402
 
 configure_logging(level="INFO")
 
@@ -95,11 +92,11 @@ def get_tools() -> list[dict[str, Any]]:
 discovered_tools = discover_tools()
 
 # Re-export common types and functions for tool development
-from .containers.container_exec import execute_in_container as exec_command
-from .containers.container_lifecycle import ContainerAction, manage_container_lifecycle
-from .containers.container_logs import get_container_logs as container_logs
-from .containers.container_stats import get_container_stats as container_stats
-from .containers.list_containers import list_containers
+from .containers.container_exec import execute_in_container as exec_command  # noqa: E402
+from .containers.container_lifecycle import ContainerAction, manage_container_lifecycle  # noqa: E402
+from .containers.container_logs import get_container_logs as container_logs  # noqa: E402
+from .containers.container_stats import get_container_stats as container_stats  # noqa: E402
+from .containers.list_containers import list_containers  # noqa: E402
 
 
 # Create convenience functions for common container operations
@@ -117,10 +114,13 @@ async def restart_container(container_id: str, timeout: int = 10, **kwargs):
 
 async def remove_container(container_id: str, force: bool = False, remove_volumes: bool = False, **kwargs):
     """Remove a container."""
-    return await manage_container_lifecycle(container_id, ContainerAction.REMOVE, force=force, remove_volumes=remove_volumes, **kwargs)
+    return await manage_container_lifecycle(
+        container_id, ContainerAction.REMOVE,
+        force=force, remove_volumes=remove_volumes, **kwargs
+    )
 
 # Import available image management functions
-from .images.image_management import list_images, search_images, tag_image
+from .images.image_management import list_images, search_images, tag_image  # noqa: E402
 
 
 # Define stubs for missing functions to avoid import errors
@@ -137,28 +137,28 @@ def push_image(*args, **kwargs):
     raise NotImplementedError("push_image has not been implemented yet")
 
 # Import network management functions
-from .networks.network_management import connect_container_to_network as connect_container
-from .networks.network_management import (
+from .networks.network_management import connect_container_to_network as connect_container  # noqa: E402
+from .networks.network_management import (  # noqa: E402
     create_network,
     inspect_network,
     list_networks,
     remove_network,
 )
-from .networks.network_management import disconnect_container_from_network as disconnect_container
+from .networks.network_management import disconnect_container_from_network as disconnect_container  # noqa: E402
 
 # Alias for backward compatibility
 get_network = inspect_network
 
 # Import volume management functions
-from .system.system_management import get_disk_usage as disk_usage
+from .system.system_management import get_disk_usage as disk_usage  # noqa: E402
 
 # Import system management functions
-from .system.system_management import get_system_info as system_info
-from .system.system_management import prune_system
-from .volumes.volume_management import create_volume, list_volumes, prune_volumes, remove_volume
+from .system.system_management import get_system_info as system_info  # noqa: E402
+from .system.system_management import prune_system  # noqa: E402
+from .volumes.volume_management import create_volume, list_volumes, prune_volumes, remove_volume  # noqa: E402
 
 # Import workflow management functions
-from .workflows.workflow_management import (
+from .workflows.workflow_management import (  # noqa: E402
     create_workflow,
     get_workflow_status,
     start_workflow,
@@ -217,64 +217,56 @@ except Exception as e:
     )
 
 __all__ = [
-    # Container tools
-    'list_containers',
-    'get_container',
-    'create_container',
-    'start_container',
-    'stop_container',
-    'restart_container',
-    'remove_container',
+    'build_image',
+    'connect_container',
     'container_logs',
     'container_stats',
-    'exec_command',
-
-    # Image tools
-    'list_images',
-    'pull_image',
-    'remove_image',
-    'build_image',
-    'tag_image',
-    'push_image',
-    'search_images',
-
-    # Network tools
-    'list_networks',
-    'get_network',
+    'create_container',
+    'create_gpu_container',
     'create_network',
-    'remove_network',
-    'connect_container',
-    'disconnect_container',
-
-    # Volume tools
-    'list_volumes',
     'create_volume',
-    'remove_volume',
-    'prune_volumes',
-
-    # System tools
-    'system_info',
-    'disk_usage',
-    'prune_system',
-
-    # Desktop management tools
-    'docker_desktop_status',
-    'docker_daemon_recover',
-    'docker_daemon_restart',
-    'docker_desktop_update',
-
     # Workflow tools
     'create_workflow',
-    'start_workflow',
-    'stop_workflow',
+    'disconnect_container',
+    'discovered_tools',
+    'disk_usage',
+    'docker_daemon_recover',
+    'docker_daemon_restart',
+    # Desktop management tools
+    'docker_desktop_status',
+    'docker_desktop_update',
+    'exec_command',
+    'get_container',
+    'get_container_gpu_info',
+    'get_gpu_info',
+    'get_network',
     'get_workflow_status',
-
+    # Container tools
+    'list_containers',
     # GPU tools
     'list_gpus',
-    'get_gpu_info',
+    # Image tools
+    'list_images',
+    # Network tools
+    'list_networks',
+    # Volume tools
+    'list_volumes',
     'monitor_gpu_usage',
-    'create_gpu_container',
-    'get_container_gpu_info',
-
-    'discovered_tools'
+    'prune_system',
+    'prune_volumes',
+    'pull_image',
+    'push_image',
+    'remove_container',
+    'remove_image',
+    'remove_network',
+    'remove_volume',
+    'restart_container',
+    'search_images',
+    'start_container',
+    'start_workflow',
+    'stop_container',
+    'stop_workflow',
+    # System tools
+    'system_info',
+    'tag_image'
 ]

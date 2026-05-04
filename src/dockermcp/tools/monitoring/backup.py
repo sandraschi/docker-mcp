@@ -21,7 +21,7 @@ DEFAULT_BACKUP_DIR = Path("/var/backups/dockermcp/monitoring")
 class MonitoringBackup:
     """Handles backup and restore of monitoring stack data."""
 
-    def __init__(self, backup_dir: str | Path = None):
+    def __init__(self, backup_dir: str | Path | None = None):
         """Initialize the backup manager."""
         self.backup_dir = Path(backup_dir) if backup_dir else DEFAULT_BACKUP_DIR
         self.backup_dir.mkdir(parents=True, exist_ok=True)
@@ -48,7 +48,7 @@ class MonitoringBackup:
             Path("/etc/alertmanager/alertmanager.yml"),
         ]
 
-    def create_backup(self, output_file: str | Path = None) -> dict[str, Any]:
+    def create_backup(self, output_file: str | Path | None = None) -> dict[str, Any]:
         """Create a backup of monitoring data."""
         try:
             if not output_file:
@@ -96,7 +96,7 @@ class MonitoringBackup:
             with tarfile.open(backup_file, "r:gz") as tar:
                 # Extract to a temporary directory first
                 with tempfile.TemporaryDirectory() as tmp_dir:
-                    tar.extractall(tmp_dir)
+                    tar.extractall(tmp_dir, filter='data')
 
                     # Move files to target directory
                     for item in Path(tmp_dir).iterdir():

@@ -49,7 +49,9 @@ class ContainerLogsRequest(BaseModel):
             return LogStreamType(v.lower()).value
         except ValueError:
             valid_types = [e.value for e in LogStreamType]
-            raise ValueError(f"Invalid stream_type: {v}. Must be one of: {', '.join(valid_types)}")
+            raise ValueError(
+                f"Invalid stream_type: {v}. Must be one of: {', '.join(valid_types)}"
+            ) from None
 
 
 class LogEntry(BaseModel):
@@ -82,7 +84,7 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
         try:
             container = client.containers.get(params.container_id)
         except NotFound as e:
-            return ContainerLogsResponse.error(
+            return ContainerLogsResponse.error_response(
                 container_id=params.container_id,
                 error=f"Container not found: {e!s}",
                 message=f"Container {params.container_id} not found"
@@ -144,7 +146,7 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
     except (DockerException, APIError) as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerLogsResponse.error(
+        return ContainerLogsResponse.error_response(
             container_id=params.container_id,
             error=error_msg,
             message="Failed to retrieve container logs"
@@ -152,7 +154,7 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
     except Exception as e:
         error_msg = f"Unexpected error: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return ContainerLogsResponse.error(
+        return ContainerLogsResponse.error_response(
             container_id=params.container_id,
             error=error_msg,
             message="An unexpected error occurred"
