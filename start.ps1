@@ -1,22 +1,14 @@
-Param([switch]$Headless)
-$SkipFrontend = $Headless
-
-# --- SOTA Headless Standard ---
-if ($Headless -and ($Host.UI.RawUI.WindowTitle -notmatch 'Hidden')) {
-    Start-Process pwsh -ArgumentList '-NoProfile', '-File', $PSCommandPath, '-Headless' -WindowStyle Hidden
-    exit
+param(
+    [switch]$Headless,
+    [switch]$BackendOnly,
+    [switch]$FrontendOnly,
+    [switch]$NoBrowser
+)
+$child = Join-Path $PSScriptRoot "web_sota/start.ps1"
+if (-not (Test-Path -LiteralPath $child)) {
+    Write-Error "Missing launcher: $child"
+    exit 1
 }
-$WindowStyle = if ($Headless) { 'Hidden' } else { 'Normal' }
-# ------------------------------
+& $child @PSBoundParameters
+exit $LASTEXITCODE
 
-$env:FASTMCP_LOG_LEVEL = 'WARNING'
-# schip-mcp-docker Start - Standards-Compliant SOTA
-Write-Host 'Starting schip-mcp-docker...' -ForegroundColor Cyan
-
-Set-Location $PSScriptRoot
-Write-Host 'Starting Standardized Fullstack Hybrid...' -ForegroundColor Green
-# Launch backend Hidden by default to prevent console spam
-Start-Process pwsh -ArgumentList '-NoProfile', '-Command', 'uv run -m schip_mcp_docker' -WindowStyle Hidden
-Set-Location web_sota
-if ($SkipFrontend) { return }
-npm run dev

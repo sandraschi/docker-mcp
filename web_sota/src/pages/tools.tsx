@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Wrench, Play, CheckCircle2, AlertCircle, Loader2 } from "lucide-react";
+import { Wrench, Play, AlertCircle, Loader2 } from "lucide-react";
 
 export function Tools() {
     const [tools, setTools] = useState<string[]>([]);

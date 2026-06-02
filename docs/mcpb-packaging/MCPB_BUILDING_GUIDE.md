@@ -1160,7 +1160,7 @@ your-mcp-server/
 ### Local Development
 
 ```bash
-# 1. AI-generate manifest.json (place in mcpb/manifest.json)
+# 1. AI-generate manifest.json (repo root — fleet standard; legacy mcpb/ subfolder deprecated)
 # ENSURE: fastmcp>=2.10.1 in requirements.txt
 # ENSURE: cwd: "src" and PYTHONPATH: "src" in mcp_config
 
@@ -1496,7 +1496,7 @@ jobs:
       run: mkdir -p dist
         
     - name: Validate manifest.json
-      run: mcpb validate mcpb/manifest.json
+      run: mcpb validate manifest.json
       
     - name: Build MCPB extension
       run: |
@@ -1552,7 +1552,7 @@ jobs:
 
 ```bash
 # Always validate before building
-mcpb validate mcpb/manifest.json
+mcpb validate manifest.json
 
 # Common issues:
 # - Missing cwd and PYTHONPATH for Python servers
@@ -1689,7 +1689,7 @@ mcpb pack . ../package.mcpb
 
 - [ ] Validate Python import: `cd src && python -c "import your_mcp.server"`
 - [ ] Validate FastMCP version: `python -c "import fastmcp; print(fastmcp.__version__)"`
-- [ ] Validate manifest: `mcpb validate mcpb/manifest.json`
+- [ ] Validate manifest: `mcpb validate manifest.json`
 - [ ] Build package: `mcpb pack . dist/`
 - [ ] Test installation on clean Claude Desktop
 - [ ] Verify user configuration prompts work correctly

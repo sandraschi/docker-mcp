@@ -1,10 +1,10 @@
 # llms.txt for docker-mcp
-# Last Updated: January 2026
-# FastMCP 3.1.1+ Server for comprehensive Docker operations
+# Last Updated: 2026-06-02
+# FastMCP 3.3 — sampling, prefab UI, agentic workflows, web_sota 10806/10807, MCPB root, Tauri
 
 ## Project Overview
 
-Docker MCP Server is a FastMCP 3.1+ server providing:
+Docker MCP Server is a FastMCP 3.3 server providing:
 - Native MCP tools for Docker daemon management (status, recovery, restart, update)
 - Container lifecycle management (create, start, stop, restart, remove)
 - Image handling (pull, list, tag, remove)
@@ -15,7 +15,14 @@ Docker MCP Server is a FastMCP 3.1+ server providing:
 
 ## Key Features
 
-### Docker Desktop Management (NEW)
+### Fleet 3.3 surface
+- Prefab cards: `docker_containers_card`, `docker_desktop_status_card`, `docker_system_info_card`
+- MCP prompts + `resource://docker-mcp/skills`
+- Web: `/logs`, settings LLM glom (Ollama/LM Studio)
+- MCPB: root `manifest.json`; pack with `just mcpb-pack`
+- Tauri: `just build-native`
+
+### Docker Desktop Management
 - `docker_desktop_status(autofix: bool)` - Check daemon health with hang detection, list images/containers
 - `docker_daemon_recover()` - Emergency recovery from hanging daemon
 - `docker_daemon_restart()` - Graceful daemon restart
@@ -28,13 +35,13 @@ Docker MCP Server is a FastMCP 3.1+ server providing:
 - Volume management (create, list, remove, prune)
 - System monitoring (info, disk usage, version)
 
-### Web Application
-- FastAPI backend on port 10807
-- React/Vite webapp on port 10806
-- Real-time Docker data via docker-py
-- Dashboard with system info and container status
-- Container browser and management
-- MCP tools catalog
+### Web Application (web_sota)
+- FastAPI bridge on port 10807 (`/api/*`, `/api/logs`, `/api/llm/providers`)
+- React/Vite on port 10806 (dev); Tauri bundles UI + sidecar
+- Fleet pages: dashboard, containers, images, tools, chat, settings (LLM glom-on), event logs, help
+- Prefab MCP tools: docker_containers_card, docker_desktop_status_card, docker_system_info_card
+- MCP prompts: docker_deploy_stack, docker_daemon_health_check
+- Resources: resource://docker-mcp/skills, resource://docker-mcp/capabilities
 
 ## Directory Structure
 

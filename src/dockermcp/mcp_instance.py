@@ -6,6 +6,7 @@ This is the ONLY place where FastMCP should be initialized.
 """
 import json
 import logging
+import os
 import threading
 import traceback
 from typing import Any, Optional
@@ -38,11 +39,29 @@ class FastMCPSingleton:
             try:
                 logger.info("Initializing FastMCP instance...")
 
-                # Initialize FastMCP with minimal settings
+                from docker_mcp.config import get_sampling_config
+                from docker_mcp.sampling import DockerSamplingHandler
+
+                sampling_handler = DockerSamplingHandler(get_sampling_config())
+
                 self.mcp = FastMCP(
                     name="docker-mcp",
-                    version=__version__
+                    version=__version__,
+                    sampling_handler=sampling_handler,
+                    sampling_handler_behavior="fallback",
+                    instructions=(
+                        "You are docker-mcp: Docker Desktop and engine control for containers, "
+                        "images, networks, volumes, and compose. Use docker_desktop_status before "
+                        "destructive ops. Prefer prefab card tools for inventories and health."
+                    ),
+                    on_duplicate="replace",
                 )
+                global mcp
+                mcp = self.mcp
+                self._initialized = True
+                from dockermcp.tool_registration import register_all_tools
+
+                register_all_tools(self.mcp)
 
                 # ── MCP Bridge (ProxyProvider) ────────────────────────────────────────────
                 _bridge_proxies: list[str] = []
@@ -61,7 +80,6 @@ class FastMCPSingleton:
                 self._patch_message_handler()
 
                 logger.info(f"FastMCP instance initialized: {self.mcp.name} v{self.mcp.version}")
-                self._initialized = True
 
             except Exception as e:
                 logger.error(f"Failed to initialize FastMCP: {e!s}")
@@ -132,6 +150,9 @@ class FastMCPSingleton:
             logger.error(f"Failed to patch message handler: {e!s}")
             logger.debug(f"Error details: {traceback.format_exc()}")
 
+# Set during _initialize; tools import this symbol for @mcp.tool decorators
+mcp: FastMCP | None = None
+
 # Create the singleton instance
 _singleton: FastMCPSingleton = FastMCPSingleton()
 
@@ -150,5 +171,3 @@ def get_mcp() -> FastMCP:
         raise RuntimeError("FastMCP instance failed to initialize")
     return _singleton.mcp
 
-# For backward compatibility
-mcp = get_mcp()

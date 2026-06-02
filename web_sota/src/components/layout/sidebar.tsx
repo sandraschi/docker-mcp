@@ -10,7 +10,8 @@ import {
     Box,
     HelpCircle,
     Container,
-    Image as ImageIcon
+    Image as ImageIcon,
+    ScrollText,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -27,6 +28,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         { href: '/images', label: 'Images', icon: ImageIcon },
         { href: '/chat', label: 'AI Command', icon: MessageSquare },
         { href: '/tools', label: 'MCP Tools', icon: Wrench },
+        { href: '/logs', label: 'Event logs', icon: ScrollText },
         { href: '/help', label: 'Help', icon: HelpCircle },
         { href: '/settings', label: 'Settings', icon: Settings },
     ];

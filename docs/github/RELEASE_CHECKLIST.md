@@ -104,7 +104,7 @@ Use this checklist before **every** release to ensure quality.
 - [ ] **Version numbers updated**
   - [ ] `pyproject.toml` → `version = "1.0.0b2"`
   - [ ] `src/your_package/__init__.py` → `__version__ = "1.0.0b2"`
-  - [ ] `mcpb/manifest.json` → `"version": "1.0.0b2"`
+  - [ ] Root `manifest.json` → `"version": "3.3.0"` (fleet MCPB v0.2 at repo root)
 
 - [ ] **CHANGELOG.md updated**
   - [ ] New version section added
@@ -220,7 +220,7 @@ Use this checklist before **every** release to ensure quality.
 
 1. **Update versions** (if not done)
    ```bash
-   # Update pyproject.toml, __init__.py, mcpb/manifest.json
+   # Update pyproject.toml, dockermcp/__init__.py __version__, root manifest.json
    git add -A
    git commit -m "chore: bump version to 1.0.0b2"
    ```

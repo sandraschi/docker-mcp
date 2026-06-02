@@ -40,10 +40,9 @@ jobs:
       - name: Build SOTA Artifacts
         run: |
           uv build
-          # Heritage support for legacy MCPB
-          if [ -d "mcpb" ]; then
-            zip -r dist/schip-mcp-docker.mcpb mcpb/ -x "*.git*"
-          fi
+          npm install -g @anthropic-ai/mcpb
+          mkdir -p dist
+          mcpb pack . dist/docker-mcp-${{ github.ref_name }}.mcpb
 
       - name: Generate Changelog
         id: changelog

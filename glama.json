@@ -2,37 +2,26 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": ["sandraschi"],
   "name": "docker-mcp",
-  "description": "FastMCP 2.13+ server for Docker operations with monitoring stack (Prometheus, Grafana, Loki). Container lifecycle, networking, volumes, and image management. Beta status.",
+  "description": "FastMCP 3.3 Docker control plane with sampling, prefab UI, agentic workflows, web dashboard, and Tauri native installer.",
   "type": "mcp_server",
   "status": "beta",
-  "framework": "FastMCP 2.13+",
-  "tools": 12,
-  "transport": ["stdio"],
+  "framework": "FastMCP 3.3",
+  "tools": 40,
+  "transport": ["stdio", "http"],
   "keywords": [
     "docker",
     "containers",
-    "virtualization",
     "devops",
-    "monitoring",
-    "prometheus",
-    "grafana",
     "mcp-server",
-    "fastmcp"
+    "fastmcp",
+    "prefab-ui",
+    "sampling"
   ],
   "features": {
-    "container_management": {
-      "enabled": true
-    },
-    "monitoring_stack": {
-      "enabled": true,
-      "components": ["Prometheus", "Grafana", "Loki"]
-    },
-    "networking": {
-      "enabled": true
-    },
-    "volume_management": {
-      "enabled": true
-    }
+    "container_management": { "enabled": true },
+    "docker_desktop": { "enabled": true },
+    "prefab_ui": { "enabled": true },
+    "sampling": { "enabled": true },
+    "web_dashboard": { "enabled": true, "ports": [10806, 10807] }
   }
 }
-

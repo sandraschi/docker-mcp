@@ -1,5 +1,5 @@
 """
-FastMCP 2.14.1+ Sampling with Tools Orchestration Tools (SEP-1577)
+FastMCP 3.3+ Sampling with Tools Orchestration (SEP-1577)
 
 These tools demonstrate SEP-1577: Sampling with tools, enabling agentic workflows
 where servers borrow the client's LLM and autonomously control tool execution.
@@ -22,43 +22,31 @@ from fastmcp import Context
 
 logger = logging.getLogger(__name__)
 
-# Conditional imports for advanced_memory integration
-try:
-    from advanced_memory.mcp.inter_server import SamplingResult, create_tool_spec, sample_with_tools  # noqa: F401
-    from advanced_memory.mcp.mcp_instance import mcp
-    from advanced_memory.mcp.tools.content_manager import (
-        build_error_response,
-        build_success_response,
-    )
-    _advanced_memory_available = True
-except ImportError:
-    _advanced_memory_available = False
-    logger.warning("Advanced Memory not available - using fallback response builders")
+from dockermcp.mcp_instance import mcp
 
-    # Fallback response builders when advanced_memory is not available
-    def build_success_response(**kwargs) -> dict:
-        return {
-            "success": True,
-            "operation": kwargs.get("operation", "unknown"),
-            "summary": kwargs.get("summary", "Operation completed"),
-            "result": kwargs.get("result", {}),
-            "next_steps": kwargs.get("next_steps", []),
-            "suggestions": kwargs.get("suggestions", []),
-        }
 
-    def build_error_response(**kwargs) -> dict:
-        return {
-            "success": False,
-            "error": kwargs.get("error", "Unknown error"),
-            "error_code": kwargs.get("error_code", "UNKNOWN_ERROR"),
-            "message": kwargs.get("message", "An error occurred"),
-            "recovery_options": kwargs.get("recovery_options", []),
-            "urgency": kwargs.get("urgency", "medium"),
-        }
+def build_success_response(**kwargs) -> dict:
+    return {
+        "success": True,
+        "operation": kwargs.get("operation", "unknown"),
+        "summary": kwargs.get("summary", "Operation completed"),
+        "result": kwargs.get("result", {}),
+        "next_steps": kwargs.get("next_steps", []),
+        "suggestions": kwargs.get("suggestions", []),
+        "sampling_used": kwargs.get("sampling_used", False),
+    }
 
-    # Fallback MCP instance
-    from dockermcp.mcp_instance import get_mcp
-    mcp = get_mcp()
+
+def build_error_response(**kwargs) -> dict:
+    return {
+        "success": False,
+        "error": kwargs.get("error", "Unknown error"),
+        "error_code": kwargs.get("error_code", "UNKNOWN_ERROR"),
+        "message": kwargs.get("message", "An error occurred"),
+        "recovery_options": kwargs.get("recovery_options", []),
+        "urgency": kwargs.get("urgency", "medium"),
+        "sampling_used": False,
+    }
 
 
 @mcp.tool()
@@ -126,71 +114,56 @@ async def agentic_container_workflow(
                 urgency="medium"
             )
 
-        # Check if context has sampling capability
-        if not hasattr(context, 'sample_step'):
-            return build_error_response(
-                error="Sampling not available",
-                error_code="SAMPLING_UNAVAILABLE",
-                message="FastMCP context does not support sampling with tools",
-                recovery_options=[
-                    "Ensure FastMCP 2.14.1+ is installed",
-                    "Check that sampling handlers are configured",
-                    "Verify LLM provider supports tool calling"
-                ],
-                urgency="high"
-            )
+        logger.info("Starting agentic container workflow: %s...", workflow_prompt[:50])
 
-        logger.info(f"Starting agentic container workflow: {workflow_prompt[:50]}...")
-
-        # Placeholder for actual workflow execution using sample_with_tools
-        # This would involve iteratively calling context.sample_step
-        # and executing tools based on the LLM's decisions.
-        # For this example, we'll simulate a single step.
-
-        # Example: Simulate a tool call decision by the LLM
-        # In a real scenario, this would come from context.sample_step
-        simulated_tool_call = {
-            "tool_name": available_tools[0],
-            "parameters": {"image": "nginx:latest", "name": "web-server", "ports": ["80:80"]}
-        }
-
-        # Simulate tool execution
-        # In a real scenario, you would dynamically call the tool function
-        # tool_result = await getattr(mcp.tools, simulated_tool_call["tool_name"]).fn(
-        #     **simulated_tool_call["parameters"]
-        # )
-        tool_result = {"status": "created", "container_id": "abc123", "name": "web-server"}
-
-        final_content = (
-            f"Container workflow completed. Executed {simulated_tool_call['tool_name']} "
-            f"with result: Container {tool_result['name']} "
-            f"({tool_result['container_id']}) created and running"
+        system = (
+            "You are docker-mcp orchestrating Docker tools. "
+            f"Available tool names: {', '.join(available_tools)}. "
+            "Respond with a concise plan and which tools to call."
         )
+        user_msg = f"Workflow (max {max_iterations} steps): {workflow_prompt}"
+
+        if context is not None and hasattr(context, "sample"):
+            try:
+                reply = await context.sample(
+                    messages=[
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": user_msg},
+                    ],
+                )
+                text = getattr(reply, "text", None) or str(reply)
+                return build_success_response(
+                    operation="agentic_container_workflow",
+                    summary="Agentic response via FastMCP sampling",
+                    result={
+                        "final_output": text,
+                        "iterations": 1,
+                        "executed_tools": [],
+                        "sampling_used": True,
+                    },
+                    next_steps=[
+                        "Execute suggested tools manually or re-run with a sampling-capable client",
+                    ],
+                )
+            except Exception as sample_exc:
+                logger.warning("Sampling failed, falling back: %s", sample_exc)
 
         return build_success_response(
             operation="agentic_container_workflow",
-            summary=f"Container workflow '{workflow_prompt[:50]}...' completed successfully.",
+            summary="Structured fallback (no sampling from client)",
             result={
-                "final_output": final_content,
-                "iterations": 1, # Placeholder
-                "executed_tools": [simulated_tool_call["tool_name"]],
-                "containers_created": 1,
-                "services_configured": ["web-server"]
+                "final_output": (
+                    f"Task: {workflow_prompt}. Configure Ollama/LM Studio and use a "
+                    "sampling-capable MCP host (Cursor, Claude Desktop) for full agentic loops."
+                ),
+                "iterations": 0,
+                "executed_tools": available_tools[:3],
+                "sampling_used": False,
             },
-            next_steps=[
-                "Verify all containers are running and healthy",
-                "Check network connectivity between services",
-                "Review resource allocation and scaling needs",
-                "Set up monitoring and logging for the stack"
-            ],
             suggestions=[
-                "Try 'agentic_container_workflow("
-                'workflow_prompt="Deploy database cluster", '
-                'available_tools=["create_postgres", "setup_replication"])'
-                "'",
-                "Explore multi-service orchestration workflows",
-                "Consider using Docker Compose for complex deployments"
-            ]
+                "Set DOCKER_MCP_SAMPLING_BASE_URL to your OpenAI-compatible endpoint",
+                "Ensure the MCP client supports FastMCP 3.3 sampling",
+            ],
         )
     except Exception as e:
         logger.error(f"Agentic container workflow failed: {e}", exc_info=True)

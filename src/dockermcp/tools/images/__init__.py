@@ -5,13 +5,7 @@ This package provides comprehensive image management tools following
 FastMCP 2.12+ standards.
 """
 
-# Import image tools to register them with FastMCP
 from .image_management import (
-    ImageHistoryResponse,
-    ImageListResponse,
-    ImagePruneResponse,
-    ImageSearchResponse,
-    ImageTagResponse,
     get_image_history,
     list_images,
     prune_images,
@@ -20,11 +14,6 @@ from .image_management import (
 )
 
 __all__ = [
-    "ImageHistoryResponse",
-    "ImageListResponse",
-    "ImagePruneResponse",
-    "ImageSearchResponse",
-    "ImageTagResponse",
     "get_image_history",
     "list_images",
     "prune_images",

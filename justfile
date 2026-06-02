@@ -1,6 +1,6 @@
 name := "docker-mcp"
-desc := "FastMCP 3.2 server for Docker operations"
-ver := "3.2.0"
+desc := "FastMCP 3.3 server for Docker operations"
+ver := "3.3.0"
 
 # Open the interactive recipe dashboard in the browser
 default:
@@ -14,7 +14,20 @@ build:
 
 # Build webapp
 build-webapp:
-    cd web_sota && npm ci && npm run build
+    cd web_sota && npm install && npm run build
+
+# MCPB bundle (Claude Desktop)
+mcpb-pack:
+    npx @anthropic-ai/mcpb pack . dist/docker-mcp-v3.3.0.mcpb
+
+# Tauri native installer (Windows release)
+build-native:
+    pwsh -NoLogo -File native/build.ps1
+
+build-native-debug:
+    Set-Location native
+    $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
+    npx @tauri-apps/cli build --debug
 
 # ── Test ─
 

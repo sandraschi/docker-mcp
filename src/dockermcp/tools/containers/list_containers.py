@@ -11,7 +11,7 @@ from typing import Any
 from docker.errors import DockerException
 from pydantic import BaseModel, ConfigDict, Field
 
-from dockermcp import check_docker_available, docker_client
+from dockermcp.docker_context import check_docker_available, docker_client
 from dockermcp.logging_config import logger
 from dockermcp.mcp_instance import mcp
 

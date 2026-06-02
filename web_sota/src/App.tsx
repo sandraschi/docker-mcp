@@ -7,6 +7,7 @@ import { Chat } from '@/pages/chat';
 import { Tools } from '@/pages/tools';
 import { Help } from '@/pages/help';
 import { Settings } from '@/pages/settings';
+import { LogsPage } from '@/pages/logs';
 
 function App() {
   return (
@@ -19,6 +20,7 @@ function App() {
           <Route path="/chat" element={<Chat />} />
           <Route path="/tools" element={<Tools />} />
           <Route path="/help" element={<Help />} />
+          <Route path="/logs" element={<LogsPage />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

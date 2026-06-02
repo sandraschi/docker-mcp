@@ -9,7 +9,7 @@ import logging
 
 from pydantic import BaseModel, Field
 
-from dockermcp import docker_available, retry_docker_connection
+from dockermcp.docker_context import docker_available, retry_docker_connection
 from dockermcp.mcp_instance import mcp
 from dockermcp.tools import ToolResponse
 

@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "schip-mcp-docker"
-version = "3.2.0"
-description = "FastMCP 3.2.0 server for comprehensive Docker operations"
+version = "3.3.0"
+description = "FastMCP 3.3 server for comprehensive Docker operations"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -20,7 +20,8 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastmcp>=3.2.0,<4",
+    "fastmcp>=3.3.0,<4",
+    "prefab-ui>=0.14.0",
     "docker>=6.0.0",
     "pydantic>=2.0.0,<3.0.0",
     "python-dotenv>=0.19.0",
@@ -38,6 +39,7 @@ dev = [
     "pytest-asyncio>=0.25",
     "pytest-cov>=6",
     "ruff>=0.15.2",
+    "pyinstaller>=6",
 ]
 
 [project.urls]
@@ -49,7 +51,7 @@ Repository = "https://github.com/sandraschi/dockermcp"
 docker-mcp = "dockermcp.server:main"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/dockermcp"]
+packages = ["src/dockermcp", "src/docker_mcp", "src/customization"]
 
 [tool.uv-dynamic-versioning]
 enable = true

@@ -282,7 +282,7 @@ uv sync --dev  # ✅ Installs everything
 
 **Steps**:
 1. Fix all code quality issues
-2. Update version in `pyproject.toml`, `__init__.py`, `mcpb/manifest.json`
+2. Update version in `pyproject.toml`, `src/dockermcp/__init__.py`, root `manifest.json`
 3. Update `CHANGELOG.md`
 4. Commit and push
 5. Create and push tag:

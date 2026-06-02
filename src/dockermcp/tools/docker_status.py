@@ -6,7 +6,7 @@ and related services.
 """
 from typing import Any
 
-from dockermcp import get_docker_status
+from dockermcp.docker_context import get_docker_status
 from dockermcp.mcp_instance import mcp
 
 

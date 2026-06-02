@@ -9,13 +9,18 @@ import asyncio
 import logging
 import sys
 import warnings
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
 
-from docker_mcp.web import setup_webapp
 from dockermcp.logging_config import configure_logging, logger
 from dockermcp.mcp_instance import get_mcp
+
+# Initialize MCP + tools before web routes import dockermcp tool modules
+mcp = get_mcp()
+
+from docker_mcp.web import setup_webapp
 
 # Suppress all warnings
 warnings.filterwarnings("ignore")
@@ -37,14 +42,37 @@ configure_logging(
     level="WARNING",
 )
 
-# Use the shared MCP instance that has all tools registered (from dockermcp)
-mcp = get_mcp()
+@asynccontextmanager
+async def _web_lifespan(_app: FastAPI):
+    from docker_mcp.activity_log import install_log_handler, log_activity
+    from docker_mcp.llm.manager import get_llm_manager
+
+    install_log_handler()
+    log_activity("system", "Docker MCP web bridge starting")
+    await get_llm_manager().glom_local_providers_if_up()
+    log_activity("system", "Docker MCP web bridge ready")
+    yield
+
 
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
-web_app = FastAPI(title="Docker Management Web Bridge")
+web_app = FastAPI(title="Docker Management Web Bridge", lifespan=_web_lifespan)
 
 # Setup webapp bridge with the tool-loaded MCP instance
 setup_webapp(web_app, mcp_app=mcp)
+
+
+def _mount_web_ui(app: FastAPI) -> None:
+    """Serve built web_sota for Tauri / single-port installs."""
+    from pathlib import Path
+
+    from fastapi.staticfiles import StaticFiles
+
+    dist = Path(__file__).resolve().parent.parent / "web_sota" / "dist"
+    if dist.is_dir():
+        app.mount("/", StaticFiles(directory=str(dist), html=True), name="web-ui")
+
+
+_mount_web_ui(web_app)
 
 
 def get_all_tools() -> list[callable]:

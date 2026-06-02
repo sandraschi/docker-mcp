@@ -25,9 +25,32 @@ just web         # start the frontend (if applicable)
 
 > **Why not `pip install`?** MCP servers bundle webapps, configs, project scaffolding, and tooling that a flat Python package can't deliver. PyPI offers no safety advantage — it doesn't audit packages either. `just` gives you the complete, ready-to-run stack.
 
+## Option A — MCPB (Claude Desktop)
+
+1. Download `docker-mcp-*.mcpb` from [Releases](https://github.com/sandraschi/docker-mcp/releases/latest)
+2. Drag onto Claude Desktop or use Settings → MCP → Install from file
+
+Build locally: `just mcpb-pack` (requires Node.js for `npx @anthropic-ai/mcpb`).
+
+## Option B — Tauri desktop installer (Windows)
+
+```powershell
+just build-native
+```
+
+Installer under `native/target/release/bundle/`. Requires Rust, Node.js, uv, and PyInstaller (see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
+
+## Option C — Web dashboard (dev)
+
+```powershell
+.\start.ps1
+```
+
+Opens http://127.0.0.1:10806 (frontend) and http://127.0.0.1:10807 (API).
+
 ---
 
-## 🐌 Traditional Setup
+## Traditional Setup
 
 If you prefer not to use `just`:
 
@@ -46,10 +69,10 @@ If you prefer not to use `just`:
    # stdio mode (for MCP clients like Claude Desktop)
    uv run python -m docker_mcp.server
 
-   # HTTP mode (for web dashboard)
-   uv run uvicorn docker_mcp.server:app --port 10807
+   # HTTP web bridge (API + optional built UI)
+   uv run uvicorn customization.server:app --host 127.0.0.1 --port 10807
    ```
-5. Open `http://localhost:10807` or the frontend URL.
+5. Open http://127.0.0.1:10806 (run `cd web_sota; npm run dev` for Vite) or http://127.0.0.1:10807/api/health.
 
 ---
 

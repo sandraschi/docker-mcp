@@ -1,53 +1,64 @@
 {
-  "dxt_version": "0.1",
-  "name": "dockermcp",
-  "version": "0.1.0",
-  "description": "FastMCP 2.10.1 server for Docker operations with Austrian efficiency",
-  "long_description": "A comprehensive MCP server for managing Docker containers, images, networks, and volumes with advanced workflow intelligence.",
+  "manifest_version": "0.2",
+  "name": "docker-mcp",
+  "version": "3.3.0",
+  "description": "FastMCP 3.3 Docker control plane — containers, Desktop health, sampling, prefab UI, agentic workflows",
+  "long_description": "FastMCP 3.3 MCP server for Docker containers, images, networks, volumes, compose, Docker Desktop recovery, SEP-1577 agentic workflows, prefab cards, and a React web dashboard (10806/10807).",
   "author": {
     "name": "Sandra Schimanovich",
     "email": "sandra@sandraschi.dev",
     "url": "https://github.com/sandraschi"
   },
+  "license": "MIT",
+  "homepage": "https://github.com/sandraschi/docker-mcp",
   "repository": {
     "type": "git",
-    "url": "https://github.com/sandraschi/dockermcp"
+    "url": "https://github.com/sandraschi/docker-mcp"
   },
-  "homepage": "https://github.com/sandraschi/dockermcp",
-  "documentation": "https://github.com/sandraschi/dockermcp/blob/main/README.md",
-  "support": "https://github.com/sandraschi/dockermcp/issues",
-  "license": "MIT",
-  "keywords": ["docker", "mcp", "containers", "devops", "automation"],
-  "icon": "assets/icon.png",
+  "keywords": ["docker", "containers", "mcp", "fastmcp", "devops"],
   "server": {
     "type": "python",
-    "entry_point": "dockermcp.server",
+    "entry_point": "src/dockermcp/server.py",
     "mcp_config": {
       "command": "python",
-      "args": ["-m", "dockermcp.server"],
+      "args": ["-m", "dockermcp"],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONPATH": "${PWD}/src",
+        "PYTHONUNBUFFERED": "1",
+        "DOCKER_MCP_LLM_GLOM": "1"
       }
     }
   },
-  "user_config": {
-    "docker_socket": {
-      "type": "string",
-      "title": "Docker Socket Path",
-      "description": "Path to the Docker socket (default: /var/run/docker.sock on Unix, //./pipe/docker_engine on Windows)",
-      "default": "//./pipe/docker_engine"
+  "compatibility": {
+    "platforms": ["win32", "darwin", "linux"]
+  },
+  "tools_generated": true,
+  "prompts_generated": true,
+  "prompts": [
+    {
+      "name": "system",
+      "description": "System prompt — Docker MCP capabilities and safety",
+      "text": "assets/prompts/system.md"
     },
-    "default_workspace": {
-      "type": "directory",
-      "title": "Default Workspace Directory",
-      "description": "Default directory for Docker-related files and configurations",
-      "default": "${HOME}/docker-workspace"
+    {
+      "name": "user",
+      "description": "User guide — workflows and troubleshooting",
+      "text": "assets/prompts/user.md"
     },
-    "log_level": {
-      "type": "string",
-      "title": "Log Level",
-      "description": "Logging level (debug, info, warning, error, critical)",
-      "default": "info"
+    {
+      "name": "examples",
+      "description": "Structured tool-call examples",
+      "text": "assets/prompts/examples.json"
+    },
+    {
+      "name": "docker_deploy_stack",
+      "description": "Deploy a multi-container stack",
+      "text": "Deploy Docker stack '{stack_name}': verify daemon health, create networks/volumes, start services, report ports."
+    },
+    {
+      "name": "docker_daemon_health_check",
+      "description": "Docker Desktop / daemon diagnostics",
+      "text": "Check Docker daemon health with docker_desktop_status; recover or restart only if hung."
     }
-  }
+  ]
 }
