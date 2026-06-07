@@ -1,10 +1,10 @@
-name := "docker-mcp"
+﻿name := "docker-mcp"
 desc := "FastMCP 3.3 server for Docker operations"
 ver := "3.3.0"
 
 # Open the interactive recipe dashboard in the browser
 default:
-    @pwsh.exe -NoProfile -ExecutionPolicy Bypass -File ../mcp-central-docs/scripts/just-dashboard.ps1 -Path .
+    @just --list
 
 # ── Build ─
 
@@ -83,3 +83,4 @@ clean:
 # View server logs
 logs:
     Get-Content logs/dockermcp.log -Tail 50 -Wait
+
