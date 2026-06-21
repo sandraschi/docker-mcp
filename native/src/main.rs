@@ -6,6 +6,8 @@ use std::io::BufRead;
 use std::process::{Command, Stdio};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
 
 #[tauri::command]
 async fn start_backend(
