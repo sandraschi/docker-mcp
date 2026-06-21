@@ -5,6 +5,7 @@ Docker MCP Server - Main Entry Point
 This module initializes and runs the Docker MCP server with FastMCP 3.1+ compatibility.
 Includes both MCP stdio transport and FastAPI HTTP server for the webapp.
 """
+
 import asyncio
 import logging
 import sys
@@ -25,14 +26,11 @@ from dockermcp.transport import run_server  # noqa: E402
 # Configure logging with JSON format and proper stream handling
 # Disable JSON for RPC logs to prevent parsing issues
 configure_logging(
-    enable_console=True,
-    json_format=True,
-    log_file=str(Path("logs/dockermcp.log")),
-    disable_json_for_rpc=True
+    enable_console=True, json_format=True, log_file=str(Path("logs/dockermcp.log")), disable_json_for_rpc=True
 )
 
 # Get logger for this module
-server_logger = logging.getLogger('dockermcp.server')
+server_logger = logging.getLogger("dockermcp.server")
 
 # Redirect warnings to the logger
 warnings.showwarning = warn_with_log
@@ -70,6 +68,7 @@ except ImportError as e:
     logger.error(f"Failed to import tool modules: {e}", exc_info=True)
     sys.exit(1)
 
+
 def run_fastapi_server():
     """Run FastAPI server in a separate thread"""
     import uvicorn
@@ -79,6 +78,7 @@ def run_fastapi_server():
     app = create_app()
     logger.info("Starting FastAPI server on port 10807...")
     uvicorn.run(app, host="127.0.0.1", port=10807, log_level="warning")
+
 
 def main() -> None:
     """Initialize and run the Docker MCP server with stdio transport and FastAPI HTTP."""
@@ -90,6 +90,7 @@ def main() -> None:
 
         # Give FastAPI time to start
         import time
+
         time.sleep(2)
 
         # Start MCP stdio server
@@ -100,6 +101,7 @@ def main() -> None:
     except Exception as e:
         logger.critical(f"Fatal error: {e}", exc_info=True)
         sys.exit(1)
+
 
 if __name__ == "__main__":
     main()

@@ -16,7 +16,7 @@ class SamplingConfig:
 def get_sampling_config() -> SamplingConfig:
     base = os.getenv("DOCKER_MCP_SAMPLING_BASE_URL", "http://127.0.0.1:11434/v1").rstrip("/")
     if not base.endswith("/v1"):
-        base = f"{base}/v1" if "://" in base else f"http://127.0.0.1:11434/v1"
+        base = f"{base}/v1" if "://" in base else "http://127.0.0.1:11434/v1"
     return SamplingConfig(
         base_url=base,
         model=os.getenv("DOCKER_MCP_SAMPLING_MODEL", "llama3.2"),

@@ -2,6 +2,7 @@
 Volume management operations for Docker MCP.
 Handles Docker volume operations with proper error handling and type hints.
 """
+
 import json
 import subprocess
 from typing import Any
@@ -9,7 +10,8 @@ from typing import Any
 from dockermcp.logging_config import logger
 
 # Get a child logger for this module
-logger = logger.getChild('volumes')
+logger = logger.getChild("volumes")
+
 
 class VolumeManager:
     """
@@ -25,40 +27,26 @@ class VolumeManager:
         """
         try:
             result = subprocess.run(
-                ['docker', 'volume', 'ls', '--format', '{{json .}}'],  # noqa: S607
+                ["docker", "volume", "ls", "--format", "{{json .}}"],  # noqa: S607
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
 
             # Parse the JSON output
             volumes = []
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line:
                     volumes.append(json.loads(line))
 
-            return {
-                'success': True,
-                'volumes': volumes,
-                'count': len(volumes)
-            }
+            return {"success": True, "volumes": volumes, "count": len(volumes)}
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to list volumes: {e.stderr}")
-            return {
-                'success': False,
-                'error': f"Failed to list volumes: {e.stderr}",
-                'volumes': [],
-                'count': 0
-            }
+            return {"success": False, "error": f"Failed to list volumes: {e.stderr}", "volumes": [], "count": 0}
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse volume list: {e}")
-            return {
-                'success': False,
-                'error': f"Failed to parse volume list: {e}",
-                'volumes': [],
-                'count': 0
-            }
+            return {"success": False, "error": f"Failed to parse volume list: {e}", "volumes": [], "count": 0}
 
     def create_volume(self, name: str, driver: str = "local") -> dict[str, Any]:
         """
@@ -73,25 +61,21 @@ class VolumeManager:
         """
         try:
             result = subprocess.run(  # noqa: S603
-                ['docker', 'volume', 'create', '--driver', driver, name],  # noqa: S607
+                ["docker", "volume", "create", "--driver", driver, name],  # noqa: S607
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
 
-            return {
-                'success': True,
-                'volume_name': result.stdout.strip(),
-                'driver': driver
-            }
+            return {"success": True, "volume_name": result.stdout.strip(), "driver": driver}
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to create volume {name}: {e.stderr}")
             return {
-                'success': False,
-                'error': f"Failed to create volume: {e.stderr}",
-                'volume_name': name,
-                'driver': driver
+                "success": False,
+                "error": f"Failed to create volume: {e.stderr}",
+                "volume_name": name,
+                "driver": driver,
             }
 
     def remove_volume(self, volume_name: str, force: bool = False) -> dict[str, Any]:
@@ -105,29 +89,22 @@ class VolumeManager:
         Returns:
             Dict containing removal result or error details
         """
-        cmd = ['docker', 'volume', 'rm']
+        cmd = ["docker", "volume", "rm"]
         if force:
-            cmd.append('--force')
+            cmd.append("--force")
         cmd.append(volume_name)
 
         try:
             subprocess.run(  # noqa: S603
-                cmd,
-                capture_output=True,
-                text=True,
-                check=True
+                cmd, capture_output=True, text=True, check=True
             )
 
             return {
-                'success': True,
-                'volume_name': volume_name,
-                'message': f"Volume {volume_name} removed successfully"
+                "success": True,
+                "volume_name": volume_name,
+                "message": f"Volume {volume_name} removed successfully",
             }
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove volume {volume_name}: {e.stderr}")
-            return {
-                'success': False,
-                'error': f"Failed to remove volume: {e.stderr}",
-                'volume_name': volume_name
-            }
+            return {"success": False, "error": f"Failed to remove volume: {e.stderr}", "volume_name": volume_name}

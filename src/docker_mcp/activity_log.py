@@ -62,9 +62,7 @@ def clear_logs() -> None:
         _entries.clear()
 
 
-def _matches(
-    entry: dict[str, Any], *, level: str | None, kind: str | None, search: str | None
-) -> bool:
+def _matches(entry: dict[str, Any], *, level: str | None, kind: str | None, search: str | None) -> bool:
     if level:
         min_rank = _LEVEL_RANK.get(level.upper(), 0)
         if _LEVEL_RANK.get(str(entry.get("level", "INFO")), 0) < min_rank:
@@ -73,10 +71,7 @@ def _matches(
         return False
     if search:
         needle = search.lower()
-        hay = (
-            f"{entry.get('kind', '')} {entry.get('detail', '')} "
-            f"{json.dumps(entry.get('meta', {}))}"
-        ).lower()
+        hay = (f"{entry.get('kind', '')} {entry.get('detail', '')} {json.dumps(entry.get('meta', {}))}").lower()
         if needle not in hay:
             return False
     return True
@@ -182,9 +177,7 @@ def export_logs(
             )
         return buffer.getvalue(), "text/csv", f"docker-mcp-logs-{stamp}.csv"
 
-    body = json.dumps(
-        {"exported_at": datetime.now(UTC).isoformat(), "entries": entries}, indent=2
-    )
+    body = json.dumps({"exported_at": datetime.now(UTC).isoformat(), "entries": entries}, indent=2)
     return body, "application/json", f"docker-mcp-logs-{stamp}.json"
 
 

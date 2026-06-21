@@ -4,6 +4,7 @@ Volume management operations.
 This module provides functions for managing Docker volumes including
 creation, inspection, and removal.
 """
+
 import asyncio
 import logging
 from typing import Any
@@ -13,6 +14,7 @@ from ..logging_config import ContextLogger
 logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 # TODO: Move volume operations from docker_ops/volumes.py to here
+
 
 class VolumeManager:
     """Manager for volume operations."""
@@ -24,18 +26,15 @@ class VolumeManager:
     async def list_volumes(self) -> list[dict[str, Any]]:
         """List all Docker volumes."""
         try:
-            volumes = await asyncio.get_event_loop().run_in_executor(
-                None,
-                lambda: self.client.volumes.list()
-            )
+            volumes = await asyncio.get_event_loop().run_in_executor(None, lambda: self.client.volumes.list())
             return [
                 {
-                    'name': vol.name,
-                    'driver': vol.attrs['Driver'],
-                    'mountpoint': vol.attrs['Mountpoint'],
-                    'labels': vol.attrs.get('Labels', {})
+                    "name": vol.name,
+                    "driver": vol.attrs["Driver"],
+                    "mountpoint": vol.attrs["Mountpoint"],
+                    "labels": vol.attrs.get("Labels", {}),
                 }
-                for vol in volumes['Volumes']
+                for vol in volumes["Volumes"]
             ]
         except Exception as e:
             logger.error(f"Error listing volumes: {e!s}")

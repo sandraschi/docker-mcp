@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "schip-mcp-docker"
-version = "3.3.0"
+version = "3.4.0"
 description = "FastMCP 3.3 server for comprehensive Docker operations"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -20,7 +20,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "fastmcp>=3.3.0,<4",
+    "fastmcp>=3.4.2,<4",
     "prefab-ui>=0.14.0",
     "docker>=6.0.0",
     "pydantic>=2.0.0,<3.0.0",
@@ -61,6 +61,7 @@ style = "pep440"
 [tool.ruff]
 line-length = 120
 target-version = "py312"
+exclude = ["scripts", "tests", "_llm_test_scripts", "monitoring", "examples", "mcpb", "docs", "build"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "S", "UP", "RUF"]

@@ -13,11 +13,9 @@ import docker
 sys.path.append(str(Path(__file__).parent.parent))
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
 
 async def test_docker_connection():
     """Test the Docker connection handling."""
@@ -30,6 +28,7 @@ async def test_docker_connection():
     except Exception as e:
         print(f"❌ Docker is not available: {e!s}")
         return False
+
 
 if __name__ == "__main__":
     # Run the test

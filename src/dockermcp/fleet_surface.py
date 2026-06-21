@@ -95,9 +95,7 @@ def register_fleet_surface(mcp) -> None:
             get_system_info,
         )
 
-        result = await get_system_info(
-            SystemInfoRequest(include_disk_usage=True, include_swarm_info=False)
-        )
+        result = await get_system_info(SystemInfoRequest(include_disk_usage=True, include_swarm_info=False))
         payload = result.model_dump() if hasattr(result, "model_dump") else result
         return build_system_info_card(payload if isinstance(payload, dict) else {})
 

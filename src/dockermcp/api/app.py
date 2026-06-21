@@ -1,6 +1,7 @@
 """
 FastAPI routes for Docker MCP webapp
 """
+
 import logging
 
 import docker
@@ -9,15 +10,25 @@ from fastapi.middleware.cors import CORSMiddleware
 
 logger = logging.getLogger(__name__)
 
+
 def create_app() -> FastAPI:
     """Create and configure FastAPI app with Docker endpoints"""
 
     app = FastAPI(title="Docker MCP API", version="0.1.0")
 
-    # Add CORS middleware
+    # Add CORS middleware (tauri-aware)
+    _tauri_desktop = os.environ.get("DOCKER_TAURI", "").lower() in ("1", "true", "yes")
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=[
+            "http://127.0.0.1:10807",
+            "http://localhost:10807",
+            "http://goliath:10807",
+            "http://tauri.localhost",
+            "https://tauri.localhost",
+            "tauri://localhost",
+        ],
+        allow_origin_regex=r"https?://tauri\.localhost(:\d+)?" if _tauri_desktop else None,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -94,8 +105,7 @@ def create_app() -> FastAPI:
                     "total_containers_size": sum(c.get("SizeRw", 0) for c in disk_info.get("Containers", [])),
                     "total_images_size": sum(i.get("Size", 0) for i in disk_info.get("Images", [])),
                     "total_volumes_size": sum(
-                        v.get("UsageData", {}).get("Size", 0)
-                        for v in disk_info.get("Volumes", [])
+                        v.get("UsageData", {}).get("Size", 0) for v in disk_info.get("Volumes", [])
                     ),
                     "total_size": total_size,
                 },
@@ -171,10 +181,12 @@ def create_app() -> FastAPI:
 
     return app
 
+
 if __name__ == "__main__":
     import os
 
     import uvicorn
+
     app = create_app()
     host = os.environ.get("HOST", "127.0.0.1")
     uvicorn.run(app, host=host, port=10807)

@@ -4,6 +4,7 @@ Docker MCP Server - Main entry point.
 This module initializes and runs the Docker MCP server with enhanced error handling,
 logging, and system signal handling for graceful shutdowns.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -26,14 +27,12 @@ if src_dir not in sys.path:
 # Configure logging with JSON format and proper stream handling
 # Disable JSON for RPC logs to prevent parsing issues
 configure_logging(
-    enable_console=True,
-    json_format=True,
-    log_file=str(Path("logs/dockermcp.log")),
-    disable_json_for_rpc=True
+    enable_console=True, json_format=True, log_file=str(Path("logs/dockermcp.log")), disable_json_for_rpc=True
 )
 
 # Global flag to control the main event loop
 should_exit = False
+
 
 class DockerMCPServer:
     """Main server class for Docker MCP."""
@@ -64,12 +63,14 @@ class DockerMCPServer:
             # Import API endpoints to register them
             try:
                 from dockermcp.api import containers as _containers
+
                 self.logger.debug("Successfully imported API endpoints")
             except ImportError as e:
                 self.logger.warning(f"Failed to import API endpoints: {e}")
                 # Fallback for direct script execution
                 try:
                     from api import containers as _containers  # noqa: F401
+
                     self.logger.debug("Successfully imported API endpoints (fallback)")
                 except ImportError:
                     self.logger.warning("Failed to import API endpoints (fallback)")
@@ -77,6 +78,7 @@ class DockerMCPServer:
             # Import tools to ensure they're registered with the MCP instance
             try:
                 from dockermcp import tools as _tools  # noqa: F401
+
                 self.logger.info("Successfully imported tools")
             except ImportError as e:
                 self.logger.error(f"Failed to import tools: {e}", exc_info=True)
@@ -144,11 +146,12 @@ class DockerMCPServer:
             "executable": sys.executable,
             "cwd": os.getcwd(),
             "pid": os.getpid(),
-            "uid": os.getuid() if hasattr(os, 'getuid') else None,
-            "gid": os.getgid() if hasattr(os, 'getgid') else None,
+            "uid": os.getuid() if hasattr(os, "getuid") else None,
+            "gid": os.getgid() if hasattr(os, "getgid") else None,
         }
 
         self.logger.info("System information", **system_info)
+
 
 def handle_exception(exc_type: type[BaseException], exc_value: BaseException, exc_traceback) -> None:
     """Global exception handler for uncaught exceptions."""
@@ -165,6 +168,7 @@ def handle_exception(exc_type: type[BaseException], exc_value: BaseException, ex
             "exception_message": str(exc_value),
         },
     )
+
 
 async def run_server() -> None:
     """Run the Docker MCP server."""
@@ -194,23 +198,30 @@ async def run_server() -> None:
         # Ensure clean shutdown
         await server.shutdown()
 
+
 def main() -> int:
     """Entry point for the Docker MCP server."""
     # Set up global exception handler
     sys.excepthook = handle_exception
 
     # Configure root logger to be silent
-    logging.basicConfig(
-        level=logging.CRITICAL,
-        force=True,
-        handlers=[logging.NullHandler()]
-    )
+    logging.basicConfig(level=logging.CRITICAL, force=True, handlers=[logging.NullHandler()])
 
     # Silence common noisy loggers
     for logger_name in [
-        'fastmcp', 'mcp', 'uvicorn', 'httpx', 'httpcore',
-        'h11', 'asyncio', 'watchfiles', 'uvicorn.error',
-        'docker', 'urllib3', 'websockets', 'aiohttp'
+        "fastmcp",
+        "mcp",
+        "uvicorn",
+        "httpx",
+        "httpcore",
+        "h11",
+        "asyncio",
+        "watchfiles",
+        "uvicorn.error",
+        "docker",
+        "urllib3",
+        "websockets",
+        "aiohttp",
     ]:
         logging.getLogger(logger_name).setLevel(logging.WARNING)
 
@@ -236,6 +247,7 @@ def main() -> int:
             extra={"error": str(e)},
         )
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

@@ -45,6 +45,7 @@ async def test_docker_operations():
     except Exception as e:
         return False, f"❌ Unexpected error: {e!s}"
 
+
 if __name__ == "__main__":
     print("Testing core Docker functionality...")
 

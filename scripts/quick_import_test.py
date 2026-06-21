@@ -9,6 +9,7 @@ try:
 except Exception as e:
     print(f"❌ containers import failed: {e}")
     import traceback
+
     traceback.print_exc()
 
 try:
@@ -16,4 +17,5 @@ try:
 except Exception as e:
     print(f"❌ images import failed: {e}")
     import traceback
+
     traceback.print_exc()

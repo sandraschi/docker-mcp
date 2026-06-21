@@ -7,6 +7,7 @@ This module provides tools for managing Docker workflows including:
 - Health checks and monitoring
 - Automated deployment workflows
 """
+
 from __future__ import annotations
 
 import time
@@ -51,6 +52,7 @@ class WorkflowManager:
             else:
                 from ....dockermcp import docker_available
                 from ....dockermcp import docker_client as global_client
+
                 if docker_available:
                     self.client = global_client
                 else:
@@ -60,11 +62,7 @@ class WorkflowManager:
 
         self.workflows: dict[str, WorkflowState] = {}
 
-    def create_workflow(
-        self,
-        workflow_definition: WorkflowDefinition,
-        workflow_id: str | None = None
-    ) -> WorkflowState:
+    def create_workflow(self, workflow_definition: WorkflowDefinition, workflow_id: str | None = None) -> WorkflowState:
         """Create a new workflow.
 
         Args:
@@ -87,7 +85,7 @@ class WorkflowManager:
                 workflow_id=workflow_id,
                 name=workflow_definition.name,
                 status=WorkflowStatus.PENDING,
-                created_at=datetime.utcnow()
+                created_at=datetime.utcnow(),
             )
 
             # Store workflow state
@@ -101,11 +99,7 @@ class WorkflowManager:
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
-    async def start_workflow(
-        self,
-        workflow_id: str,
-        timeout: int
-    ) -> WorkflowState:
+    async def start_workflow(self, workflow_id: str, timeout: int) -> WorkflowState:
         """Start a workflow.
 
         Args:
@@ -145,11 +139,7 @@ class WorkflowManager:
 
             raise ToolError(error_msg) from e
 
-    async def stop_workflow(
-        self,
-        workflow_id: str,
-        force: bool
-    ) -> WorkflowState:
+    async def stop_workflow(self, workflow_id: str, force: bool) -> WorkflowState:
         """Stop a running workflow.
 
         Args:
@@ -181,10 +171,7 @@ class WorkflowManager:
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
-    def get_workflow(
-        self,
-        workflow_id: str
-    ) -> WorkflowState:
+    def get_workflow(self, workflow_id: str) -> WorkflowState:
         """Get the status of a workflow.
 
         Args:
@@ -207,22 +194,21 @@ class WorkflowManager:
             logger.error(error_msg, exc_info=True)
             raise ToolError(error_msg) from e
 
+
 # Global workflow manager instance
 workflow_manager = WorkflowManager()
+
 
 # Parameter models for workflow tools
 class CreateWorkflowParams(CreateWorkflowRequest):
     """Parameters for creating a workflow."""
+
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "workflow_definition": {
-                    "name": "web-app",
-                    "services": {"web": {"image": "nginx:latest"}}
-                }
-            }
+            "example": {"workflow_definition": {"name": "web-app", "services": {"web": {"image": "nginx:latest"}}}}
         }
     )
+
 
 @mcp.tool
 async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowResponse:
@@ -271,8 +257,7 @@ async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowRespons
     try:
         # Create the workflow
         workflow_id = workflow_manager.create_workflow(
-            workflow_definition=params.workflow_definition,
-            workflow_id=params.workflow_id
+            workflow_definition=params.workflow_definition, workflow_id=params.workflow_id
         )
 
         # Return success response
@@ -281,7 +266,7 @@ async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowRespons
             name=workflow_id.name,
             status=workflow_id.status,
             created_at=workflow_id.created_at,
-            message="Workflow created successfully"
+            message="Workflow created successfully",
         )
 
     except Exception as e:
@@ -289,16 +274,12 @@ async def create_workflow(params: CreateWorkflowParams) -> CreateWorkflowRespons
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
+
 class StartWorkflowParams(StartWorkflowRequest):
     """Parameters for starting a workflow."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "workflow_id": "workflow_123",
-                "timeout": 300
-            }
-        }
-    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"workflow_id": "workflow_123", "timeout": 300}})
+
 
 @mcp.tool
 async def start_workflow(params: StartWorkflowParams) -> StartWorkflowResponse:
@@ -328,38 +309,29 @@ async def start_workflow(params: StartWorkflowParams) -> StartWorkflowResponse:
     """
     try:
         # Start the workflow
-        workflow_state = await workflow_manager.start_workflow(
-            workflow_id=params.workflow_id,
-            timeout=params.timeout
-        )
+        workflow_state = await workflow_manager.start_workflow(workflow_id=params.workflow_id, timeout=params.timeout)
 
         # Return success response
         return StartWorkflowResponse(
             workflow_id=workflow_state.workflow_id,
             status=workflow_state.status,
             start_time=workflow_state.start_time or datetime.utcnow(),
-            message="Workflow started successfully"
+            message="Workflow started successfully",
         )
     except Exception as e:
         error_msg = f"Failed to start workflow: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
+
 class StopWorkflowParams(StopWorkflowRequest):
     """Parameters for stopping a workflow."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "workflow_id": "workflow_123",
-                "force": False
-            }
-        }
-    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"workflow_id": "workflow_123", "force": False}})
+
 
 @mcp.tool
-async def stop_workflow(
-    params: StopWorkflowParams
-) -> StopWorkflowResponse:
+async def stop_workflow(params: StopWorkflowParams) -> StopWorkflowResponse:
     """
     Stop a running workflow.
 
@@ -385,17 +357,14 @@ async def stop_workflow(
     """
     try:
         # Stop the workflow
-        workflow_state = await workflow_manager.stop_workflow(
-            workflow_id=params.workflow_id,
-            force=params.force
-        )
+        workflow_state = await workflow_manager.stop_workflow(workflow_id=params.workflow_id, force=params.force)
 
         # Return success response
         return StopWorkflowResponse(
             workflow_id=workflow_state.workflow_id,
             status=workflow_state.status,
             end_time=workflow_state.end_time or datetime.utcnow(),
-            message="Workflow stopped successfully"
+            message="Workflow stopped successfully",
         )
 
     except Exception as e:
@@ -403,19 +372,19 @@ async def stop_workflow(
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
+
 class GetWorkflowStatusParams(BaseModel):
     """Parameters for getting workflow status.
 
     Attributes:
         workflow_id: The unique identifier of the workflow to get status for.
     """
+
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "workflow_id": "workflow_123"
-            },
+            "example": {"workflow_id": "workflow_123"},
             "title": "GetWorkflowStatusParams",
-            "description": "Parameters for retrieving the status of a workflow"
+            "description": "Parameters for retrieving the status of a workflow",
         }
     )
 
@@ -426,9 +395,10 @@ class GetWorkflowStatusParams(BaseModel):
         pattern=r"^[a-zA-Z0-9_-]+$",
         json_schema_extra={
             "examples": ["workflow_123", "my-workflow-1"],
-            "description": "ID of the workflow to get status for"
-        }
+            "description": "ID of the workflow to get status for",
+        },
     )
+
 
 @mcp.tool
 async def get_workflow_status(params: GetWorkflowStatusParams) -> WorkflowStatusResponse:
@@ -477,7 +447,7 @@ async def get_workflow_status(params: GetWorkflowStatusParams) -> WorkflowStatus
             start_time=workflow.start_time,
             end_time=workflow.end_time,
             services=workflow.services,
-            error=workflow.error
+            error=workflow.error,
         )
 
     except Exception as e:
@@ -485,22 +455,15 @@ async def get_workflow_status(params: GetWorkflowStatusParams) -> WorkflowStatus
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
 
+
 class ListWorkflowsParams(ListWorkflowsRequest):
     """Parameters for listing workflows."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "status": "running",
-                "limit": 10,
-                "offset": 0
-            }
-        }
-    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"status": "running", "limit": 10, "offset": 0}})
+
 
 @mcp.tool
-async def list_workflows(
-    params: ListWorkflowsParams
-) -> ListWorkflowsResponse:
+async def list_workflows(params: ListWorkflowsParams) -> ListWorkflowsResponse:
     """
     List all workflows with optional filtering and pagination.
 
@@ -542,20 +505,22 @@ async def list_workflows(
         # Filter workflows by status
         filtered_workflows = []
         for workflow in workflow_manager.workflows.values():
-            if params.status == 'all' or workflow.status.value == params.status:
-                filtered_workflows.append(WorkflowSummary(
-                    workflow_id=workflow.workflow_id,
-                    name=workflow.name,
-                    status=workflow.status,
-                    created_at=workflow.created_at,
-                    start_time=workflow.start_time,
-                    end_time=workflow.end_time,
-                    service_count=len(workflow.services) if workflow.services else 0
-                ))
+            if params.status == "all" or workflow.status.value == params.status:
+                filtered_workflows.append(
+                    WorkflowSummary(
+                        workflow_id=workflow.workflow_id,
+                        name=workflow.name,
+                        status=workflow.status,
+                        created_at=workflow.created_at,
+                        start_time=workflow.start_time,
+                        end_time=workflow.end_time,
+                        service_count=len(workflow.services) if workflow.services else 0,
+                    )
+                )
 
         # Apply pagination
         total = len(filtered_workflows)
-        paginated_workflows = filtered_workflows[params.offset:params.offset + params.limit]
+        paginated_workflows = filtered_workflows[params.offset : params.offset + params.limit]
 
         # Return paginated results
         return ListWorkflowsResponse(
@@ -564,7 +529,7 @@ async def list_workflows(
             limit=params.limit,
             offset=params.offset,
             status_filter=params.status.lower(),
-            message=f"Found {total} workflow(s)"
+            message=f"Found {total} workflow(s)",
         )
 
     except Exception as e:

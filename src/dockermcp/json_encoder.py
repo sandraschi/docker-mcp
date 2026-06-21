@@ -1,6 +1,7 @@
 """
 Custom JSON encoder for Docker MCP server to handle Docker SDK objects and other non-serializable types.
 """
+
 import json
 import logging
 import re
@@ -11,6 +12,7 @@ from enum import Enum
 from typing import Any, ClassVar
 
 logger = logging.getLogger(__name__)
+
 
 class DockerJSONEncoder(json.JSONEncoder):
     """Custom JSON encoder that handles Docker SDK objects and other non-serializable types."""
@@ -28,15 +30,17 @@ class DockerJSONEncoder(json.JSONEncoder):
         self._type_handlers = {}
 
         # Register standard Python type handlers
-        self._type_handlers.update({
-            datetime: lambda x: x.isoformat(),
-            set: list,
-            frozenset: list,
-            bytes: lambda x: x.decode('utf-8', errors='replace'),
-            uuid.UUID: str,
-            type(re.compile('')): lambda x: x.pattern,
-            Enum: lambda x: x.name,
-        })
+        self._type_handlers.update(
+            {
+                datetime: lambda x: x.isoformat(),
+                set: list,
+                frozenset: list,
+                bytes: lambda x: x.decode("utf-8", errors="replace"),
+                uuid.UUID: str,
+                type(re.compile("")): lambda x: x.pattern,
+                Enum: lambda x: x.name,
+            }
+        )
 
         # Try to import and handle Docker SDK types
         try:
@@ -46,12 +50,14 @@ class DockerJSONEncoder(json.JSONEncoder):
             import docker.models.volumes
 
             # Register Docker container handlers
-            self._type_handlers.update({
-                docker.models.containers.Container: self._serialize_docker_container,
-                docker.models.images.Image: self._serialize_docker_image,
-                docker.models.networks.Network: self._serialize_docker_network,
-                docker.models.volumes.Volume: self._serialize_docker_volume,
-            })
+            self._type_handlers.update(
+                {
+                    docker.models.containers.Container: self._serialize_docker_container,
+                    docker.models.images.Image: self._serialize_docker_image,
+                    docker.models.networks.Network: self._serialize_docker_network,
+                    docker.models.volumes.Volume: self._serialize_docker_volume,
+                }
+            )
 
         except ImportError:
             logger.debug("Docker SDK not available, using basic type handlers")
@@ -60,67 +66,67 @@ class DockerJSONEncoder(json.JSONEncoder):
         """Serialize a Docker container object."""
         try:
             return {
-                'id': container.id,
-                'short_id': container.short_id,
-                'name': container.name,
-                'status': container.status,
-                'image': container.image.tags[0] if container.image.tags else container.image.short_id,
-                'created': container.attrs['Created'],
-                'state': container.attrs['State'],
-                'labels': container.labels,
+                "id": container.id,
+                "short_id": container.short_id,
+                "name": container.name,
+                "status": container.status,
+                "image": container.image.tags[0] if container.image.tags else container.image.short_id,
+                "created": container.attrs["Created"],
+                "state": container.attrs["State"],
+                "labels": container.labels,
             }
         except Exception as e:
             logger.warning(f"Failed to serialize container {getattr(container, 'id', 'unknown')}: {e}")
-            return {'id': getattr(container, 'id', 'unknown'), 'error': str(e)}
+            return {"id": getattr(container, "id", "unknown"), "error": str(e)}
 
     def _serialize_docker_image(self, image) -> dict[str, Any]:
         """Serialize a Docker image object."""
         try:
             return {
-                'id': image.id,
-                'short_id': image.short_id,
-                'tags': image.tags,
-                'created': image.attrs['Created'],
-                'size': image.attrs.get('Size'),
-                'virtual_size': image.attrs.get('VirtualSize'),
-                'labels': image.labels,
+                "id": image.id,
+                "short_id": image.short_id,
+                "tags": image.tags,
+                "created": image.attrs["Created"],
+                "size": image.attrs.get("Size"),
+                "virtual_size": image.attrs.get("VirtualSize"),
+                "labels": image.labels,
             }
         except Exception as e:
             logger.warning(f"Failed to serialize image {getattr(image, 'id', 'unknown')}: {e}")
-            return {'id': getattr(image, 'id', 'unknown'), 'error': str(e)}
+            return {"id": getattr(image, "id", "unknown"), "error": str(e)}
 
     def _serialize_docker_network(self, network) -> dict[str, Any]:
         """Serialize a Docker network object."""
         try:
             return {
-                'id': network.id,
-                'name': network.name,
-                'driver': network.attrs.get('Driver'),
-                'scope': network.attrs.get('Scope'),
-                'ipam': network.attrs.get('IPAM'),
-                'containers': network.attrs.get('Containers', {}),
-                'labels': network.attrs.get('Labels', {}),
-                'created': network.attrs.get('Created'),
+                "id": network.id,
+                "name": network.name,
+                "driver": network.attrs.get("Driver"),
+                "scope": network.attrs.get("Scope"),
+                "ipam": network.attrs.get("IPAM"),
+                "containers": network.attrs.get("Containers", {}),
+                "labels": network.attrs.get("Labels", {}),
+                "created": network.attrs.get("Created"),
             }
         except Exception as e:
             logger.warning(f"Failed to serialize network {getattr(network, 'id', 'unknown')}: {e}")
-            return {'id': getattr(network, 'id', 'unknown'), 'error': str(e)}
+            return {"id": getattr(network, "id", "unknown"), "error": str(e)}
 
     def _serialize_docker_volume(self, volume) -> dict[str, Any]:
         """Serialize a Docker volume object."""
         try:
             return {
-                'name': volume.name,
-                'driver': volume.attrs.get('Driver'),
-                'mountpoint': volume.attrs.get('Mountpoint'),
-                'labels': volume.attrs.get('Labels', {}),
-                'options': volume.attrs.get('Options', {}),
-                'created': volume.attrs.get('CreatedAt'),
-                'scope': volume.attrs.get('Scope'),
+                "name": volume.name,
+                "driver": volume.attrs.get("Driver"),
+                "mountpoint": volume.attrs.get("Mountpoint"),
+                "labels": volume.attrs.get("Labels", {}),
+                "options": volume.attrs.get("Options", {}),
+                "created": volume.attrs.get("CreatedAt"),
+                "scope": volume.attrs.get("Scope"),
             }
         except Exception as e:
             logger.warning(f"Failed to serialize volume {getattr(volume, 'name', 'unknown')}: {e}")
-            return {'name': getattr(volume, 'name', 'unknown'), 'error': str(e)}
+            return {"name": getattr(volume, "name", "unknown"), "error": str(e)}
 
     def default(self, obj: Any) -> Any:
         """Convert objects to a JSON-serializable format."""
@@ -134,13 +140,13 @@ class DockerJSONEncoder(json.JSONEncoder):
                     break  # Fall through to default handling
 
         # Handle common non-serializable types
-        if hasattr(obj, '__dict__'):
+        if hasattr(obj, "__dict__"):
             return self.clean_dict(obj.__dict__)
-        elif hasattr(obj, '_asdict'):
+        elif hasattr(obj, "_asdict"):
             return self.clean_dict(obj._asdict())
-        elif hasattr(obj, 'isoformat'):
+        elif hasattr(obj, "isoformat"):
             return obj.isoformat()
-        elif hasattr(obj, '__iter__') and not isinstance(obj, (str, bytes, bytearray)):
+        elif hasattr(obj, "__iter__") and not isinstance(obj, (str, bytes, bytearray)):
             return [self.default(item) for item in obj]
 
         # Try to get a string representation as a fallback
@@ -160,7 +166,7 @@ class DockerJSONEncoder(json.JSONEncoder):
             result = {}
             for key, value in d.items():
                 # Skip private attributes
-                if isinstance(key, str) and key.startswith('_'):
+                if isinstance(key, str) and key.startswith("_"):
                     continue
 
                 try:
@@ -189,11 +195,11 @@ class DockerJSONEncoder(json.JSONEncoder):
             return result
 
         # Handle other objects with __dict__
-        elif hasattr(d, '__dict__'):
+        elif hasattr(d, "__dict__"):
             return self.clean_dict(d.__dict__)
 
         # Handle namedtuples
-        elif hasattr(d, '_asdict'):
+        elif hasattr(d, "_asdict"):
             return self.clean_dict(d._asdict())
 
         # Handle other types using the default encoder
@@ -205,9 +211,11 @@ class DockerJSONEncoder(json.JSONEncoder):
                 logger.debug(f"Could not serialize value of type {type(d).__name__}: {e}")
                 return str(d) if d is not None else None
 
+
 def dumps(obj: Any, **kwargs) -> str:
     """Serialize obj to a JSON formatted str using the custom encoder."""
     return json.dumps(obj, cls=DockerJSONEncoder, **kwargs)
+
 
 def loads(json_str: str, **kwargs) -> Any:
     """Deserialize json_str to a Python object."""

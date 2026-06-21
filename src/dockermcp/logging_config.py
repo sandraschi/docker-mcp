@@ -12,6 +12,7 @@ This module provides a centralized logging configuration with the following feat
 - Loguru integration
 - Context-aware logging
 """
+
 from __future__ import annotations
 
 import json
@@ -30,9 +31,9 @@ from typing import (
 )
 
 # Type variable for generic function wrapping
-F = TypeVar('F', bound=Callable[..., Any])
-P = TypeVar('P')
-T = TypeVar('T')
+F = TypeVar("F", bound=Callable[..., Any])
+P = TypeVar("P")
+T = TypeVar("T")
 
 # Third-party imports
 LOGURU_AVAILABLE = False
@@ -40,10 +41,11 @@ loguru_logger = None
 LOGURU_FORMAT = "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} - {message}"
 
 # Only try to import loguru if it's actually needed
-if os.environ.get('ENABLE_LOGURU', 'false').lower() == 'true':
+if os.environ.get("ENABLE_LOGURU", "false").lower() == "true":
     try:
         from loguru import logger as loguru_logger
         from loguru._defaults import LOGURU_FORMAT as _LOGURU_FORMAT
+
         LOGURU_AVAILABLE = True
         LOGURU_FORMAT = _LOGURU_FORMAT
     except ImportError:
@@ -66,9 +68,11 @@ HOSTNAME = os.environ.get("HOSTNAME", socket.gethostname())
 for logger_name in ["fastmcp", "urllib3", "docker", "asyncio"]:
     logging.getLogger(logger_name).setLevel(logging.WARNING)
 
+
 # Thread-local storage for request context
 class LogContext(threading.local):
     """Thread-local storage for log context."""
+
     def __init__(self):
         super().__init__()
         self.correlation_id: str | None = None
@@ -85,78 +89,100 @@ class LogContext(threading.local):
         self.extra: dict[str, Any] = {}
         self.loki_handler_id: int | None = None
 
+
 # Global log context
 log_context = LogContext()
+
 
 class JsonFormatter(logging.Formatter):
     """Custom JSON formatter for structured logging."""
 
     def __init__(self, *args, **kwargs):
-        self.disable_json = kwargs.pop('disable_json', False)
+        self.disable_json = kwargs.pop("disable_json", False)
         super().__init__(*args, **kwargs)
 
     def format(self, record: logging.LogRecord) -> str:
         """Format the log record as JSON."""
-        if self.disable_json or getattr(record, 'disable_json', False):
+        if self.disable_json or getattr(record, "disable_json", False):
             # For RPC logs, still use JSON but with a simpler structure
             log_record = {
-                'timestamp': datetime.fromtimestamp(record.created, UTC).isoformat() + 'Z',
-                'level': record.levelname.lower(),
-                'message': record.getMessage(),
-                'name': record.name
+                "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat() + "Z",
+                "level": record.levelname.lower(),
+                "message": record.getMessage(),
+                "name": record.name,
             }
 
         # Create a dict with the log record data
         log_record = {
-            'timestamp': datetime.fromtimestamp(record.created, UTC).isoformat() + 'Z',
-            'level': record.levelname.lower(),
-            'name': record.name,
-            'message': record.getMessage(),
-            'pid': record.process,
-            'thread': record.thread,
-            'module': record.module,
-            'function': record.funcName,
-            'line': record.lineno,
-            'environment': ENVIRONMENT,
-            'hostname': HOSTNAME
+            "timestamp": datetime.fromtimestamp(record.created, UTC).isoformat() + "Z",
+            "level": record.levelname.lower(),
+            "name": record.name,
+            "message": record.getMessage(),
+            "pid": record.process,
+            "thread": record.thread,
+            "module": record.module,
+            "function": record.funcName,
+            "line": record.lineno,
+            "environment": ENVIRONMENT,
+            "hostname": HOSTNAME,
         }
 
         # Add correlation ID if available
-        if hasattr(record, 'correlation_id'):
-            log_record['correlation_id'] = record.correlation_id
+        if hasattr(record, "correlation_id"):
+            log_record["correlation_id"] = record.correlation_id
         elif log_context.correlation_id:
-            log_record['correlation_id'] = log_context.correlation_id
+            log_record["correlation_id"] = log_context.correlation_id
 
         # Add request ID if available
-        if hasattr(record, 'request_id'):
-            log_record['request_id'] = record.request_id
+        if hasattr(record, "request_id"):
+            log_record["request_id"] = record.request_id
         elif log_context.request_id:
-            log_record['request_id'] = log_context.request_id
+            log_record["request_id"] = log_context.request_id
 
         # Add user ID if available
-        if hasattr(record, 'user_id'):
-            log_record['user_id'] = record.user_id
+        if hasattr(record, "user_id"):
+            log_record["user_id"] = record.user_id
         elif log_context.user_id:
-            log_record['user_id'] = log_context.user_id
+            log_record["user_id"] = log_context.user_id
 
         # Add labels and tags
-        log_record['labels'] = log_context.labels
-        log_record['tags'] = log_context.tags
+        log_record["labels"] = log_context.labels
+        log_record["tags"] = log_context.tags
 
         # Add any extra context
         log_record.update(log_context.extra)
 
         # Add exception info if present
         if record.exc_info:
-            log_record['exception'] = self.formatException(record.exc_info)
+            log_record["exception"] = self.formatException(record.exc_info)
 
         # Add any extra attributes
         for key, value in record.__dict__.items():
-            if key not in ('args', 'asctime', 'created', 'exc_info', 'exc_text',
-                          'filename', 'funcName', 'id', 'levelname', 'levelno',
-                          'lineno', 'module', 'msecs', 'message', 'msg', 'name',
-                          'pathname', 'process', 'processName', 'relativeCreated',
-                          'stack_info', 'thread', 'threadName') and not key.startswith('_'):
+            if key not in (
+                "args",
+                "asctime",
+                "created",
+                "exc_info",
+                "exc_text",
+                "filename",
+                "funcName",
+                "id",
+                "levelname",
+                "levelno",
+                "lineno",
+                "module",
+                "msecs",
+                "message",
+                "msg",
+                "name",
+                "pathname",
+                "process",
+                "processName",
+                "relativeCreated",
+                "stack_info",
+                "thread",
+                "threadName",
+            ) and not key.startswith("_"):
                 try:
                     # Ensure value is JSON serializable
                     json.dumps(value)
@@ -169,37 +195,41 @@ class JsonFormatter(logging.Formatter):
             return json.dumps(log_record, ensure_ascii=False, default=str)
         except (TypeError, ValueError) as e:
             # Fallback to a minimal valid JSON if serialization fails
-            return json.dumps({
-                'timestamp': datetime.now(UTC).isoformat() + 'Z',
-                'level': 'error',
-                'name': 'logging',
-                'message': f'Failed to serialize log record: {e!s}',
-                'original_message': str(record.msg)
-            }, default=str)
+            return json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat() + "Z",
+                    "level": "error",
+                    "name": "logging",
+                    "message": f"Failed to serialize log record: {e!s}",
+                    "original_message": str(record.msg),
+                },
+                default=str,
+            )
+
 
 class ContextLogger(logging.LoggerAdapter):
     """Logger adapter that adds context to log records."""
 
     def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """Add context to the log record."""
-        extra = kwargs.get('extra', {})
+        extra = kwargs.get("extra", {})
 
         # Add context from thread-local storage
-        if log_context.correlation_id and 'correlation_id' not in extra:
-            extra['correlation_id'] = log_context.correlation_id
-        if log_context.request_id and 'request_id' not in extra:
-            extra['request_id'] = log_context.request_id
-        if log_context.user_id and 'user_id' not in extra:
-            extra['user_id'] = log_context.user_id
+        if log_context.correlation_id and "correlation_id" not in extra:
+            extra["correlation_id"] = log_context.correlation_id
+        if log_context.request_id and "request_id" not in extra:
+            extra["request_id"] = log_context.request_id
+        if log_context.user_id and "user_id" not in extra:
+            extra["user_id"] = log_context.user_id
 
         # Add labels and tags
-        extra['labels'] = {**log_context.labels, **extra.get('labels', {})}
-        extra['tags'] = {**log_context.tags, **extra.get('tags', {})}
+        extra["labels"] = {**log_context.labels, **extra.get("labels", {})}
+        extra["tags"] = {**log_context.tags, **extra.get("tags", {})}
 
         # Add any extra context
         extra.update(log_context.extra)
 
-        kwargs['extra'] = extra
+        kwargs["extra"] = extra
         return msg, kwargs
 
     def bind(self, **kwargs: Any) -> ContextLogger:
@@ -220,23 +250,24 @@ class ContextLogger(logging.LoggerAdapter):
         def patcher(record: dict[str, Any]) -> None:
             """Patch Loguru record with context."""
             if log_context.correlation_id:
-                record['extra']['correlation_id'] = log_context.correlation_id
+                record["extra"]["correlation_id"] = log_context.correlation_id
             if log_context.request_id:
-                record['extra']['request_id'] = log_context.request_id
+                record["extra"]["request_id"] = log_context.request_id
             if log_context.user_id:
-                record['extra']['user_id'] = log_context.user_id
+                record["extra"]["user_id"] = log_context.user_id
 
             # Add labels and tags
-            record['extra']['labels'] = {**log_context.labels, **record['extra'].get('labels', {})}
-            record['extra']['tags'] = {**log_context.tags, **record['extra'].get('tags', {})}
+            record["extra"]["labels"] = {**log_context.labels, **record["extra"].get("labels", {})}
+            record["extra"]["tags"] = {**log_context.tags, **record["extra"].get("tags", {})}
 
             # Add any extra context
             for key, value in log_context.extra.items():
-                if key not in record['extra']:
-                    record['extra'][key] = value
+                if key not in record["extra"]:
+                    record["extra"][key] = value
 
         # Apply the patcher to Loguru
         loguru_logger.configure(patcher=patcher)
+
 
 class LogContextManager:
     """Context manager for log context."""
@@ -258,7 +289,7 @@ class LogContextManager:
             setattr(log_context, key, self.new_context[key])
 
         # Patch Loguru if available
-        if LOGURU_AVAILABLE and hasattr(self.logger, 'patch_loguru'):
+        if LOGURU_AVAILABLE and hasattr(self.logger, "patch_loguru"):
             self.logger.patch_loguru()
 
         return self
@@ -275,8 +306,9 @@ class LogContextManager:
                 setattr(log_context, key, None)
 
         # Re-patch Loguru if available
-        if LOGURU_AVAILABLE and hasattr(self.logger, 'patch_loguru'):
+        if LOGURU_AVAILABLE and hasattr(self.logger, "patch_loguru"):
             self.logger.patch_loguru()
+
 
 def configure_logging(
     level: str | int = DEFAULT_LOG_LEVEL,
@@ -333,9 +365,7 @@ def configure_logging(
     if json_format:
         formatter = JsonFormatter(disable_json=disable_json_for_rpc)
     else:
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+        formatter = logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 
     # Add console handler
     if enable_console:
@@ -353,18 +383,16 @@ def configure_logging(
             log_file,
             maxBytes=10 * 1024 * 1024,  # 10 MB
             backupCount=5,
-            encoding='utf-8',
+            encoding="utf-8",
         )
         file_handler.setLevel(level)
         file_handler.setFormatter(formatter)
         root_logger.addHandler(file_handler)
 
     # Add syslog handler if enabled
-    if enable_syslog and hasattr(logging.handlers, 'SysLogHandler'):
+    if enable_syslog and hasattr(logging.handlers, "SysLogHandler"):
         try:
-            syslog_handler = logging.handlers.SysLogHandler(
-                address=('localhost', 514)
-            )
+            syslog_handler = logging.handlers.SysLogHandler(address=("localhost", 514))
             syslog_handler.setLevel(level)
             syslog_handler.setFormatter(formatter)
             root_logger.addHandler(syslog_handler)
@@ -372,25 +400,21 @@ def configure_logging(
             root_logger.warning(f"Failed to configure syslog: {e}")
 
     # Configure log levels for third-party libraries
-    logging.getLogger('docker').setLevel(logging.WARNING)
-    logging.getLogger('urllib3').setLevel(logging.WARNING)
-    logging.getLogger('asyncio').setLevel(logging.WARNING)
-    logging.getLogger('aiodocker').setLevel(logging.WARNING)
+    logging.getLogger("docker").setLevel(logging.WARNING)
+    logging.getLogger("urllib3").setLevel(logging.WARNING)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+    logging.getLogger("aiodocker").setLevel(logging.WARNING)
 
     # Configure Loguru if available
     if LOGURU_AVAILABLE:
         _configure_loguru(level, log_file, enable_console, enable_syslog)
 
         # Configure Loki if enabled
-        if enable_loki or (enable_loki is None and 'LOKI_URL' in os.environ):
-            _configure_loki(
-                level=level,
-                url=loki_url,
-                tags=loki_tags,
-                labels=loki_labels
-            )
+        if enable_loki or (enable_loki is None and "LOKI_URL" in os.environ):
+            _configure_loki(level=level, url=loki_url, tags=loki_tags, labels=loki_labels)
 
     return root_logger
+
 
 def _configure_loguru(
     level: str | int,
@@ -430,14 +454,9 @@ def _configure_loguru(
         log_file.parent.mkdir(parents=True, exist_ok=True)
 
         loguru_logger.add(
-            str(log_file.with_suffix('.log')),  # Ensure .log extension
+            str(log_file.with_suffix(".log")),  # Ensure .log extension
             level=level_name,
-            format=(
-                "{time:YYYY-MM-DD HH:mm:ss.SSS} | "
-                "{level: <8} | "
-                "{name}:{function}:{line} | "
-                "{message}"
-            ),
+            format=("{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | {message}"),
             rotation="10 MB",
             retention="30 days",
             compression="zip",
@@ -460,6 +479,7 @@ def _configure_loguru(
             )
         except ImportError:
             loguru_logger.warning("systemd-python not installed, syslog logging disabled")
+
 
 def _configure_loki(
     level: str | int = "INFO",
@@ -511,7 +531,7 @@ def _configure_loki(
     # Add Loki handler
     try:
         # Remove existing Loki handler if any
-        if hasattr(log_context, 'loki_handler_id') and log_context.loki_handler_id is not None:
+        if hasattr(log_context, "loki_handler_id") and log_context.loki_handler_id is not None:
             try:
                 loguru_logger.remove(log_context.loki_handler_id)
             except ValueError:
@@ -533,6 +553,7 @@ def _configure_loki(
     except Exception as e:
         loguru_logger.error(f"Failed to configure Loki logging: {e}")
 
+
 # Create a default logger instance
 logger = ContextLogger(logging.getLogger(__name__), {})
 
@@ -544,11 +565,8 @@ if not root_logger.handlers:
         root_logger.removeHandler(handler)
 
     # Configure with JSON format and proper stream handling
-    configure_logging(
-        enable_console=True,
-        json_format=True,
-        log_file=str(LOG_FILE)
-    )
+    configure_logging(enable_console=True, json_format=True, log_file=str(LOG_FILE))
+
 
 # Add a filter to add correlation ID to log records
 class CorrelationIdFilter(logging.Filter):
@@ -556,29 +574,34 @@ class CorrelationIdFilter(logging.Filter):
 
     def filter(self, record: logging.LogRecord) -> bool:
         """Add correlation ID to the log record."""
-        if not hasattr(record, 'correlation_id') and log_context.correlation_id:
+        if not hasattr(record, "correlation_id") and log_context.correlation_id:
             record.correlation_id = log_context.correlation_id
         return True
+
 
 # Add the filter to the root logger
 for handler in logging.root.handlers:
     handler.addFilter(CorrelationIdFilter())
 
+
 # Define BoundLogger and BoundLoggerAdapter classes
 class BoundLoggerAdapter(logging.LoggerAdapter):
     """Adapter that adds context to log records."""
+
     def __init__(self, logger: logging.Logger, extra: dict[str, Any]):
         super().__init__(logger, extra)
 
     def process(self, msg: str, kwargs: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """Process the logging message and keyword arguments."""
-        if 'extra' not in kwargs:
-            kwargs['extra'] = {}
-        kwargs['extra'].update(self.extra)
+        if "extra" not in kwargs:
+            kwargs["extra"] = {}
+        kwargs["extra"].update(self.extra)
         return msg, kwargs
+
 
 class BoundLogger(logging.Logger):
     """Logger class that supports context binding."""
+
     def bind(self, **kwargs: Any) -> BoundLogger:
         """Bind context variables to this logger."""
         return BoundLoggerAdapter(self, kwargs)
@@ -586,6 +609,7 @@ class BoundLogger(logging.Logger):
     def contextualize(self, **kwargs: Any) -> LogContextManager:
         """Create a context manager that binds context variables."""
         return LogContextManager(ContextLogger(self, {}), **kwargs)
+
 
 # Patch the logger class
 logging.setLoggerClass(BoundLogger)

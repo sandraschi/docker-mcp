@@ -10,6 +10,9 @@ ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT / "src"))
 
 
+# PyInstaller lazy-import traps (fleet Tauri protocol)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="docker-mcp HTTP web bridge")
     parser.add_argument("--http", action="store_true", help="Run HTTP (required for Tauri)")

@@ -5,6 +5,7 @@ This module provides high-level functions for managing Docker networks,
 including creating, removing, and inspecting networks, as well as managing
 container connections to networks.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -35,32 +36,22 @@ def prune_networks() -> NetworkOperationResponse:
         client = mcp.docker_client
         result = client.networks.prune()
 
-        deleted_count = len(result.get('NetworksDeleted', []))
-        space_reclaimed = result.get('SpaceReclaimed', 0)
+        deleted_count = len(result.get("NetworksDeleted", []))
+        space_reclaimed = result.get("SpaceReclaimed", 0)
 
-        logger.info(
-            "Successfully pruned networks",
-            networks_deleted=deleted_count,
-            space_reclaimed=space_reclaimed
-        )
+        logger.info("Successfully pruned networks", networks_deleted=deleted_count, space_reclaimed=space_reclaimed)
 
         return NetworkOperationResponse(
             status="success",
             message=f"Successfully pruned {deleted_count} networks",
             network_id=None,
-            data={
-                'networks_deleted': result.get('NetworksDeleted', []),
-                'space_reclaimed': space_reclaimed
-            }
+            data={"networks_deleted": result.get("NetworksDeleted", []), "space_reclaimed": space_reclaimed},
         )
 
     except docker.errors.APIError as e:
         error_msg = f"Failed to prune networks: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return NetworkOperationResponse.error_response(
-            error=error_msg,
-            message="Failed to prune networks"
-        )
+        return NetworkOperationResponse.error_response(error=error_msg, message="Failed to prune networks")
 
 
 def list_networks() -> NetworkListResponse:
@@ -74,33 +65,19 @@ def list_networks() -> NetworkListResponse:
         client = mcp.docker_client
         networks = client.networks.list()
 
-        network_summaries = [
-            NetworkSummary.from_docker_network(net)
-            for net in networks
-        ]
+        network_summaries = [NetworkSummary.from_docker_network(net) for net in networks]
 
-        logger.info(
-            "Listed networks",
-            network_count=len(network_summaries)
-        )
+        logger.info("Listed networks", network_count=len(network_summaries))
 
-        return NetworkListResponse.success(
-            data=network_summaries,
-            message=f"Found {len(network_summaries)} networks"
-        )
+        return NetworkListResponse.success(data=network_summaries, message=f"Found {len(network_summaries)} networks")
 
     except docker.errors.APIError as e:
         error_msg = f"Failed to list networks: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return NetworkListResponse.error_response(
-            error=error_msg,
-            message="Failed to list networks"
-        )
+        return NetworkListResponse.error_response(error=error_msg, message="Failed to list networks")
 
 
-def create_network(
-    params: NetworkCreateRequest
-) -> NetworkOperationResponse:
+def create_network(params: NetworkCreateRequest) -> NetworkOperationResponse:
     """
     Create a new Docker network.
 
@@ -123,25 +100,20 @@ def create_network(
             f"Created network '{params.name}' with ID {network.id}",
             network_id=network.id,
             driver=params.driver,
-            internal=params.internal
+            internal=params.internal,
         )
 
         return NetworkOperationResponse.success(
             network_id=network.id,
             message=f"Successfully created network '{params.name}'",
-            data={
-                'name': params.name,
-                'driver': params.driver,
-                'internal': params.internal
-            }
+            data={"name": params.name, "driver": params.driver, "internal": params.internal},
         )
 
     except docker.errors.APIError as e:
         error_msg = f"Failed to create network '{params.name}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkOperationResponse.error_response(
-            error=error_msg,
-            message=f"Failed to create network '{params.name}'"
+            error=error_msg, message=f"Failed to create network '{params.name}'"
         )
 
 
@@ -161,36 +133,24 @@ def remove_network(network_id: str) -> NetworkOperationResponse:
         network_name = network.name
         network.remove()
 
-        logger.info(
-            "Removed network",
-            network_id=network_id,
-            network_name=network_name
-        )
+        logger.info("Removed network", network_id=network_id, network_name=network_name)
 
         return NetworkOperationResponse.success(
-            network_id=network_id,
-            message=f"Successfully removed network '{network_name}'",
-            data={
-                'name': network_name
-            }
+            network_id=network_id, message=f"Successfully removed network '{network_name}'", data={"name": network_name}
         )
 
     except docker.errors.NotFound as e:
         error_msg = f"Network '{network_id}' not found: {e!s}"
         logger.warning(error_msg)
         return NetworkOperationResponse.error_response(
-            error=error_msg,
-            network_id=network_id,
-            message=f"Network '{network_id}' not found"
+            error=error_msg, network_id=network_id, message=f"Network '{network_id}' not found"
         )
 
     except docker.errors.APIError as e:
         error_msg = f"Failed to remove network '{network_id}': {e!s}"
         logger.error(error_msg, exc_info=True)
         return NetworkOperationResponse.error_response(
-            error=error_msg,
-            network_id=network_id,
-            message="Failed to remove network"
+            error=error_msg, network_id=network_id, message="Failed to remove network"
         )
 
 
@@ -202,7 +162,7 @@ def connect_container_to_network(
     aliases: list[str] | None = None,
     links: dict[str, str] | None = None,
     link_local_ips: list[str] | None = None,
-    driver_opt: dict[str, str] | None = None
+    driver_opt: dict[str, str] | None = None,
 ) -> dict[str, Any]:
     """
     Connect a container to a network.
@@ -231,7 +191,7 @@ def connect_container_to_network(
             aliases=aliases,
             links=links,
             link_local_ips=link_local_ips,
-            driver_opt=driver_opt
+            driver_opt=driver_opt,
         )
 
         network.connect(container, endpoint_config=endpoint_config)
@@ -239,13 +199,10 @@ def connect_container_to_network(
         logger.info(
             f"Connected container '{container.name}' to network '{network.name}'",
             container_id=container_id,
-            network_id=network_id
+            network_id=network_id,
         )
 
-        return {
-            'status': 'success',
-            'message': f"Successfully connected container to network '{network.name}'"
-        }
+        return {"status": "success", "message": f"Successfully connected container to network '{network.name}'"}
 
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to connect container to network: {e!s}"
@@ -253,11 +210,7 @@ def connect_container_to_network(
         raise ToolError(error_msg) from e
 
 
-def disconnect_container_from_network(
-    container_id: str,
-    network_id: str,
-    force: bool = False
-) -> dict[str, Any]:
+def disconnect_container_from_network(container_id: str, network_id: str, force: bool = False) -> dict[str, Any]:
     """
     Disconnect a container from a network.
 
@@ -279,13 +232,10 @@ def disconnect_container_from_network(
         logger.info(
             f"Disconnected container '{container.name}' from network '{network.name}'",
             container_id=container_id,
-            network_id=network_id
+            network_id=network_id,
         )
 
-        return {
-            'status': 'success',
-            'message': f"Successfully disconnected container from network '{network.name}'"
-        }
+        return {"status": "success", "message": f"Successfully disconnected container from network '{network.name}'"}
 
     except (docker.errors.NotFound, docker.errors.APIError) as e:
         error_msg = f"Failed to disconnect container from network: {e!s}"
@@ -311,19 +261,15 @@ def get_network_stats(network_id: str) -> dict[str, Any]:
         containers = network.containers
 
         stats = {
-            'network_id': network.id,
-            'name': network.name,
-            'containers_connected': len(containers),
-            'containers': []
+            "network_id": network.id,
+            "name": network.name,
+            "containers_connected": len(containers),
+            "containers": [],
         }
 
         # Add basic container info
         for container in containers:
-            stats['containers'].append({
-                'id': container.id,
-                'name': container.name,
-                'status': container.status
-            })
+            stats["containers"].append({"id": container.id, "name": container.name, "status": container.status})
 
         logger.debug(f"Retrieved stats for network '{network.name}'", **stats)
         return stats
@@ -353,57 +299,44 @@ def inspect_network(network_id: str) -> NetworkInspectResponse:
 
         # Format the response
         result = {
-            'id': attrs.get('Id'),
-            'name': attrs.get('Name'),
-            'created': attrs.get('Created'),
-            'scope': attrs.get('Scope'),
-            'driver': attrs.get('Driver'),
-            'enable_ipv6': attrs.get('EnableIPv6', False),
-            'internal': attrs.get('Internal', False),
-            'attachable': attrs.get('Attachable', False),
-            'ingress': attrs.get('Ingress', False),
-            'ipam': attrs.get('IPAM', {}),
-            'options': attrs.get('Options', {}),
-            'labels': attrs.get('Labels', {}),
-            'containers': {},
-            'peers': attrs.get('Peers', []),
-            'services': attrs.get('Services', {})
+            "id": attrs.get("Id"),
+            "name": attrs.get("Name"),
+            "created": attrs.get("Created"),
+            "scope": attrs.get("Scope"),
+            "driver": attrs.get("Driver"),
+            "enable_ipv6": attrs.get("EnableIPv6", False),
+            "internal": attrs.get("Internal", False),
+            "attachable": attrs.get("Attachable", False),
+            "ingress": attrs.get("Ingress", False),
+            "ipam": attrs.get("IPAM", {}),
+            "options": attrs.get("Options", {}),
+            "labels": attrs.get("Labels", {}),
+            "containers": {},
+            "peers": attrs.get("Peers", []),
+            "services": attrs.get("Services", {}),
         }
 
         # Add container information if available
-        if 'Containers' in attrs:
-            for container_id, container_info in attrs['Containers'].items():
-                result['containers'][container_id] = {
-                    'name': container_info.get('Name', ''),
-                    'endpoint_id': container_info.get('EndpointID', ''),
-                    'mac_address': container_info.get('MacAddress', ''),
-                    'ipv4_address': container_info.get('IPv4Address', ''),
-                    'ipv6_address': container_info.get('IPv6Address', '')
+        if "Containers" in attrs:
+            for container_id, container_info in attrs["Containers"].items():
+                result["containers"][container_id] = {
+                    "name": container_info.get("Name", ""),
+                    "endpoint_id": container_info.get("EndpointID", ""),
+                    "mac_address": container_info.get("MacAddress", ""),
+                    "ipv4_address": container_info.get("IPv4Address", ""),
+                    "ipv6_address": container_info.get("IPv6Address", ""),
                 }
 
-        logger.debug(
-            "Inspected network",
-            network_id=network_id,
-            network_name=network.name
-        )
+        logger.debug("Inspected network", network_id=network_id, network_name=network.name)
 
-        return NetworkInspectResponse.success(
-            data=result,
-            message=f"Successfully inspected network '{network.name}'"
-        )
+        return NetworkInspectResponse.success(data=result, message=f"Successfully inspected network '{network.name}'")
 
     except docker.errors.NotFound as e:
         error_msg = f"Network '{network_id}' not found: {e!s}"
         logger.warning(error_msg)
-        return NetworkInspectResponse.error_response(
-            error=error_msg,
-            message=f"Network '{network_id}' not found"
-        )
+        return NetworkInspectResponse.error_response(error=error_msg, message=f"Network '{network_id}' not found")
 
     except docker.errors.APIError as e:
         error_msg = f"Failed to inspect network '{network_id}': {e!s}"
         logger.error(error_msg, exc_info=True)
-        return NetworkInspectResponse.error_response(
-            error=error_msg,
-            message="Failed to inspect network"
-        )
+        return NetworkInspectResponse.error_response(error=error_msg, message="Failed to inspect network")

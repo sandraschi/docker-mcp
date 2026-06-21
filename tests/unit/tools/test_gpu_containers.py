@@ -3,6 +3,7 @@ Test suite for GPU-accelerated container management.
 
 This module contains tests for GPU container operations.
 """
+
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
@@ -10,6 +11,7 @@ from unittest.mock import MagicMock, Mock, patch
 TEST_CONTAINER_ID = "test-gpu-container-id"
 TEST_IMAGE = "nvidia/cuda:11.0-base"
 TEST_GPU_IDS = [0, 1]
+
 
 # Create a mock GPUDevice class for testing
 class MockGPUDevice:
@@ -22,6 +24,7 @@ class MockGPUDevice:
         self.temperature = temperature
         self.power_draw = power_draw
 
+
 # Create a mock GPUManager class
 class MockGPUManager:
     def __init__(self):
@@ -33,7 +36,7 @@ class MockGPUManager:
                 memory_used=1073741824,
                 utilization_gpu=5,
                 temperature=45,
-                power_draw=65
+                power_draw=65,
             )
         ]
 
@@ -48,75 +51,75 @@ class MockGPUManager:
 
     async def get_device_info(self, device_id=None):
         if device_id is None:
-            return [{
-                'id': device.id,
-                'name': device.name,
-                'memory_total': device.memory_total,
-                'memory_used': device.memory_used,
-                'utilization_gpu': device.utilization_gpu,
-                'temperature': device.temperature,
-                'power_draw': device.power_draw
-            } for device in self.devices]
+            return [
+                {
+                    "id": device.id,
+                    "name": device.name,
+                    "memory_total": device.memory_total,
+                    "memory_used": device.memory_used,
+                    "utilization_gpu": device.utilization_gpu,
+                    "temperature": device.temperature,
+                    "power_draw": device.power_draw,
+                }
+                for device in self.devices
+            ]
         else:
             device = self.get_device_by_id(device_id)
             if device:
                 return {
-                    'id': device.id,
-                    'name': device.name,
-                    'memory_total': device.memory_total,
-                    'memory_used': device.memory_used,
-                    'utilization_gpu': device.utilization_gpu,
-                    'temperature': device.temperature,
-                    'power_draw': device.power_draw
+                    "id": device.id,
+                    "name": device.name,
+                    "memory_total": device.memory_total,
+                    "memory_used": device.memory_used,
+                    "utilization_gpu": device.utilization_gpu,
+                    "temperature": device.temperature,
+                    "power_draw": device.power_draw,
                 }
             return None
 
+
 # Create a mock container class
 class MockContainer:
-    def __init__(self, id, name, status='running'):
+    def __init__(self, id, name, status="running"):
         self.id = id
         self.name = name
         self.status = status
         self.attrs = {
-            'Id': id,
-            'Name': name,
-            'State': {'Status': status},
-            'HostConfig': {
-                'DeviceRequests': [
-                    {
-                        'Driver': 'nvidia',
-                        'DeviceIDs': ['0']
-                    }
-                ]
-            }
+            "Id": id,
+            "Name": name,
+            "State": {"Status": status},
+            "HostConfig": {"DeviceRequests": [{"Driver": "nvidia", "DeviceIDs": ["0"]}]},
         }
+
 
 class TestGPUContainerConfig(unittest.TestCase):
     """Test cases for GPUContainerConfig model."""
 
     def test_config_creation(self):
         """Test creating a GPU container configuration."""
+
         # This is a placeholder test since we can't import the actual class
         # without proper dependencies
         class GPUContainerConfig:
             def __init__(self, **kwargs):
-                self.gpu_ids = kwargs.get('gpu_ids', [])
-                self.count = kwargs.get('count', 0)
-                self.capabilities = kwargs.get('capabilities', [["gpu"]])
-                self.driver = kwargs.get('driver', "nvidia")
-                self.runtime = kwargs.get('runtime', "nvidia")
-                self.environment = kwargs.get('environment', {})
-                self.device_requests = kwargs.get('device_requests', [])
+                self.gpu_ids = kwargs.get("gpu_ids", [])
+                self.count = kwargs.get("count", 0)
+                self.capabilities = kwargs.get("capabilities", [["gpu"]])
+                self.driver = kwargs.get("driver", "nvidia")
+                self.runtime = kwargs.get("runtime", "nvidia")
+                self.environment = kwargs.get("environment", {})
+                self.device_requests = kwargs.get("device_requests", [])
 
         config = GPUContainerConfig(gpu_ids=[0, 1], count=2)
         self.assertEqual(config.gpu_ids, [0, 1])
         self.assertEqual(config.count, 2)
         self.assertEqual(config.runtime, "nvidia")
 
+
 class TestGPUContainerManager(unittest.TestCase):
     """Test cases for GPUContainerManager class."""
 
-    @patch('dockermcp.tools.gpu.gpu_management.GPUManager')
+    @patch("dockermcp.tools.gpu.gpu_management.GPUManager")
     def test_get_available_gpus(self, mock_gpu_manager):
         """Test getting available GPUs."""
         # Setup mock
@@ -127,7 +130,7 @@ class TestGPUContainerManager(unittest.TestCase):
             memory_used=1073741824,
             utilization_gpu=5,
             temperature=45,
-            power_draw=65
+            power_draw=65,
         )
         mock_gpu_manager.return_value.get_available_devices.return_value = [mock_gpu]
 
@@ -141,7 +144,8 @@ class TestGPUContainerManager(unittest.TestCase):
         self.assertEqual(gpus[0].name, "NVIDIA GeForce RTX 3090")
         self.assertEqual(gpus[0].utilization_gpu, 5)
 
-@patch('docker.DockerClient')
+
+@patch("docker.DockerClient")
 class TestGPUContainerOperations(unittest.TestCase):
     """Test cases for GPU container operations."""
 
@@ -149,26 +153,20 @@ class TestGPUContainerOperations(unittest.TestCase):
         """Test creating a GPU container."""
         # Setup mock
         mock_client = MagicMock()
-        mock_container = MockContainer(
-            id=TEST_CONTAINER_ID,
-            name="test-container"
-        )
+        mock_container = MockContainer(id=TEST_CONTAINER_ID, name="test-container")
         mock_client.containers.run.return_value = mock_container
         mock_docker_client.return_value = mock_client
 
         # Test
-        result = {
-            'status': 'success',
-            'container_id': mock_container.id,
-            'container_name': mock_container.name
-        }
+        result = {"status": "success", "container_id": mock_container.id, "container_name": mock_container.name}
 
         # Verify
-        self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['container_id'], TEST_CONTAINER_ID)
-        self.assertEqual(result['container_name'], "test-container")
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["container_id"], TEST_CONTAINER_ID)
+        self.assertEqual(result["container_name"], "test-container")
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()
 
     def test_gpu_ids_validation(self):
@@ -207,6 +205,7 @@ class TestGPUContainerManager(unittest.TestCase):
         """Set up test fixtures."""
         # Import the module under test after setting up mocks
         from dockermcp.tools.gpu import gpu_containers
+
         self.gpu_containers = gpu_containers
 
         # Create mock objects
@@ -214,7 +213,7 @@ class TestGPUContainerManager(unittest.TestCase):
         self.gpu_manager = MockGPUManager()
 
         # Patch the GPUManager import in the module under test
-        self.patcher = patch('dockermcp.tools.gpu.gpu_containers.GPUManager', return_value=self.gpu_manager)
+        self.patcher = patch("dockermcp.tools.gpu.gpu_containers.GPUManager", return_value=self.gpu_manager)
         self.mock_gpu_manager_class = self.patcher.start()
 
         # Create manager instance
@@ -227,11 +226,7 @@ class TestGPUContainerManager(unittest.TestCase):
     def test_create_device_request_all_gpus(self):
         """Test creating a device request for all GPUs."""
         # Act
-        request = self.manager._create_device_request(
-            gpu_ids="all",
-            capabilities=[["gpu"]],
-            driver="nvidia"
-        )
+        request = self.manager._create_device_request(gpu_ids="all", capabilities=[["gpu"]], driver="nvidia")
 
         # Assert
         self.assertEqual(len(request), 1)
@@ -244,11 +239,7 @@ class TestGPUContainerManager(unittest.TestCase):
         """Test creating a device request for specific GPUs."""
         # Act
         gpu_ids = [0]  # Using first GPU from our mock
-        request = self.manager._create_device_request(
-            gpu_ids=gpu_ids,
-            capabilities=[["gpu"]],
-            driver="nvidia"
-        )
+        request = self.manager._create_device_request(gpu_ids=gpu_ids, capabilities=[["gpu"]], driver="nvidia")
 
         # Assert
         self.assertEqual(len(request), 1)
@@ -270,7 +261,7 @@ class TestGPUContainerManager(unittest.TestCase):
             capabilities=[["gpu"]],
             driver="nvidia",
             runtime="nvidia",
-            environment=environment
+            environment=environment,
         )
 
         self.assertIsInstance(config, GPUContainerConfig)
@@ -289,14 +280,14 @@ class TestGPUTools(unittest.IsolatedAsyncioTestCase):
         self.mock_container = MagicMock()
         self.mock_container.id = TEST_CONTAINER_ID
         self.mock_container.name = "test-gpu-container"
-        self.mock_container.status = 'running'
+        self.mock_container.status = "running"
 
         # Configure the container mock
         self.docker_client.containers.get.return_value = self.mock_container
         self.docker_client.containers.run.return_value = self.mock_container
 
         # Patch the global GPU container manager
-        self.manager_patcher = patch('dockermcp.tools.gpu.gpu_containers.gpu_container_manager')
+        self.manager_patcher = patch("dockermcp.tools.gpu.gpu_containers.gpu_container_manager")
         self.mock_manager = self.manager_patcher.start()
 
         # Mock the GPU manager
@@ -312,7 +303,7 @@ class TestGPUTools(unittest.IsolatedAsyncioTestCase):
                 memory_used=1073741824,
                 utilization_gpu=5,
                 temperature=45,
-                power_draw=65
+                power_draw=65,
             )
         ]
         self.mock_gpu_manager.get_available_devices.return_value = self.mock_gpu_devices
@@ -332,23 +323,20 @@ class TestGPUTools(unittest.IsolatedAsyncioTestCase):
         """Test creating a GPU container."""
         # Configure the mock
         self.mock_container.attrs = {
-            'Id': TEST_CONTAINER_ID,
-            'Name': 'test-gpu-container',
-            'State': {'Status': 'running'}
+            "Id": TEST_CONTAINER_ID,
+            "Name": "test-gpu-container",
+            "State": {"Status": "running"},
         }
 
         # Call the function
         result = await create_gpu_container(
-            image=TEST_IMAGE,
-            command="nvidia-smi",
-            gpu_ids=[0],
-            name="test-gpu-container"
+            image=TEST_IMAGE, command="nvidia-smi", gpu_ids=[0], name="test-gpu-container"
         )
 
         # Verify the result
-        self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['container_id'], TEST_CONTAINER_ID)
-        self.assertEqual(result['container_name'], 'test-gpu-container')
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["container_id"], TEST_CONTAINER_ID)
+        self.assertEqual(result["container_name"], "test-gpu-container")
 
         # Verify the container was created with the correct parameters
         self.docker_client.containers.run.assert_called_once_with(
@@ -357,40 +345,33 @@ class TestGPUTools(unittest.IsolatedAsyncioTestCase):
             name="test-gpu-container",
             detach=True,
             auto_remove=False,
-            shm_size='2g',
+            shm_size="2g",
             volumes=None,
             ports=None,
-            environment={'NVIDIA_VISIBLE_DEVICES': '0'},
-            device_requests=[{'Driver': 'nvidia'}],
-            runtime="nvidia"
+            environment={"NVIDIA_VISIBLE_DEVICES": "0"},
+            device_requests=[{"Driver": "nvidia"}],
+            runtime="nvidia",
         )
 
     async def test_get_container_gpu_info(self):
         """Test getting GPU information for a container."""
         # Configure the mocks
         self.mock_container.attrs = {
-            'Id': TEST_CONTAINER_ID,
-            'Name': 'test-gpu-container',
-            'HostConfig': {
-                'DeviceRequests': [
-                    {
-                        'Driver': 'nvidia',
-                        'DeviceIDs': ['0']
-                    }
-                ]
-            },
-            'State': {'Status': 'running'}
+            "Id": TEST_CONTAINER_ID,
+            "Name": "test-gpu-container",
+            "HostConfig": {"DeviceRequests": [{"Driver": "nvidia", "DeviceIDs": ["0"]}]},
+            "State": {"Status": "running"},
         }
 
         # Call the function
         result = await get_container_gpu_info(TEST_CONTAINER_ID)
 
         # Verify the result
-        self.assertEqual(result['status'], 'success')
-        self.assertEqual(result['container_id'], TEST_CONTAINER_ID)
-        self.assertTrue(result['has_gpu_access'])
-        self.assertEqual(len(result['gpus']), 1)
-        self.assertEqual(result['gpus'][0]['id'], '0')
+        self.assertEqual(result["status"], "success")
+        self.assertEqual(result["container_id"], TEST_CONTAINER_ID)
+        self.assertTrue(result["has_gpu_access"])
+        self.assertEqual(len(result["gpus"]), 1)
+        self.assertEqual(result["gpus"][0]["id"], "0")
 
 
 if __name__ == "__main__":

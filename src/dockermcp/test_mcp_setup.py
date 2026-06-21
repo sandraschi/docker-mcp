@@ -1,6 +1,7 @@
 """
 Test script to verify FastMCP setup and tool registration.
 """
+
 import sys
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from dockermcp.mcp_instance import get_mcp  # noqa: E402
 
 # Configure logging
 configure_logging(level="INFO")
+
 
 def test_mcp_setup():
     """Test that the MCP instance is properly set up and tools are registered."""
@@ -33,6 +35,7 @@ def test_mcp_setup():
     except Exception as e:
         logger.error(f"Error testing MCP setup: {e}", exc_info=True)
         return False
+
 
 if __name__ == "__main__":
     if test_mcp_setup():

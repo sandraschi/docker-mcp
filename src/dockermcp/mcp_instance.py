@@ -4,6 +4,7 @@ FastMCP Singleton Instance
 This module provides a single, shared FastMCP instance for the entire application.
 This is the ONLY place where FastMCP should be initialized.
 """
+
 import json
 import logging
 import os
@@ -19,13 +20,14 @@ from . import __version__
 # Set up logging
 logger = logging.getLogger(__name__)
 
+
 # Thread-safe singleton pattern
 class FastMCPSingleton:
-    _instance: Optional['FastMCPSingleton'] = None
+    _instance: Optional["FastMCPSingleton"] = None
     _lock = threading.Lock()
     _initialized = False
 
-    def __new__(cls) -> 'FastMCPSingleton':
+    def __new__(cls) -> "FastMCPSingleton":
         if cls._instance is None:
             with cls._lock:
                 if cls._instance is None:
@@ -74,7 +76,7 @@ class FastMCPSingleton:
                                 self.mcp.add_provider(create_proxy(url))
                                 _bridge_proxies.append(url)
                             except Exception:
-                                pass
+                                logger.debug(f"Bridge proxy {url} not available")
 
                 # Patch the message handler to handle custom protocol versions
                 self._patch_message_handler()
@@ -95,7 +97,7 @@ class FastMCPSingleton:
                 logger.info("FastMCP server instance not yet available for patching. Will attempt later.")
                 return
 
-            original_handler = getattr(server, '_handle_message', None)
+            original_handler = getattr(server, "_handle_message", None)
 
             if not callable(original_handler):
                 logger.warning("Could not find original message handler, skipping patch")
@@ -109,15 +111,12 @@ class FastMCPSingleton:
                         msg_dict = json.loads(message)
 
                         # Check if this is a JSON-RPC message with a custom version
-                        if (isinstance(msg_dict, dict) and
-                            'jsonrpc' in msg_dict and
-                            msg_dict.get('jsonrpc') != '2.0'):
-
-                            custom_version = msg_dict['jsonrpc']
+                        if isinstance(msg_dict, dict) and "jsonrpc" in msg_dict and msg_dict.get("jsonrpc") != "2.0":
+                            custom_version = msg_dict["jsonrpc"]
                             logger.debug(f"Handling custom protocol version: {custom_version}")
 
                             # Process with standard version
-                            msg_dict['jsonrpc'] = '2.0'
+                            msg_dict["jsonrpc"] = "2.0"
                             response = await original_handler(transport, json.dumps(msg_dict))
 
                             # Restore custom version in response if needed
@@ -125,7 +124,7 @@ class FastMCPSingleton:
                                 try:
                                     resp_dict = json.loads(response)
                                     if isinstance(resp_dict, dict):
-                                        resp_dict['jsonrpc'] = custom_version
+                                        resp_dict["jsonrpc"] = custom_version
                                         return json.dumps(resp_dict)
                                 except json.JSONDecodeError:
                                     pass
@@ -150,11 +149,13 @@ class FastMCPSingleton:
             logger.error(f"Failed to patch message handler: {e!s}")
             logger.debug(f"Error details: {traceback.format_exc()}")
 
+
 # Set during _initialize; tools import this symbol for @mcp.tool decorators
 mcp: FastMCP | None = None
 
 # Create the singleton instance
 _singleton: FastMCPSingleton = FastMCPSingleton()
+
 
 def get_mcp() -> FastMCP:
     """
@@ -170,4 +171,3 @@ def get_mcp() -> FastMCP:
     if not _singleton._initialized:
         raise RuntimeError("FastMCP instance failed to initialize")
     return _singleton.mcp
-

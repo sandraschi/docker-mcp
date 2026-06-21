@@ -3,6 +3,7 @@ Test suite for container execution tools.
 
 This module contains tests for executing commands inside containers.
 """
+
 import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
@@ -32,15 +33,11 @@ class TestContainerExec(unittest.TestCase):
         self.mock_container.exec_run.return_value = self.mock_exec
 
         # Mock for streaming
-        self.mock_stream = [
-            b'stdout output\n',
-            b'stderr output\n',
-            b'final output\n'
-        ]
+        self.mock_stream = [b"stdout output\n", b"stderr output\n", b"final output\n"]
         self.mock_container.exec_run.return_value.output = self.mock_stream
 
         # Patch the Docker client
-        self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
+        self.docker_patcher = patch("docker.from_env", return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
 
     def tearDown(self):
@@ -57,7 +54,7 @@ class TestContainerExec(unittest.TestCase):
             environment={"VAR1": "value1", "VAR2": "value2"},
             user="user",
             privileged=False,
-            tty=False
+            tty=False,
         )
 
         # Execute
@@ -84,10 +81,7 @@ class TestContainerExec(unittest.TestCase):
         """Test executing a command with streaming output."""
         # Setup
         request = ContainerExecRequest(
-            container_id="test-container",
-            command="tail -f /var/log/app.log",
-            stream=True,
-            stream_timeout=5
+            container_id="test-container", command="tail -f /var/log/app.log", stream=True, stream_timeout=5
         )
 
         # Mock the generator for streaming
@@ -111,10 +105,7 @@ class TestContainerExec(unittest.TestCase):
         # Setup
         self.mock_container.exec_run.side_effect = docker.errors.APIError("Command failed")
 
-        request = ContainerExecRequest(
-            container_id="test-container",
-            command="invalid-command"
-        )
+        request = ContainerExecRequest(container_id="test-container", command="invalid-command")
 
         # Execute and assert
         with self.assertRaises(ToolError) as context:
@@ -126,10 +117,7 @@ class TestContainerExec(unittest.TestCase):
         """Test handling of non-existent container."""
         # Setup
         self.docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
-        request = ContainerExecRequest(
-            container_id="nonexistent-container",
-            command="echo test"
-        )
+        request = ContainerExecRequest(container_id="nonexistent-container", command="echo test")
 
         # Execute and assert
         with self.assertRaises(ToolError) as context:
@@ -150,19 +138,17 @@ class TestContainerExec(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ContainerExecRequest(
                 container_id="test-container",
-                command=["ls", "-la"]  # Should be a string
+                command=["ls", "-la"],  # Should be a string
             )
 
         # Test valid request
         request = ContainerExecRequest(
-            container_id="test-container",
-            command="echo hello",
-            environment={"TEST": "value"},
-            workdir="/app"
+            container_id="test-container", command="echo hello", environment={"TEST": "value"}, workdir="/app"
         )
         self.assertEqual(request.command, "echo hello")
         self.assertEqual(request.environment["TEST"], "value")
         self.assertEqual(request.workdir, "/app")
+
 
 # Helper function to run async tests
 if __name__ == "__main__":

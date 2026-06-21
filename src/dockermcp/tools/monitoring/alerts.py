@@ -3,6 +3,7 @@ Alert Management Tools for Monitoring Stack
 
 This module provides tools to manage alerts and notifications in the monitoring stack.
 """
+
 import json
 from pathlib import Path
 from typing import Any, Literal
@@ -16,6 +17,7 @@ from dockermcp.mcp_instance import mcp
 # Path to alert rules
 alert_rules_dir = Path(__file__).parent.parent.parent.parent.parent / "monitoring" / "prometheus" / "alert.rules"
 
+
 def ensure_alert_rules_dir() -> bool:
     """Ensure the alert rules directory exists."""
     try:
@@ -25,12 +27,14 @@ def ensure_alert_rules_dir() -> bool:
         logger.error(f"Failed to create alert rules directory: {e}")
         return False
 
+
 class AlertRule(BaseModel):
     """Model representing an alert rule."""
+
     name: str = Field(..., description="Name of the alert")
     expr: str = Field(..., description="PromQL expression for the alert")
-    for_duration: str = Field('5m', description="Duration the condition must be true before firing")
-    severity: str = Field('warning', description="Severity level (critical, warning, info)")
+    for_duration: str = Field("5m", description="Duration the condition must be true before firing")
+    severity: str = Field("warning", description="Severity level (critical, warning, info)")
     summary: str | None = Field(None, description="Short description of the alert")
     description: str | None = Field(None, description="Detailed description of the alert")
     labels: dict[str, str] = Field(default_factory=dict, description="Additional labels for the alert")
@@ -40,21 +44,21 @@ class AlertRule(BaseModel):
         json_schema_extra={
             "example": {
                 "name": "HighCPUUsage",
-                "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * 100 > 80",
+                "expr": '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 80',
                 "for_duration": "5m",
                 "severity": "warning",
                 "summary": "High CPU usage on {{ $labels.instance }}",
-                "description": "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+                "description": "CPU usage is {{ $value }}% on {{ $labels.instance }}",
             }
         }
     )
 
+
 class ListAlertRulesParams(BaseModel):
     """Parameters for listing alert rules."""
-    format: Literal['json', 'yaml', 'text'] = Field(
-        'json',
-        description="Output format for the alert rules"
-    )
+
+    format: Literal["json", "yaml", "text"] = Field("json", description="Output format for the alert rules")
+
 
 @mcp.tool
 async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
@@ -90,11 +94,7 @@ async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
 
         if not alert_rules_dir.exists():
             logger.info("No alert rules file found at %s", alert_rules_dir)
-            return {
-                "status": "success",
-                "message": "No alert rules configured",
-                "alerts": []
-            }
+            return {"status": "success", "message": "No alert rules configured", "alerts": []}
 
         try:
             # Load alert rules from file
@@ -102,33 +102,32 @@ async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
                 rules = yaml.safe_load(f) or {}
 
             # Extract alert rules
-            for group in rules.get('groups', []):
-                for rule in group.get('rules', []):
-                    if 'alert' in rule:
-                        alerts.append(AlertRule(
-                            name=rule['alert'],
-                            expr=rule.get('expr', ''),
-                            for_duration=rule.get('for', '5m'),
-                            severity=rule.get('labels', {}).get('severity', 'warning'),
-                            summary=rule.get('annotations', {}).get('summary'),
-                            description=rule.get('annotations', {}).get('description'),
-                            labels=rule.get('labels', {}),
-                            annotations=rule.get('annotations', {})
-                        ))
+            for group in rules.get("groups", []):
+                for rule in group.get("rules", []):
+                    if "alert" in rule:
+                        alerts.append(
+                            AlertRule(
+                                name=rule["alert"],
+                                expr=rule.get("expr", ""),
+                                for_duration=rule.get("for", "5m"),
+                                severity=rule.get("labels", {}).get("severity", "warning"),
+                                summary=rule.get("annotations", {}).get("summary"),
+                                description=rule.get("annotations", {}).get("description"),
+                                labels=rule.get("labels", {}),
+                                annotations=rule.get("annotations", {}),
+                            )
+                        )
         except yaml.YAMLError as e:
             logger.error("Failed to parse alert rules file: %s", str(e))
-            return {
-                "status": "error",
-                "error": f"Invalid alert rules file: {e!s}"
-            }
+            return {"status": "error", "error": f"Invalid alert rules file: {e!s}"}
 
         # Format the output
         output = ""
         alerts_dict = [alert.dict(exclude_none=True) for alert in alerts]
 
-        if params.format == 'yaml':
+        if params.format == "yaml":
             output = yaml.dump({"alerts": alerts_dict}, default_flow_style=False)
-        elif params.format == 'text':
+        elif params.format == "text":
             for alert in alerts:
                 output += f"=== {alert.name} ===\n"
                 output += f"Expression: {alert.expr}\n"
@@ -145,30 +144,30 @@ async def list_alert_rules(params: ListAlertRulesParams) -> dict[str, Any]:
         return {
             "status": "success",
             "alerts": alerts_dict,
-            "output": output if params.format != 'json' else json.loads(output)
+            "output": output if params.format != "json" else json.loads(output),
         }
     except Exception as e:
         error_msg = f"Failed to list alert rules: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}
+
 
 class AddAlertRuleParams(AlertRule):
     """Parameters for adding a new alert rule."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "name": "HighCPUUsage",
-                "expr": "100 - (avg by(instance) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m]))) * 100 > 80",
+                "expr": '100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m]))) * 100 > 80',
                 "for_duration": "5m",
                 "severity": "warning",
                 "summary": "High CPU usage on {{ $labels.instance }}",
-                "description": "CPU usage is {{ $value }}% on {{ $labels.instance }}"
+                "description": "CPU usage is {{ $value }}% on {{ $labels.instance }}",
             }
         }
     )
+
 
 @mcp.tool
 async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
@@ -216,32 +215,26 @@ async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
         if not ensure_alert_rules_dir():
             error_msg = "Failed to create alert rules directory"
             logger.error(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
 
         # Create the new alert rule
         new_alert = {
-            'alert': params.name,
-            'expr': params.expr,
-            'for': params.for_duration,
-            'labels': {
-                'severity': params.severity,
-                **params.labels
-            },
-            'annotations': {}
+            "alert": params.name,
+            "expr": params.expr,
+            "for": params.for_duration,
+            "labels": {"severity": params.severity, **params.labels},
+            "annotations": {},
         }
 
         if params.summary:
-            new_alert['annotations']['summary'] = params.summary
+            new_alert["annotations"]["summary"] = params.summary
         if params.description:
-            new_alert['annotations']['description'] = params.description
+            new_alert["annotations"]["description"] = params.description
         if params.annotations:
-            new_alert['annotations'].update(params.annotations)
+            new_alert["annotations"].update(params.annotations)
 
         # Load existing rules
-        rules = {'groups': [{'name': 'docker-mcp', 'rules': []}]}
+        rules = {"groups": [{"name": "docker-mcp", "rules": []}]}
         if alert_rules_dir.exists():
             try:
                 with open(alert_rules_dir) as f:
@@ -249,26 +242,23 @@ async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
             except yaml.YAMLError as e:
                 error_msg = f"Failed to load existing alert rules: {e!s}"
                 logger.error(error_msg)
-                return {
-                    "status": "error",
-                    "error": error_msg
-                }
+                return {"status": "error", "error": error_msg}
 
         # Check if alert with same name already exists
         alert_updated = False
-        for group in rules.get('groups', []):
-            for i, rule in enumerate(group.get('rules', [])):
-                if rule.get('alert') == params.name:
-                    group['rules'][i] = new_alert  # Update existing
+        for group in rules.get("groups", []):
+            for i, rule in enumerate(group.get("rules", [])):
+                if rule.get("alert") == params.name:
+                    group["rules"][i] = new_alert  # Update existing
                     alert_updated = True
                     break
 
             if not alert_updated:
-                group.setdefault('rules', []).append(new_alert)  # Add new
+                group.setdefault("rules", []).append(new_alert)  # Add new
 
         # Save back to file
         try:
-            with open(alert_rules_dir, 'w') as f:
+            with open(alert_rules_dir, "w") as f:
                 yaml.dump(rules, f, default_flow_style=False)
 
             logger.info(f"Alert rule '{params.name}' {'updated' if alert_updated else 'added'}")
@@ -276,26 +266,23 @@ async def add_alert_rule(params: AddAlertRuleParams) -> dict[str, Any]:
                 "status": "success",
                 "message": f"Alert rule {params.name} {'updated' if alert_updated else 'added'}",
                 "alert": params.name,
-                "updated": alert_updated
+                "updated": alert_updated,
             }
         except OSError as e:
             error_msg = f"Failed to save alert rules: {e!s}"
             logger.error(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
     except Exception as e:
         error_msg = f"Failed to add alert rule: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}
+
 
 class RemoveAlertRuleParams(BaseModel):
     """Parameters for removing an alert rule."""
+
     name: str = Field(..., description="Name of the alert rule to remove")
+
 
 @mcp.tool
 async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
@@ -320,10 +307,7 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
         if not alert_rules_dir.exists():
             error_msg = "No alert rules configured"
             logger.warning(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
 
         # Load existing rules
         try:
@@ -332,50 +316,34 @@ async def remove_alert_rule(params: RemoveAlertRuleParams) -> dict[str, Any]:
         except yaml.YAMLError as e:
             error_msg = f"Failed to load alert rules: {e!s}"
             logger.error(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
 
         # Find and remove the alert
         removed = False
-        for group in rules.get('groups', []):
-            if 'rules' in group:
-                original_count = len(group['rules'])
-                group['rules'] = [r for r in group['rules'] if r.get('alert') != params.name]
-                if len(group['rules']) < original_count:
+        for group in rules.get("groups", []):
+            if "rules" in group:
+                original_count = len(group["rules"])
+                group["rules"] = [r for r in group["rules"] if r.get("alert") != params.name]
+                if len(group["rules"]) < original_count:
                     removed = True
 
         if not removed:
             error_msg = f"Alert rule '{params.name}' not found"
             logger.warning(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
 
         # Save back to file
         try:
-            with open(alert_rules_dir, 'w') as f:
+            with open(alert_rules_dir, "w") as f:
                 yaml.dump(rules, f, default_flow_style=False)
 
             logger.info(f"Alert rule '{params.name}' removed")
-            return {
-                "status": "success",
-                "message": "Alert rule removed",
-                "removed_alert": params.name
-            }
+            return {"status": "success", "message": "Alert rule removed", "removed_alert": params.name}
         except OSError as e:
             error_msg = f"Failed to save alert rules: {e!s}"
             logger.error(error_msg)
-            return {
-                "status": "error",
-                "error": error_msg
-            }
+            return {"status": "error", "error": error_msg}
     except Exception as e:
         error_msg = f"Failed to remove alert rule: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}

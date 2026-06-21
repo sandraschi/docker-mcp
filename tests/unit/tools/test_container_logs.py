@@ -3,6 +3,7 @@ Test suite for container logs tools.
 
 This module contains tests for container log retrieval and streaming.
 """
+
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -31,13 +32,13 @@ class TestContainerLogs(unittest.TestCase):
 
         # Mock for streaming
         self.mock_stream = [
-            b'2023-01-01T00:00:00Z Log line 1\n',
-            b'2023-01-01T00:00:01Z Log line 2\n',
-            b'2023-01-01T00:00:02Z Log line 3\n'
+            b"2023-01-01T00:00:00Z Log line 1\n",
+            b"2023-01-01T00:00:01Z Log line 2\n",
+            b"2023-01-01T00:00:02Z Log line 3\n",
         ]
 
         # Patch the Docker client
-        self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
+        self.docker_patcher = patch("docker.from_env", return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
 
     def tearDown(self):
@@ -48,12 +49,7 @@ class TestContainerLogs(unittest.TestCase):
         """Test retrieving container logs."""
         # Setup
         request = ContainerLogsRequest(
-            container_id="test-container",
-            tail=100,
-            since="1h",
-            until="now",
-            timestamps=True,
-            follow=False
+            container_id="test-container", tail=100, since="1h", until="now", timestamps=True, follow=False
         )
 
         # Execute
@@ -64,16 +60,12 @@ class TestContainerLogs(unittest.TestCase):
         self.assertEqual(len(response["logs"]), 2)
         self.assertEqual(response["container_id"], "test-container")
         self.mock_container.logs.assert_called_once_with(
-            tail=100,
-            since="1h",
-            until="now",
-            timestamps=True,
-            follow=False,
-            stream=False
+            tail=100, since="1h", until="now", timestamps=True, follow=False, stream=False
         )
 
     async def test_stream_container_logs(self):
         """Test streaming container logs."""
+
         # Setup mock for streaming
         async def mock_stream():
             for chunk in self.mock_stream:
@@ -81,11 +73,7 @@ class TestContainerLogs(unittest.TestCase):
 
         self.mock_container.logs.return_value = mock_stream()
 
-        request = ContainerLogsRequest(
-            container_id="test-container",
-            follow=True,
-            tail=10
-        )
+        request = ContainerLogsRequest(container_id="test-container", follow=True, tail=10)
 
         # Collect all log entries
         logs = []
@@ -97,12 +85,7 @@ class TestContainerLogs(unittest.TestCase):
         self.assertIn("Log line 1", logs[0]["message"])
         self.assertIn("Log line 2", logs[1]["message"])
         self.mock_container.logs.assert_called_once_with(
-            tail=10,
-            since=None,
-            until=None,
-            timestamps=True,
-            follow=True,
-            stream=True
+            tail=10, since=None, until=None, timestamps=True, follow=True, stream=True
         )
 
     async def test_log_parsing(self):
@@ -110,16 +93,12 @@ class TestContainerLogs(unittest.TestCase):
         # Test with timestamps
 
         # Test Docker log format with timestamp
-        timestamp, message = _parse_log_entry(
-            b"2023-01-01T00:00:00.123456Z This is a log message\n"
-        )
+        timestamp, message = _parse_log_entry(b"2023-01-01T00:00:00.123456Z This is a log message\n")
         self.assertEqual(timestamp, "2023-01-01T00:00:00.123456Z")
         self.assertEqual(message, "This is a log message")
 
         # Test without timestamp
-        timestamp, message = _parse_log_entry(
-            b"This is a log message without timestamp\n"
-        )
+        timestamp, message = _parse_log_entry(b"This is a log message without timestamp\n")
         self.assertIsNotNone(timestamp)  # Should use current time
         self.assertEqual(message, "This is a log message without timestamp")
 
@@ -128,9 +107,7 @@ class TestContainerLogs(unittest.TestCase):
         # Setup
         self.docker_client.containers.get.side_effect = docker.errors.NotFound("Container not found")
 
-        request = ContainerLogsRequest(
-            container_id="nonexistent-container"
-        )
+        request = ContainerLogsRequest(container_id="nonexistent-container")
 
         # Execute and assert
         with self.assertRaises(ToolError) as context:
@@ -151,22 +128,17 @@ class TestContainerLogs(unittest.TestCase):
         with self.assertRaises(ValidationError):
             ContainerLogsRequest(
                 container_id="test-container",
-                tail=-1  # Must be >= 0
+                tail=-1,  # Must be >= 0
             )
 
         # Test valid request
-        request = ContainerLogsRequest(
-            container_id="test-container",
-            tail=50,
-            since="2h",
-            until="now",
-            timestamps=True
-        )
+        request = ContainerLogsRequest(container_id="test-container", tail=50, since="2h", until="now", timestamps=True)
         self.assertEqual(request.container_id, "test-container")
         self.assertEqual(request.tail, 50)
         self.assertEqual(request.since, "2h")
         self.assertEqual(request.until, "now")
         self.assertTrue(request.timestamps)
+
 
 # Helper function to run async tests
 if __name__ == "__main__":

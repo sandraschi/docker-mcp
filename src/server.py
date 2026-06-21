@@ -7,28 +7,27 @@ Main entry point for the Docker MCP server using FastMCP 2.12 tool registration.
 
 import asyncio
 import logging
+import os
 import sys
 import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
+from docker_mcp.web import setup_webapp
 from dockermcp.logging_config import configure_logging, logger
 from dockermcp.mcp_instance import get_mcp
 
 # Initialize MCP + tools before web routes import dockermcp tool modules
 mcp = get_mcp()
 
-from docker_mcp.web import setup_webapp
-
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 
 # Configure root logger to be silent
-logging.basicConfig(
-    level=logging.CRITICAL, force=True, handlers=[logging.NullHandler()]
-)
+logging.basicConfig(level=logging.CRITICAL, force=True, handlers=[logging.NullHandler()])
 
 # Silence common noisy loggers
 for logger_name in ["fastmcp", "mcp", "uvicorn", "httpx", "httpcore", "h11", "asyncio"]:
@@ -41,6 +40,7 @@ configure_logging(
     log_file=str(Path("logs/dockermcp.log")),
     level="WARNING",
 )
+
 
 @asynccontextmanager
 async def _web_lifespan(_app: FastAPI):
@@ -56,6 +56,23 @@ async def _web_lifespan(_app: FastAPI):
 
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
 web_app = FastAPI(title="Docker Management Web Bridge", lifespan=_web_lifespan)
+
+_tauri_desktop = os.environ.get("DOCKER_TAURI", "").lower() in ("1", "true", "yes")
+
+web_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://127.0.0.1:10807",
+        "http://localhost:10807",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+        "tauri://localhost",
+    ],
+    allow_origin_regex=r"https?://tauri\.localhost(:\d+)?" if _tauri_desktop else None,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Setup webapp bridge with the tool-loaded MCP instance
 setup_webapp(web_app, mcp_app=mcp)
@@ -94,9 +111,7 @@ def get_all_tools() -> list[callable]:
     modules = [
         name
         for _, name, is_pkg in pkgutil.iter_modules([str(tools_dir)])
-        if not name.startswith("_")
-        and not name == "models"
-        and not name.startswith("test_")
+        if not name.startswith("_") and not name == "models" and not name.startswith("test_")
     ]
 
     # Import all modules to register the tools

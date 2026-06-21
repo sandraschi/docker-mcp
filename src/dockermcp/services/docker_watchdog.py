@@ -4,6 +4,7 @@ Docker Watchdog Service
 A cross-platform service that monitors the Docker daemon and automatically attempts recovery
 if it becomes unresponsive or crashes.
 """
+
 import asyncio
 import logging
 import platform
@@ -14,6 +15,7 @@ import docker
 from docker.errors import DockerException
 
 logger = logging.getLogger(__name__)
+
 
 class DockerWatchdog:
     def __init__(self, check_interval: int = 30, max_retries: int = 3):
@@ -27,7 +29,7 @@ class DockerWatchdog:
         self.check_interval = check_interval
         self.max_retries = max_retries
         self.retry_count = 0
-        self.is_windows = platform.system().lower() == 'windows'
+        self.is_windows = platform.system().lower() == "windows"
         self.docker_client = self._get_docker_client()
 
     def _get_docker_client(self) -> docker.DockerClient:
@@ -48,10 +50,7 @@ class DockerWatchdog:
             self.docker_client.containers.list(limit=1)
 
             self.retry_count = 0  # Reset retry counter on success
-            return {
-                'status': 'healthy',
-                'message': 'Docker daemon is responding normally'
-            }
+            return {"status": "healthy", "message": "Docker daemon is responding normally"}
 
         except Exception as e:
             self.retry_count += 1
@@ -59,14 +58,14 @@ class DockerWatchdog:
 
             if self.retry_count >= self.max_retries:
                 return {
-                    'status': 'unhealthy',
-                    'message': f'Docker daemon is not responding after {self.max_retries} attempts',
-                    'error': str(e)
+                    "status": "unhealthy",
+                    "message": f"Docker daemon is not responding after {self.max_retries} attempts",
+                    "error": str(e),
                 }
             return {
-                'status': 'degraded',
-                'message': f'Docker daemon check failed (attempt {self.retry_count}/{self.max_retries})',
-                'error': str(e)
+                "status": "degraded",
+                "message": f"Docker daemon check failed (attempt {self.retry_count}/{self.max_retries})",
+                "error": str(e),
             }
 
     async def restart_docker_service(self) -> dict[str, Any]:
@@ -74,25 +73,25 @@ class DockerWatchdog:
         try:
             if self.is_windows:
                 # Windows service restart
-                subprocess.run(['net', 'stop', 'docker'], check=True, capture_output=True, text=True)  # noqa: S607
-                subprocess.run(['net', 'start', 'docker'], check=True, capture_output=True, text=True)  # noqa: S607
+                subprocess.run(["net", "stop", "docker"], check=True, capture_output=True, text=True)  # noqa: S607
+                subprocess.run(["net", "start", "docker"], check=True, capture_output=True, text=True)  # noqa: S607
             else:
                 # Linux/Unix service restart
-                subprocess.run(['sudo', 'systemctl', 'restart', 'docker'], check=True, capture_output=True, text=True)  # noqa: S607  # noqa: S603 S607
+                subprocess.run(["sudo", "systemctl", "restart", "docker"], check=True, capture_output=True, text=True)  # noqa: S607  # noqa: S603 S607
 
             # Give Docker some time to start up
             await asyncio.sleep(5)
-            return {'success': True, 'message': 'Docker service restarted successfully'}
+            return {"success": True, "message": "Docker service restarted successfully"}
 
         except subprocess.CalledProcessError as e:
             error_msg = f"Failed to restart Docker service: {e.stderr}"
             logger.error(error_msg)
-            return {'success': False, 'error': error_msg}
+            return {"success": False, "error": error_msg}
 
         except Exception as e:
             error_msg = f"Error restarting Docker service: {e!s}"
             logger.error(error_msg)
-            return {'success': False, 'error': error_msg}
+            return {"success": False, "error": error_msg}
 
     async def monitor(self):
         """Main monitoring loop."""
@@ -101,11 +100,11 @@ class DockerWatchdog:
         while True:
             health = await self.check_docker_health()
 
-            if health['status'] == 'unhealthy':
+            if health["status"] == "unhealthy":
                 logger.warning("Docker daemon is unhealthy, attempting recovery...")
                 result = await self.restart_docker_service()
 
-                if not result.get('success'):
+                if not result.get("success"):
                     logger.error(f"Failed to recover Docker: {result.get('error')}")
                     # TODO: Send alert/notification
                 else:
@@ -127,11 +126,8 @@ if __name__ == "__main__":
     # Configure logging
     logging.basicConfig(
         level=logging.INFO,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        handlers=[
-            logging.StreamHandler(sys.stdout),
-            logging.FileHandler('docker_watchdog.log')
-        ]
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+        handlers=[logging.StreamHandler(sys.stdout), logging.FileHandler("docker_watchdog.log")],
     )
 
     # Start the watchdog

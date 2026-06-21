@@ -5,6 +5,7 @@ This module provides tools for streaming container logs in real-time with
 support for filtering by time, stream type, and more. It follows FastMCP 2.12+
 standards for tool registration and error handling.
 """
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -25,6 +26,7 @@ from .models import ContainerLogsResponse
 
 class LogStreamType(StrEnum):
     """Log stream types for container logs."""
+
     STDOUT = "stdout"
     STDERR = "stderr"
     ALL = "all"
@@ -32,6 +34,7 @@ class LogStreamType(StrEnum):
 
 class ContainerLogsRequest(BaseModel):
     """Request model for container logs."""
+
     container_id: str = Field(..., description="ID or name of the container")
     follow: bool = Field(False, description="Follow log output (like tail -f)")
     tail: str = Field("100", description="Number of lines to show from the end (e.g., '100', 'all')")
@@ -41,7 +44,7 @@ class ContainerLogsRequest(BaseModel):
     stream_type: str = Field("all", description="Which log streams to include (stdout, stderr, or all)")
     timeout: int = Field(60, ge=1, le=3600, description="Timeout in seconds for the log stream (1-3600)")
 
-    @field_validator('stream_type')
+    @field_validator("stream_type")
     @classmethod
     def validate_stream_type(cls, v: str) -> str:
         """Validate the stream_type parameter."""
@@ -49,16 +52,16 @@ class ContainerLogsRequest(BaseModel):
             return LogStreamType(v.lower()).value
         except ValueError:
             valid_types = [e.value for e in LogStreamType]
-            raise ValueError(
-                f"Invalid stream_type: {v}. Must be one of: {', '.join(valid_types)}"
-            ) from None
+            raise ValueError(f"Invalid stream_type: {v}. Must be one of: {', '.join(valid_types)}") from None
 
 
 class LogEntry(BaseModel):
     """A single log entry with timestamp and stream information."""
+
     timestamp: str
     stream: str
     line: str
+
 
 @mcp.tool
 async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsResponse:
@@ -87,19 +90,19 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
             return ContainerLogsResponse.error_response(
                 container_id=params.container_id,
                 error=f"Container not found: {e!s}",
-                message=f"Container {params.container_id} not found"
+                message=f"Container {params.container_id} not found",
             )
 
         # Prepare log parameters
         log_params = {
-            'stdout': params.stream_type in [LogStreamType.STDOUT, LogStreamType.ALL],
-            'stderr': params.stream_type in [LogStreamType.STDERR, LogStreamType.ALL],
-            'follow': params.follow,
-            'tail': params.tail,
-            'since': params.since,
-            'until': params.until,
-            'timestamps': params.timestamps,
-            'stream': params.follow  # Return a generator if following
+            "stdout": params.stream_type in [LogStreamType.STDOUT, LogStreamType.ALL],
+            "stderr": params.stream_type in [LogStreamType.STDERR, LogStreamType.ALL],
+            "follow": params.follow,
+            "tail": params.tail,
+            "since": params.since,
+            "until": params.until,
+            "timestamps": params.timestamps,
+            "stream": params.follow,  # Return a generator if following
         }
 
         # Clean up None values
@@ -118,27 +121,24 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
                 logger.info(f"Log stream timed out after {params.timeout} seconds")
 
             return ContainerLogsResponse.success(
-                container_id=params.container_id,
-                logs=logs,
-                message=f"Collected {len(logs)} log entries"
+                container_id=params.container_id, logs=logs, message=f"Collected {len(logs)} log entries"
             )
         else:
             # For one-time log retrieval
             try:
-                raw_logs = container.logs(**log_params).decode('utf-8', errors='replace')
+                raw_logs = container.logs(**log_params).decode("utf-8", errors="replace")
                 logs = [
                     {
-                        "timestamp": datetime.utcnow().isoformat() + 'Z',
+                        "timestamp": datetime.utcnow().isoformat() + "Z",
                         "stream": params.stream_type if params.stream_type != "all" else "stdout",
-                        "line": line
+                        "line": line,
                     }
-                    for line in raw_logs.splitlines() if line.strip()
+                    for line in raw_logs.splitlines()
+                    if line.strip()
                 ]
 
                 return ContainerLogsResponse.success(
-                    container_id=params.container_id,
-                    logs=logs,
-                    message=f"Retrieved {len(logs)} log entries"
+                    container_id=params.container_id, logs=logs, message=f"Retrieved {len(logs)} log entries"
                 )
             except APIError as e:
                 raise ToolError(f"Failed to get logs: {e!s}") from e
@@ -147,24 +147,17 @@ async def get_container_logs(params: ContainerLogsRequest) -> ContainerLogsRespo
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerLogsResponse.error_response(
-            container_id=params.container_id,
-            error=error_msg,
-            message="Failed to retrieve container logs"
+            container_id=params.container_id, error=error_msg, message="Failed to retrieve container logs"
         )
     except Exception as e:
         error_msg = f"Unexpected error: {e!s}"
         logger.error(error_msg, exc_info=True)
         return ContainerLogsResponse.error_response(
-            container_id=params.container_id,
-            error=error_msg,
-            message="An unexpected error occurred"
+            container_id=params.container_id, error=error_msg, message="An unexpected error occurred"
         )
 
-async def _stream_logs(
-    container,
-    log_params: dict[str, Any],
-    timeout: int
-) -> AsyncGenerator[dict[str, str], None]:
+
+async def _stream_logs(container, log_params: dict[str, Any], timeout: int) -> AsyncGenerator[dict[str, str], None]:
     """
     Stream logs from a container with a timeout.
 
@@ -190,14 +183,14 @@ async def _stream_logs(
             try:
                 # Parse the log line (Docker's log format)
                 if len(log_chunk) > 8:
-                    stream_type = {1: 'stdout', 2: 'stderr'}.get(log_chunk[0], 'unknown')
-                    log_line = log_chunk[8:].decode('utf-8', errors='replace').strip()
+                    stream_type = {1: "stdout", 2: "stderr"}.get(log_chunk[0], "unknown")
+                    log_line = log_chunk[8:].decode("utf-8", errors="replace").strip()
 
                     if log_line:  # Skip empty lines
                         yield {
-                            "timestamp": datetime.utcnow().isoformat() + 'Z',
+                            "timestamp": datetime.utcnow().isoformat() + "Z",
                             "stream": stream_type,
-                            "line": log_line
+                            "line": log_line,
                         }
             except Exception as e:
                 logger.error(f"Error parsing log chunk: {e!s}", exc_info=True)
@@ -207,7 +200,7 @@ async def _stream_logs(
         raise
     finally:
         # Ensure the log stream is properly closed
-        if 'log_stream' in locals():
+        if "log_stream" in locals():
             try:
                 log_stream.close()
             except Exception as e:
@@ -215,4 +208,4 @@ async def _stream_logs(
 
 
 # Register the tool with MCP
-__all__ = ['get_container_logs']
+__all__ = ["get_container_logs"]

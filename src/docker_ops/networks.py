@@ -2,6 +2,7 @@
 Network management operations for Docker MCP.
 Implements network-related operations with proper error handling and type hints.
 """
+
 import json
 import subprocess
 from typing import Any
@@ -9,7 +10,8 @@ from typing import Any
 from dockermcp.logging_config import logger
 
 # Get a child logger for this module
-logger = logger.getChild('networks')
+logger = logger.getChild("networks")
+
 
 class NetworkManager:
     """
@@ -25,40 +27,26 @@ class NetworkManager:
         """
         try:
             result = subprocess.run(
-                ['docker', 'network', 'ls', '--format', '{{json .}}'],  # noqa: S607
+                ["docker", "network", "ls", "--format", "{{json .}}"],  # noqa: S607
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
 
             # Parse the JSON output
             networks = []
-            for line in result.stdout.strip().split('\n'):
+            for line in result.stdout.strip().split("\n"):
                 if line:
                     networks.append(json.loads(line))
 
-            return {
-                'success': True,
-                'networks': networks,
-                'count': len(networks)
-            }
+            return {"success": True, "networks": networks, "count": len(networks)}
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to list networks: {e.stderr}")
-            return {
-                'success': False,
-                'error': f"Failed to list networks: {e.stderr}",
-                'networks': [],
-                'count': 0
-            }
+            return {"success": False, "error": f"Failed to list networks: {e.stderr}", "networks": [], "count": 0}
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse network list: {e}")
-            return {
-                'success': False,
-                'error': f"Failed to parse network list: {e}",
-                'networks': [],
-                'count': 0
-            }
+            return {"success": False, "error": f"Failed to parse network list: {e}", "networks": [], "count": 0}
 
     def create_network(self, name: str, driver: str = "bridge") -> dict[str, Any]:
         """
@@ -73,27 +61,17 @@ class NetworkManager:
         """
         try:
             result = subprocess.run(  # noqa: S603
-                ['docker', 'network', 'create', '--driver', driver, name],  # noqa: S607
+                ["docker", "network", "create", "--driver", driver, name],  # noqa: S607
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
 
-            return {
-                'success': True,
-                'network_id': result.stdout.strip(),
-                'name': name,
-                'driver': driver
-            }
+            return {"success": True, "network_id": result.stdout.strip(), "name": name, "driver": driver}
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to create network {name}: {e.stderr}")
-            return {
-                'success': False,
-                'error': f"Failed to create network: {e.stderr}",
-                'name': name,
-                'driver': driver
-            }
+            return {"success": False, "error": f"Failed to create network: {e.stderr}", "name": name, "driver": driver}
 
     def remove_network(self, network_id: str) -> dict[str, Any]:
         """
@@ -107,22 +85,14 @@ class NetworkManager:
         """
         try:
             subprocess.run(  # noqa: S603
-                ['docker', 'network', 'rm', network_id],  # noqa: S607
+                ["docker", "network", "rm", network_id],  # noqa: S607
                 capture_output=True,
                 text=True,
-                check=True
+                check=True,
             )
 
-            return {
-                'success': True,
-                'network_id': network_id,
-                'message': f"Network {network_id} removed successfully"
-            }
+            return {"success": True, "network_id": network_id, "message": f"Network {network_id} removed successfully"}
 
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to remove network {network_id}: {e.stderr}")
-            return {
-                'success': False,
-                'error': f"Failed to remove network: {e.stderr}",
-                'network_id': network_id
-            }
+            return {"success": False, "error": f"Failed to remove network: {e.stderr}", "network_id": network_id}

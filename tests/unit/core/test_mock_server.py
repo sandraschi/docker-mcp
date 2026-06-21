@@ -19,6 +19,7 @@ def test_mock_server_basic():
         assert response.status_code == 200
         assert response.json() == []
 
+
 def test_container_lifecycle():
     """Test container lifecycle operations."""
     with MockMCPServer(port=8001) as server:
@@ -28,7 +29,7 @@ def test_container_lifecycle():
             "Id": container_id,
             "Name": "/test-container",
             "Image": "alpine:latest",
-            "State": {"Status": "created", "Running": False}
+            "State": {"Status": "created", "Running": False},
         }
 
         # Test getting container logs
@@ -47,6 +48,7 @@ def test_container_lifecycle():
         assert container["State"]["Status"] == "running"
         assert container["State"]["Running"] is True
 
+
 def test_image_operations():
     """Test image operations."""
     with MockMCPServer(port=8001) as server:
@@ -56,10 +58,7 @@ def test_image_operations():
         initial_image_count = len(response.json())
 
         # Test pulling an image
-        response = requests.post(
-            "http://localhost:8001/images/pull",
-            json={"fromImage": "nginx:latest"}
-        )
+        response = requests.post("http://localhost:8001/images/pull", json={"fromImage": "nginx:latest"})
         assert response.status_code == 200
 
         # Verify the image was added
@@ -67,9 +66,11 @@ def test_image_operations():
         assert len(response.json()) == initial_image_count + 1
         assert any("nginx:latest" in img["RepoTags"][0] for img in response.json())
 
+
 if __name__ == "__main__":
     # Run the tests
     import sys
 
     import pytest
+
     sys.exit(pytest.main([__file__] + sys.argv[1:]))

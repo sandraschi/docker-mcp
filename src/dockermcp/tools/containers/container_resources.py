@@ -5,6 +5,7 @@ This module provides tools for managing container resource constraints including
 CPU, memory, I/O, and other resource limits. It follows FastMCP 2.12+ standards
 for tool registration and error handling.
 """
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -28,41 +29,38 @@ from dockermcp.tools import ToolResponse
 # Initialize FastMCP instance
 mcp = FastMCP("Container Resource Tools")
 
+
 # Enums for resource management
 class CpuPriority(StrEnum):
     """CPU priority levels for container CPU shares."""
+
     LOW = "low"
     NORMAL = "normal"
     HIGH = "high"
     CRITICAL = "critical"
 
+
 class MemoryUnit(StrEnum):
     """Memory unit options for resource limits."""
+
     BYTES = "b"
     KILOBYTES = "k"
     MEGABYTES = "m"
     GIGABYTES = "g"
 
+
 # Request/Response Models
 class IoDeviceWeight(BaseModel):
     """I/O weight configuration for a device."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "path": "/dev/sda",
-                "weight": 200
-            }
-        }
-    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"path": "/dev/sda", "weight": 200}})
     path: str = Field(..., description="Path to the device")
-    weight: conint(ge=10, le=1000) = Field(
-        default=100,
-        description="I/O weight (10-1000, default: 100)",
-        example=200
-    )
+    weight: conint(ge=10, le=1000) = Field(default=100, description="I/O weight (10-1000, default: 100)", example=200)
+
 
 class ResourceUpdateResult(BaseModel):
     """Result of a resource update operation."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -70,7 +68,7 @@ class ResourceUpdateResult(BaseModel):
                 "resource_type": "memory_limit",
                 "previous_value": 536870912,
                 "new_value": 1073741824,
-                "warnings": []
+                "warnings": [],
             }
         }
     )
@@ -78,67 +76,45 @@ class ResourceUpdateResult(BaseModel):
     resource_type: str = Field(..., description="Type of resource that was updated")
     previous_value: Any = Field(None, description="Previous resource value")
     new_value: Any = Field(..., description="New resource value")
-    warnings: list[str] = Field(
-        default_factory=list,
-        description="List of warning messages, if any"
-    )
+    warnings: list[str] = Field(default_factory=list, description="List of warning messages, if any")
+
 
 class GetContainerResourcesParams(BaseModel):
     """Parameters for getting container resources."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "container_id": "my-container",
-                "include_usage": True
-            }
-        }
-    )
 
-    container_id: str = Field(
-        ...,
-        description="ID or name of the container"
-    )
-    include_usage: bool = Field(
-        default=True,
-        description="Include current resource usage statistics"
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"container_id": "my-container", "include_usage": True}})
+
+    container_id: str = Field(..., description="ID or name of the container")
+    include_usage: bool = Field(default=True, description="Include current resource usage statistics")
+
 
 class ContainerResourcesResponse(BaseModel):
     """Response model for container resources."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "container_id": "a1b2c3d4e5f6",
                 "resources": {
-                    "cpu": {
-                        "shares": 1024,
-                        "quota": 100000,
-                        "period": 100000,
-                        "cpus": "0-3"
-                    },
-                    "memory": {
-                        "limit": 1073741824,
-                        "reservation": 536870912
-                    }
+                    "cpu": {"shares": 1024, "quota": 100000, "period": 100000, "cpus": "0-3"},
+                    "memory": {"limit": 1073741824, "reservation": 536870912},
                 },
                 "usage": {
                     "cpu_usage": {
                         "total_usage": 1000000000,
                         "percpu_usage": [500000000, 500000000],
                         "system_cpu_usage": 5000000000,
-                        "online_cpus": 2
+                        "online_cpus": 2,
                     }
-                }
+                },
             }
         }
     )
 
     container_id: str = Field(..., description="ID of the container")
     resources: dict[str, Any] = Field(..., description="Resource limits and configuration")
-    usage: dict[str, Any] | None = Field(
-        None,
-        description="Current resource usage statistics"
-    )
+    usage: dict[str, Any] | None = Field(None, description="Current resource usage statistics")
+
 
 @mcp.tool
 async def get_container_resources(params: GetContainerResourcesParams) -> ToolResponse[ContainerResourcesResponse]:
@@ -164,7 +140,7 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
     """
     logger.info(
         "Getting container resources",
-        extra={"container_id": params.container_id, "include_usage": params.include_usage}
+        extra={"container_id": params.container_id, "include_usage": params.include_usage},
     )
 
     try:
@@ -184,14 +160,14 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                 "realtime_period": attrs.get("HostConfig", {}).get("CpuRealtimePeriod"),
                 "realtime_runtime": attrs.get("HostConfig", {}).get("CpuRealtimeRuntime"),
                 "cfs_period": attrs.get("HostConfig", {}).get("CpuPeriod"),
-                "cfs_quota": attrs.get("HostConfig", {}).get("CpuQuota")
+                "cfs_quota": attrs.get("HostConfig", {}).get("CpuQuota"),
             },
             "memory": {
                 "limit": attrs.get("HostConfig", {}).get("Memory"),
                 "reservation": attrs.get("HostConfig", {}).get("MemoryReservation"),
                 "swap": attrs.get("HostConfig", {}).get("MemorySwap"),
                 "swappiness": attrs.get("HostConfig", {}).get("MemorySwappiness"),
-                "oom_kill_disable": attrs.get("HostConfig", {}).get("OomKillDisable")
+                "oom_kill_disable": attrs.get("HostConfig", {}).get("OomKillDisable"),
             },
             "blkio": {
                 "weight": attrs.get("HostConfig", {}).get("BlkioWeight"),
@@ -199,12 +175,10 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                 "device_read_bps": attrs.get("HostConfig", {}).get("BlkioDeviceReadBps"),
                 "device_write_bps": attrs.get("HostConfig", {}).get("BlkioDeviceWriteBps"),
                 "device_read_iops": attrs.get("HostConfig", {}).get("BlkioDeviceReadIOps"),
-                "device_write_iops": attrs.get("HostConfig", {}).get("BlkioDeviceWriteIOps")
+                "device_write_iops": attrs.get("HostConfig", {}).get("BlkioDeviceWriteIOps"),
             },
-            "pids": {
-                "limit": attrs.get("HostConfig", {}).get("PidsLimit")
-            },
-            "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy")
+            "pids": {"limit": attrs.get("HostConfig", {}).get("PidsLimit")},
+            "restart_policy": attrs.get("HostConfig", {}).get("RestartPolicy"),
         }
 
         # Get usage stats if requested
@@ -218,91 +192,69 @@ async def get_container_resources(params: GetContainerResourcesParams) -> ToolRe
                     "block_io": stats.get("blkio_stats"),
                     "network": stats.get("networks"),
                     "pids_stats": stats.get("pids_stats"),
-                    "read": stats.get("read")
+                    "read": stats.get("read"),
                 }
             except Exception as e:
                 logger.warning(
-                    f"Failed to get container stats: {e!s}",
-                    extra={"container_id": params.container_id},
-                    exc_info=True
+                    f"Failed to get container stats: {e!s}", extra={"container_id": params.container_id}, exc_info=True
                 )
 
         return ToolResponse[ContainerResourcesResponse](
             success=True,
             message=f"Retrieved resources for container {container.id}",
-            data=ContainerResourcesResponse(
-                container_id=container.id,
-                resources=resources,
-                usage=usage
-            )
+            data=ContainerResourcesResponse(container_id=container.id, resources=resources, usage=usage),
         )
 
     except NotFound as e:
         logger.error(
-            f"Container not found: {params.container_id}",
-            extra={"container_id": params.container_id},
-            exc_info=True
+            f"Container not found: {params.container_id}", extra={"container_id": params.container_id}, exc_info=True
         )
         return ToolResponse[ContainerResourcesResponse](
-            success=False,
-            message=f"Container not found: {e!s}",
-            error=f"Container not found: {e!s}"
+            success=False, message=f"Container not found: {e!s}", error=f"Container not found: {e!s}"
         )
     except APIError as e:
-        logger.error(
-            f"Docker API error: {e!s}",
-            extra={"container_id": params.container_id},
-            exc_info=True
-        )
+        logger.error(f"Docker API error: {e!s}", extra={"container_id": params.container_id}, exc_info=True)
         return ToolResponse[ContainerResourcesResponse](
-            success=False,
-            message=f"Docker API error: {e!s}",
-            error=f"Docker API error: {e!s}"
+            success=False, message=f"Docker API error: {e!s}", error=f"Docker API error: {e!s}"
         )
     except Exception as e:
         logger.error(
-            f"Error getting container resources: {e!s}",
-            extra={"container_id": params.container_id},
-            exc_info=True
+            f"Error getting container resources: {e!s}", extra={"container_id": params.container_id}, exc_info=True
         )
         return ToolResponse[ContainerResourcesResponse](
             success=False,
             message=f"Error getting container resources: {e!s}",
-            error=f"Error getting container resources: {e!s}"
+            error=f"Error getting container resources: {e!s}",
         )
+
 
 class ResetContainerResourcesParams(BaseModel):
     """Parameters for resetting container resources."""
-    model_config = ConfigDict(
-        json_schema_extra={
-            "example": {
-                "container_id": "my-container"
-            }
-        }
-    )
+
+    model_config = ConfigDict(json_schema_extra={"example": {"container_id": "my-container"}})
 
     container_id: str = Field(..., description="ID or name of the container to reset")
 
+
 class ResetContainerResourcesResponse(BaseModel):
     """Response model for resetting container resources."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "container_id": "a1b2c3d4e5f6",
-                "reset_resources": ["cpu_shares", "memory_limit", "blkio_weight"]
+                "reset_resources": ["cpu_shares", "memory_limit", "blkio_weight"],
             }
         }
     )
 
     container_id: str = Field(..., description="ID of the container")
-    reset_resources: list[str] = Field(
-        ...,
-        description="List of resource types that were reset"
-    )
+    reset_resources: list[str] = Field(..., description="List of resource types that were reset")
+
 
 @mcp.tool
 async def reset_container_resources(
-    params: ResetContainerResourcesParams
+    params: ResetContainerResourcesParams,
 ) -> ToolResponse[ResetContainerResourcesResponse]:
     """
     Reset all resource limits for a container to their default values.
@@ -331,10 +283,7 @@ async def reset_container_resources(
         >>> if response.success:
         ...     print(f"Reset {len(response.data.reset_resources)} resources for {response.data.container_id}")
     """
-    logger.info(
-        "Resetting container resources to default values",
-        extra={"container_id": params.container_id}
-    )
+    logger.info("Resetting container resources to default values", extra={"container_id": params.container_id})
 
     try:
         client = docker.from_env()
@@ -347,16 +296,14 @@ async def reset_container_resources(
         update_config = {
             # Reset CPU settings
             "CpuShares": 0,  # 0 means use the default
-            "CpuQuota": 0,   # 0 means use the default
+            "CpuQuota": 0,  # 0 means use the default
             "CpuPeriod": 0,  # 0 means use the default
             "CpusetCpus": "",  # Empty means use all CPUs
-
             # Reset memory settings
-            "Memory": 0,           # 0 means no limit
-            "MemoryReservation": 0, # 0 means no limit
-            "MemorySwap": 0,        # 0 means no limit
+            "Memory": 0,  # 0 means no limit
+            "MemoryReservation": 0,  # 0 means no limit
+            "MemorySwap": 0,  # 0 means no limit
             "MemorySwappiness": None,  # None means use the default
-
             # Reset I/O settings
             "BlkioWeight": 0,  # 0 means use the default
             "BlkioWeightDevice": None,
@@ -364,12 +311,10 @@ async def reset_container_resources(
             "BlkioDeviceWriteBps": None,
             "BlkioDeviceReadIOps": None,
             "BlkioDeviceWriteIOps": None,
-
             # Reset process limits
             "PidsLimit": 0,  # 0 means no limit
-
             # Reset restart policy
-            "RestartPolicy": {"Name": "no"}
+            "RestartPolicy": {"Name": "no"},
         }
 
         # Track which resources were reset
@@ -416,64 +361,44 @@ async def reset_container_resources(
 
             logger.info(
                 f"Reset {len(reset_resources)} resources for container {params.container_id}",
-                extra={
-                    "container_id": params.container_id,
-                    "reset_resources": reset_resources
-                }
+                extra={"container_id": params.container_id, "reset_resources": reset_resources},
             )
         else:
             logger.info(
                 f"No resource limits to reset for container {params.container_id}",
-                extra={"container_id": params.container_id}
+                extra={"container_id": params.container_id},
             )
 
         return ToolResponse[ResetContainerResourcesResponse](
             success=True,
             message=f"Reset {len(reset_resources)} resources for container {container.id}",
-            data=ResetContainerResourcesResponse(
-                container_id=container.id,
-                reset_resources=reset_resources
-            )
+            data=ResetContainerResourcesResponse(container_id=container.id, reset_resources=reset_resources),
         )
 
     except NotFound as e:
         logger.error(
-            f"Container not found: {params.container_id}",
-            extra={"container_id": params.container_id},
-            exc_info=True
+            f"Container not found: {params.container_id}", extra={"container_id": params.container_id}, exc_info=True
         )
         return ToolResponse[ResetContainerResourcesResponse](
-            success=False,
-            message=f"Container not found: {e!s}",
-            error=f"Container not found: {e!s}"
+            success=False, message=f"Container not found: {e!s}", error=f"Container not found: {e!s}"
         )
     except APIError as e:
-        logger.error(
-            f"Docker API error: {e!s}",
-            extra={"container_id": params.container_id},
-            exc_info=True
-        )
+        logger.error(f"Docker API error: {e!s}", extra={"container_id": params.container_id}, exc_info=True)
         return ToolResponse[ResetContainerResourcesResponse](
-            success=False,
-            message=f"Docker API error: {e!s}",
-            error=f"Docker API error: {e!s}"
+            success=False, message=f"Docker API error: {e!s}", error=f"Docker API error: {e!s}"
         )
     except Exception as e:
         logger.error(
-            f"Error resetting container resources: {e!s}",
-            extra={"container_id": params.container_id},
-            exc_info=True
+            f"Error resetting container resources: {e!s}", extra={"container_id": params.container_id}, exc_info=True
         )
         return ToolResponse[ResetContainerResourcesResponse](
             success=False,
             message=f"Error resetting container resources: {e!s}",
-            error=f"Error resetting container resources: {e!s}"
+            error=f"Error resetting container resources: {e!s}",
         )
+
 
 # Register tools with FastMCP
 def get_tools():
     """Return a list of tools for FastMCP to register."""
-    return [
-        get_container_resources,
-        reset_container_resources
-    ]
+    return [get_container_resources, reset_container_resources]

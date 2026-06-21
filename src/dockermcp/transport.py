@@ -92,17 +92,13 @@ Examples:
     )
 
     transport_group = parser.add_mutually_exclusive_group()
-    transport_group.add_argument(
-        "--stdio", action="store_true", help="Run in STDIO (JSON-RPC) mode (default)"
-    )
+    transport_group.add_argument("--stdio", action="store_true", help="Run in STDIO (JSON-RPC) mode (default)")
     transport_group.add_argument(
         "--http",
         action="store_true",
         help="Run in HTTP Streamable mode (FastMCP 2.14.4+)",
     )
-    transport_group.add_argument(
-        "--sse", action="store_true", help="Run in SSE mode (deprecated, use --http)"
-    )
+    transport_group.add_argument("--sse", action="store_true", help="Run in SSE mode (deprecated, use --http)")
 
     parser.add_argument(
         "--host",
@@ -154,14 +150,10 @@ def resolve_transport(args: argparse.Namespace) -> TransportType:
         # Fall back to environment variable
         env_transport = os.getenv(ENV_TRANSPORT, "stdio").lower()
         if env_transport not in ("stdio", "http", "sse"):
-            logger.warning(
-                f"Invalid {ENV_TRANSPORT}='{env_transport}', defaulting to stdio"
-            )
+            logger.warning(f"Invalid {ENV_TRANSPORT}='{env_transport}', defaulting to stdio")
             return "stdio"
         if env_transport == "sse":
-            logger.warning(
-                "SSE transport is deprecated. Consider using MCP_TRANSPORT=http instead."
-            )
+            logger.warning("SSE transport is deprecated. Consider using MCP_TRANSPORT=http instead.")
         return env_transport  # type: ignore
 
 
@@ -187,9 +179,7 @@ def resolve_config(args: argparse.Namespace) -> dict:
     }
 
 
-def run_server(
-    mcp_app, args: argparse.Namespace | None = None, server_name: str = "mcp-server"
-) -> None:
+def run_server(mcp_app, args: argparse.Namespace | None = None, server_name: str = "mcp-server") -> None:
     """
     Unified server runner for all transport modes.
 
@@ -238,9 +228,7 @@ def run_server(
             # SSE mode (deprecated)
             host = config["host"]
             port = config["port"]
-            logger.warning(
-                "SSE mode is deprecated. Migrate to HTTP Streamable (--http)."
-            )
+            logger.warning("SSE mode is deprecated. Migrate to HTTP Streamable (--http).")
             logger.info(f"Running in SSE mode: http://{host}:{port}")
             mcp_app.run(transport="sse", host=host, port=port)
 
@@ -251,13 +239,12 @@ def run_server(
         raise
 
 
-async def run_server_async(
-    mcp_app, args: argparse.Namespace | None = None, server_name: str = "mcp-server"
-) -> None:
+async def run_server_async(mcp_app, args: argparse.Namespace | None = None, server_name: str = "mcp-server") -> None:
     """
     Async wrapper for run_server. Runs the blocking server in a thread pool.
     """
     import asyncio
+
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, run_server, mcp_app, args, server_name)
 

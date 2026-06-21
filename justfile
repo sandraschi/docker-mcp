@@ -1,6 +1,8 @@
-﻿name := "docker-mcp"
-desc := "FastMCP 3.3 server for Docker operations"
-ver := "3.3.0"
+import 'scripts/just/fleet.just'
+
+name := "docker-mcp"
+desc := "FastMCP 3.4 server for Docker operations"
+ver := "3.4.0"
 
 # Open the interactive recipe dashboard in the browser
 default:
@@ -23,6 +25,10 @@ mcpb-pack:
 # Tauri native installer (Windows release)
 build-native:
     pwsh -NoLogo -File native/build.ps1
+
+# Run CUA smoke test against installed NSIS app
+cua-nsis-test:
+    C:\Windows\py.exe scripts/cua-smoke.py
 
 build-native-debug:
     Set-Location native
@@ -83,4 +89,3 @@ clean:
 # View server logs
 logs:
     Get-Content logs/dockermcp.log -Tail 50 -Wait
-

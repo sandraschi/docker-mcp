@@ -20,9 +20,9 @@ import logging
 
 from fastmcp import Context
 
-logger = logging.getLogger(__name__)
-
 from dockermcp.mcp_instance import mcp
+
+logger = logging.getLogger(__name__)
 
 
 def build_success_response(**kwargs) -> dict:
@@ -51,10 +51,7 @@ def build_error_response(**kwargs) -> dict:
 
 @mcp.tool()
 async def agentic_container_workflow(
-    workflow_prompt: str,
-    available_tools: list[str],
-    max_iterations: int = 5,
-    context: Context | None = None
+    workflow_prompt: str, available_tools: list[str], max_iterations: int = 5, context: Context | None = None
 ) -> dict:
     """
     Execute agentic container workflows using FastMCP 2.14.1+ sampling with tools.
@@ -97,9 +94,9 @@ async def agentic_container_workflow(
                 message="workflow_prompt is required to guide the container workflow",
                 recovery_options=[
                     "Provide a clear description of the container workflow to execute",
-                    "Include specific goals and available tools"
+                    "Include specific goals and available tools",
                 ],
-                urgency="medium"
+                urgency="medium",
             )
 
         if not available_tools:
@@ -109,9 +106,9 @@ async def agentic_container_workflow(
                 message="available_tools list cannot be empty",
                 recovery_options=[
                     "Specify which container tools the LLM can use",
-                    "Include at least one container tool for the workflow"
+                    "Include at least one container tool for the workflow",
                 ],
-                urgency="medium"
+                urgency="medium",
             )
 
         logger.info("Starting agentic container workflow: %s...", workflow_prompt[:50])
@@ -175,8 +172,8 @@ async def agentic_container_workflow(
                 "Check the workflow_prompt for clarity and valid container instructions",
                 "Ensure all container tools in available_tools are correctly implemented and registered",
                 "Review Docker daemon status and resource availability",
-                "Check container logs for detailed error messages"
+                "Check container logs for detailed error messages",
             ],
             diagnostic_info={"exception": str(e), "workflow_type": "container_orchestration"},
-            urgency="high"
+            urgency="high",
         )

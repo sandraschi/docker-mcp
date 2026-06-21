@@ -1,4 +1,5 @@
 """Mock Docker API responses for testing."""
+
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -17,6 +18,7 @@ class MockDockerClient:
     async def close(self):
         """Close the mock client."""
         pass
+
 
 class MockContainers:
     """Mock Docker containers API."""
@@ -43,7 +45,7 @@ class MockContainers:
             "Image": config.get("Image"),
             "State": {"Status": "created"},
             "Config": config,
-            "NetworkSettings": {"Networks": {}}
+            "NetworkSettings": {"Networks": {}},
         }
         self._containers[container_id] = container
         return container
@@ -65,6 +67,7 @@ class MockContainers:
         if container_id not in self._containers:
             raise MockDockerError("No such container", 404)
         del self._containers[container_id]
+
 
 class MockImages:
     """Mock Docker images API."""
@@ -90,10 +93,11 @@ class MockImages:
             "RepoTags": [repository],
             "Size": 1024 * 1024,  # 1MB
             "Labels": {},
-            "Config": {"Cmd": ["/bin/sh"]}
+            "Config": {"Cmd": ["/bin/sh"]},
         }
         self._images[image_id] = image
         return image
+
 
 class MockNetworks:
     """Mock Docker networks API."""
@@ -112,10 +116,11 @@ class MockNetworks:
             "Id": network_id,
             "Name": config.get("Name"),
             "Driver": config.get("Driver", "bridge"),
-            "Containers": {}
+            "Containers": {},
         }
         self._networks[network_id] = network
         return network
+
 
 class MockVolumes:
     """Mock Docker volumes API."""
@@ -134,10 +139,11 @@ class MockVolumes:
             "Name": volume_name,
             "Driver": config.get("Driver", "local"),
             "Mountpoint": f"/var/lib/docker/volumes/{volume_name}/_data",
-            "Labels": config.get("Labels", {})
+            "Labels": config.get("Labels", {}),
         }
         self._volumes[volume_name] = volume
         return volume
+
 
 class MockDockerAPI:
     """Mock Docker API client."""
@@ -149,7 +155,7 @@ class MockDockerAPI:
             "NCPU": 4,
             "MemTotal": 17179869184,  # 16GB
             "DockerRootDir": "/var/lib/docker",
-            "Name": "mock-docker-host"
+            "Name": "mock-docker-host",
         }
 
     async def version(self) -> dict[str, str]:
@@ -163,12 +169,13 @@ class MockDockerAPI:
             "Os": "linux",
             "Arch": "amd64",
             "KernelVersion": "5.10.0-0.bpo.5-amd64",
-            "BuildTime": "2021-12-20T00:19:13.000000000+00:00"
+            "BuildTime": "2021-12-20T00:19:13.000000000+00:00",
         }
 
     async def info(self) -> dict[str, Any]:
         """Get Docker system info."""
         return self._info
+
 
 class MockDockerError(Exception):
     """Mock Docker API error."""

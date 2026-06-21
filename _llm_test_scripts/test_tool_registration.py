@@ -1,6 +1,7 @@
 """
 Test script to verify FastMCP tool registration.
 """
+
 import asyncio
 import sys
 from pathlib import Path
@@ -28,16 +29,16 @@ async def test_tool_registration():
         print(f"- {tool['name']}: {tool['description']}")
 
     # Test list_containers tool
-    if 'list_containers' in [t['name'] for t in tools]:
+    if "list_containers" in [t["name"] for t in tools]:
         print("\nTesting list_containers tool...")
         try:
             # Find the tool
-            tool = next(t for t in tools if t['name'] == 'list_containers')
+            tool = next(t for t in tools if t["name"] == "list_containers")
 
             # Call the tool
-            result = await tool['function'](all_states=False)
+            result = await tool["function"](all_states=False)
 
-            if result.get('status') == 'success':
+            if result.get("status") == "success":
                 print(f"✓ Successfully listed {len(result.get('containers', []))} containers")
             else:
                 print(f"✗ Error: {result.get('message', 'Unknown error')}")
@@ -46,6 +47,7 @@ async def test_tool_registration():
             print(f"✗ Error testing list_containers: {e!s}")
     else:
         print("\n✗ list_containers tool not found")
+
 
 if __name__ == "__main__":
     asyncio.run(test_tool_registration())

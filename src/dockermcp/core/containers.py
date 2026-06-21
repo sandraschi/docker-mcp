@@ -4,6 +4,7 @@ Container management operations.
 This module provides functions for managing Docker containers including
 creation, starting, stopping, and inspection.
 """
+
 import asyncio
 import logging
 from typing import Any
@@ -14,6 +15,7 @@ logger = ContextLogger(logging.getLogger(f"dockermcp.core.{__name__}"), {})
 
 # TODO: Move container operations from docker_ops/containers.py to here
 # This will be implemented after confirming the file move
+
 
 class ContainerManager:
     """Manager for container operations."""
@@ -29,14 +31,14 @@ class ContainerManager:
                 None,
                 lambda: [
                     {
-                        'id': c.id,
-                        'name': c.name,
-                        'status': c.status,
-                        'image': c.image.tags[0] if c.image.tags else c.image.id,
-                        'created': c.attrs['Created']
+                        "id": c.id,
+                        "name": c.name,
+                        "status": c.status,
+                        "image": c.image.tags[0] if c.image.tags else c.image.id,
+                        "created": c.attrs["Created"],
                     }
                     for c in self.client.containers.list(all=all_containers)
-                ]
+                ],
             )
         except Exception as e:
             logger.error(f"Error listing containers: {e!s}")

@@ -1,11 +1,13 @@
 """
 Simple test module to verify test output capture functionality.
 """
+
 import logging
 import sys
 
 # Configure basic logging that works with pytest-capture
 logger = logging.getLogger(__name__)
+
 
 def test_hello_world(capsys, caplog):
     """A simple test that outputs to stdout, stderr, and logs."""
@@ -37,6 +39,6 @@ def test_hello_world(capsys, caplog):
 
     # Verify log levels
     log_levels = [record.levelname for record in caplog.records]
-    assert 'INFO' in log_levels
-    assert 'WARNING' in log_levels
-    assert 'ERROR' in log_levels
+    assert "INFO" in log_levels
+    assert "WARNING" in log_levels
+    assert "ERROR" in log_levels

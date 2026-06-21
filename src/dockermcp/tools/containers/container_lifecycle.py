@@ -5,6 +5,7 @@ This module provides tools for managing the complete lifecycle of Docker contain
 including creation, starting, stopping, restarting, and removal. It follows FastMCP 2.12+
 standards for tool registration and error handling.
 """
+
 from __future__ import annotations
 
 from enum import StrEnum
@@ -21,10 +22,12 @@ from dockermcp.logging_config import logger
 mcp = FastMCP("Docker MCP")
 
 # Type variable for generic type hints
-T = TypeVar('T', bound='BaseModel')
+T = TypeVar("T", bound="BaseModel")
+
 
 class ContainerAction(StrEnum):
     """Available container lifecycle actions."""
+
     START = "start"
     STOP = "stop"
     RESTART = "restart"
@@ -32,8 +35,10 @@ class ContainerAction(StrEnum):
     PAUSE = "pause"
     UNPAUSE = "unpause"
 
+
 class ContainerLifecycleRequest(BaseModel):
     """Request model for container lifecycle operations."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -41,37 +46,23 @@ class ContainerLifecycleRequest(BaseModel):
                 "action": "restart",
                 "force": False,
                 "timeout": 10,
-                "remove_volumes": False
+                "remove_volumes": False,
             }
         }
     )
 
-    container_id: str = Field(
-        ...,
-        min_length=1,
-        description="ID or name of the container"
-    )
+    container_id: str = Field(..., min_length=1, description="ID or name of the container")
     action: ContainerAction = Field(
-        ...,
-        description=f"Action to perform on the container. Options: {', '.join([e.value for e in ContainerAction])}"
+        ..., description=f"Action to perform on the container. Options: {', '.join([e.value for e in ContainerAction])}"
     )
-    force: bool = Field(
-        default=False,
-        description="Force the action (e.g., force remove a running container)"
-    )
-    timeout: int = Field(
-        default=10,
-        ge=1,
-        le=300,
-        description="Timeout in seconds for stop/restart operations"
-    )
-    remove_volumes: bool = Field(
-        default=False,
-        description="Remove volumes when removing a container"
-    )
+    force: bool = Field(default=False, description="Force the action (e.g., force remove a running container)")
+    timeout: int = Field(default=10, ge=1, le=300, description="Timeout in seconds for stop/restart operations")
+    remove_volumes: bool = Field(default=False, description="Remove volumes when removing a container")
+
 
 class ContainerLifecycleResponse(BaseModel):
     """Response model for container lifecycle operations."""
+
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
@@ -84,8 +75,8 @@ class ContainerLifecycleResponse(BaseModel):
                     "running": True,
                     "paused": False,
                     "restarting": False,
-                    "started_at": "2023-01-01T12:00:00Z"
-                }
+                    "started_at": "2023-01-01T12:00:00Z",
+                },
             }
         }
     )
@@ -94,40 +85,23 @@ class ContainerLifecycleResponse(BaseModel):
     message: str = Field(..., description="Human-readable result message")
     container_id: str = Field(..., description="ID of the container")
     action: str = Field(..., description="Action that was performed")
-    state: dict[str, Any] | None = Field(
-        default=None,
-        description="Current container state (if available)"
-    )
-    error: str | None = Field(
-        default=None,
-        description="Error message if the operation failed"
-    )
+    state: dict[str, Any] | None = Field(default=None, description="Current container state (if available)")
+    error: str | None = Field(default=None, description="Error message if the operation failed")
+
 
 class ContainerLifecycleParams(BaseModel):
     """Parameters for container lifecycle operations."""
-    container_id: str = Field(
-        ...,
-        description="ID or name of the container to manage"
-    )
+
+    container_id: str = Field(..., description="ID or name of the container to manage")
     action: str = Field(
         ...,
         description="Action to perform (start, stop, restart, remove, pause, unpause)",
-        pattern="^(start|stop|restart|remove|pause|unpause)$"
+        pattern="^(start|stop|restart|remove|pause|unpause)$",
     )
-    force: bool = Field(
-        False,
-        description="Force the action (e.g., force remove a running container)"
-    )
-    timeout: int = Field(
-        10,
-        ge=1,
-        le=300,
-        description="Timeout in seconds for stop/restart operations"
-    )
-    remove_volumes: bool = Field(
-        False,
-        description="Remove volumes when removing a container"
-    )
+    force: bool = Field(False, description="Force the action (e.g., force remove a running container)")
+    timeout: int = Field(10, ge=1, le=300, description="Timeout in seconds for stop/restart operations")
+    remove_volumes: bool = Field(False, description="Remove volumes when removing a container")
+
 
 async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> dict[str, Any]:
     """
@@ -179,7 +153,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
                 "running": container.status == "running",
                 "paused": container.status == "paused",
                 "restarting": container.status == "restarting",
-                "started_at": container.attrs["State"]["StartedAt"]
+                "started_at": container.attrs["State"]["StartedAt"],
             }
         except (docker.errors.NotFound, docker.errors.APIError):
             # Container may have been removed
@@ -190,7 +164,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
             "message": message,
             "container_id": params.container_id,
             "action": params.action,
-            "state": state
+            "state": state,
         }
 
     except docker.errors.APIError as e:
@@ -201,6 +175,7 @@ async def _manage_container_lifecycle_impl(params: ContainerLifecycleParams) -> 
         error_msg = f"Error managing container {params.container_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
         raise ToolError(error_msg) from e
+
 
 @mcp.tool
 async def manage_container_lifecycle(params: ContainerLifecycleParams) -> dict[str, Any]:

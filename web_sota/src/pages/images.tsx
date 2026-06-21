@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Loader2, AlertCircle, Image as ImageIcon } from "lucide-react";
 
@@ -35,7 +36,7 @@ export function Images() {
   const fetchImages = async () => {
     setLoading(true);
     try {
-      const res = await fetch("/api/dashboard");
+      const res = await fetch(`${API_BASE}/api/dashboard`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
       setImages(data.images ?? []);

@@ -47,18 +47,12 @@ async def docker_desktop_status(autofix: bool = False) -> dict[str, Any]:
     # 1. Check if Docker is installed
     docker_path = Path("C:/Program Files/Docker/Docker/Docker Desktop.exe")
     if not docker_path.exists():
-        return {
-            "status": "error",
-            "message": "Docker Desktop not installed",
-            "install_url": "https://hub.docker.com/"
-        }
+        return {"status": "error", "message": "Docker Desktop not installed", "install_url": "https://hub.docker.com/"}
 
     result["checks"]["docker_installed"] = True
 
     # 2. Check daemon responsiveness with timeout (hang detection)
-    result["checks"]["daemon_responsiveness"] = await _check_daemon_health(
-        autofix=autofix, result=result
-    )
+    result["checks"]["daemon_responsiveness"] = await _check_daemon_health(autofix=autofix, result=result)
 
     if result["daemon_healthy"]:
         # 3. Get Docker version
@@ -90,11 +84,7 @@ async def docker_desktop_status(autofix: bool = False) -> dict[str, Any]:
     # Format output
     output = _format_status_report(result)
 
-    return {
-        "status": "success" if result["daemon_healthy"] else "error",
-        "message": output,
-        "data": result
-    }
+    return {"status": "success" if result["daemon_healthy"] else "error", "message": output, "data": result}
 
 
 async def _check_daemon_health(autofix: bool, result: dict) -> dict:
@@ -104,15 +94,14 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
     try:
         # Test with 5-second timeout
         process = await asyncio.create_subprocess_exec(
-            "docker", "version",
+            "docker",
+            "version",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
 
         try:
-            _stdout, _stderr = await asyncio.wait_for(
-                process.communicate(), timeout=5.0
-            )
+            _stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
 
             if process.returncode == 0:
                 result["daemon_healthy"] = True
@@ -132,12 +121,8 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
                         check_result["status"] = "recovered"
                         result["issues"].remove("Daemon hanging - not responding to commands")
                     else:
-                        result["issues"].append(
-                            "Daemon recovery failed - manual intervention needed"
-                        )
-                        result["recommendations"].append(
-                            "Run: .\\update-docker-desktop.ps1 -FullWipe"
-                        )
+                        result["issues"].append("Daemon recovery failed - manual intervention needed")
+                        result["recommendations"].append("Run: .\\update-docker-desktop.ps1 -FullWipe")
 
         except TimeoutError:
             # Command timed out = daemon is hanging
@@ -155,13 +140,9 @@ async def _check_daemon_health(autofix: bool, result: dict) -> dict:
                     check_result["status"] = "recovered"
                 else:
                     result["issues"].append("Daemon recovery failed after restart")
-                    result["recommendations"].append(
-                        "Use: docker_desktop_update with full_wipe=True"
-                    )
+                    result["recommendations"].append("Use: docker_desktop_update with full_wipe=True")
             else:
-                result["recommendations"].append(
-                    "Use: docker_daemon_recover to auto-fix hanging daemon"
-                )
+                result["recommendations"].append("Use: docker_daemon_recover to auto-fix hanging daemon")
 
             process.kill()
 
@@ -184,7 +165,10 @@ async def _attempt_daemon_recovery() -> bool:
         ]:
             try:
                 await asyncio.create_subprocess_exec(
-                    "taskkill", "/IM", proc_name, "/F",
+                    "taskkill",
+                    "/IM",
+                    proc_name,
+                    "/F",
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
@@ -209,15 +193,14 @@ async def _attempt_daemon_recovery() -> bool:
             for _attempt in range(5):
                 try:
                     process = await asyncio.create_subprocess_exec(
-                        "docker", "version",
+                        "docker",
+                        "version",
                         stdout=asyncio.subprocess.PIPE,
                         stderr=asyncio.subprocess.PIPE,
                     )
 
                     try:
-                        _stdout, _stderr = await asyncio.wait_for(
-                            process.communicate(), timeout=5.0
-                        )
+                        _stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
                         if process.returncode == 0:
                             return True
                     except TimeoutError:
@@ -240,7 +223,9 @@ async def _get_docker_version() -> dict:
     """Get Docker version."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "version", "--format={{.Server.Version}}",
+            "docker",
+            "version",
+            "--format={{.Server.Version}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -254,7 +239,8 @@ async def _get_recent_images(limit: int = 10) -> dict:
     """Get last N built images."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "images",
+            "docker",
+            "images",
             "--format={{.Repository}}:{{.Tag}}\t{{.Size}}\t{{.CreatedAt}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -267,11 +253,13 @@ async def _get_recent_images(limit: int = 10) -> dict:
             if line:
                 parts = line.split("\t")
                 if len(parts) >= 3:
-                    images.append({
-                        "name": parts[0],
-                        "size": parts[1],
-                        "created": parts[2],
-                    })
+                    images.append(
+                        {
+                            "name": parts[0],
+                            "size": parts[1],
+                            "created": parts[2],
+                        }
+                    )
 
         return {
             "count": len(images),
@@ -285,7 +273,9 @@ async def _get_recent_containers(limit: int = 10) -> dict:
     """Get last N containers (all states)."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "ps", "-a",
+            "docker",
+            "ps",
+            "-a",
             "--format={{.Names}}\t{{.Status}}\t{{.Ports}}\t{{.CreatedAt}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -298,12 +288,14 @@ async def _get_recent_containers(limit: int = 10) -> dict:
             if line:
                 parts = line.split("\t", 3)
                 if len(parts) >= 4:
-                    containers.append({
-                        "name": parts[0],
-                        "status": parts[1],
-                        "ports": parts[2],
-                        "created": parts[3],
-                    })
+                    containers.append(
+                        {
+                            "name": parts[0],
+                            "status": parts[1],
+                            "ports": parts[2],
+                            "created": parts[3],
+                        }
+                    )
 
         return {
             "count": len(containers),
@@ -318,7 +310,9 @@ async def _get_container_summary() -> dict:
     try:
         # Running containers
         process = await asyncio.create_subprocess_exec(
-            "docker", "ps", "-q",
+            "docker",
+            "ps",
+            "-q",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -327,7 +321,10 @@ async def _get_container_summary() -> dict:
 
         # All containers
         process = await asyncio.create_subprocess_exec(
-            "docker", "ps", "-a", "-q",
+            "docker",
+            "ps",
+            "-a",
+            "-q",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -349,7 +346,9 @@ async def _get_disk_usage() -> dict:
     """Get Docker disk usage breakdown."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "system", "df",
+            "docker",
+            "system",
+            "df",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -370,7 +369,9 @@ async def _get_resource_stats() -> dict:
     """Get resource stats for running containers."""
     try:
         process = await asyncio.create_subprocess_exec(
-            "docker", "stats", "--no-stream",
+            "docker",
+            "stats",
+            "--no-stream",
             "--format={{.Container}}\t{{.MemUsage}}\t{{.CPUPerc}}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -383,11 +384,13 @@ async def _get_resource_stats() -> dict:
             if line:
                 parts = line.split("\t")
                 if len(parts) >= 3:
-                    stats.append({
-                        "container": parts[0][:12],
-                        "memory": parts[1],
-                        "cpu": parts[2],
-                    })
+                    stats.append(
+                        {
+                            "container": parts[0][:12],
+                            "memory": parts[1],
+                            "cpu": parts[2],
+                        }
+                    )
 
         return {"stats": stats}
     except Exception as e:
@@ -441,9 +444,7 @@ def _add_recommendations(result: dict) -> None:
     disk = result["checks"].get("disk_usage", {})
     if disk.get("usage"):
         # Note: could parse to check for specific thresholds
-        result["recommendations"].append(
-            "Run periodic cleanup: docker system prune -a"
-        )
+        result["recommendations"].append("Run periodic cleanup: docker system prune -a")
 
 
 def _format_status_report(result: dict) -> str:
@@ -477,18 +478,14 @@ def _format_status_report(result: dict) -> str:
         if "count" in images_info:
             lines.append(f"\nLast 10 Images ({images_info['count']} total):")
             for img in images_info.get("images", []):
-                lines.append(
-                    f"  {img['name']:<40} {img['size']:<15} {img['created']}"
-                )
+                lines.append(f"  {img['name']:<40} {img['size']:<15} {img['created']}")
 
         # Containers
         containers_info = checks.get("recent_containers", {})
         if "count" in containers_info:
             lines.append(f"\nLast 10 Containers ({containers_info['count']} total):")
             for cont in containers_info.get("containers", []):
-                lines.append(
-                    f"  {cont['name']:<20} {cont['status']:<25} {cont['ports']:<30}"
-                )
+                lines.append(f"  {cont['name']:<20} {cont['status']:<25} {cont['ports']:<30}")
 
         # Summary
         summary = checks.get("container_summary", {})
@@ -525,6 +522,6 @@ def _format_status_report(result: dict) -> str:
         for rec in result["recommendations"]:
             lines.append(f"  - {rec}")
 
-    lines.append("\n" + "="*50)
+    lines.append("\n" + "=" * 50)
 
     return "\n".join(lines)

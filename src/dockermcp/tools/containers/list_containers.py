@@ -4,6 +4,7 @@ Container listing functionality for Docker MCP.
 This module provides tools for listing Docker containers with various filtering options.
 It follows FastMCP 2.12+ standards for tool registration.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -18,6 +19,7 @@ from dockermcp.mcp_instance import mcp
 
 class ContainerInfo(BaseModel):
     """Information about a Docker container."""
+
     id: str = Field(..., description="Container ID")
     name: str = Field(..., description="Container name")
     status: str = Field(..., description="Container status")
@@ -35,21 +37,18 @@ class ContainerInfo(BaseModel):
                 "image": "alpine:latest",
                 "created": "2023-01-01T00:00:00Z",
                 "state": "running",
-                "labels": {"com.example.key": "value"}
+                "labels": {"com.example.key": "value"},
             }
         }
     )
 
+
 class ListContainersParams(BaseModel):
     """Parameters for listing Docker containers."""
-    all_states: bool = Field(
-        True,
-        description="If True, include stopped containers"
-    )
-    filters: dict[str, str] | None = Field(
-        None,
-        description="Dictionary of filter key-value pairs"
-    )
+
+    all_states: bool = Field(True, description="If True, include stopped containers")
+    filters: dict[str, str] | None = Field(None, description="Dictionary of filter key-value pairs")
+
 
 @mcp.tool
 @check_docker_available
@@ -90,10 +89,7 @@ async def list_containers(params: ListContainersParams) -> dict[str, Any]:
             filters = None
 
         # Get containers from Docker
-        containers = client.containers.list(
-            all=params.all_states,
-            filters=filters
-        )
+        containers = client.containers.list(all=params.all_states, filters=filters)
 
         # Process containers into response
         container_list = []
@@ -105,31 +101,19 @@ async def list_containers(params: ListContainersParams) -> dict[str, Any]:
                     name=container.name,
                     status=container.status,
                     image=container.image.tags[0] if container.image.tags else container.image.id,
-                    created=container_inspect['Created'],
-                    state=container_inspect['State']['Status'],
-                    labels=container_inspect.get('Config', {}).get('Labels', {})
+                    created=container_inspect["Created"],
+                    state=container_inspect["State"]["Status"],
+                    labels=container_inspect.get("Config", {}).get("Labels", {}),
                 ).model_dump()
             )
 
-        return {
-            "status": "success",
-            "message": f"Found {len(container_list)} containers",
-            "containers": container_list
-        }
+        return {"status": "success", "message": f"Found {len(container_list)} containers", "containers": container_list}
 
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "message": "Failed to list containers",
-            "error": error_msg
-        }
+        return {"status": "error", "message": "Failed to list containers", "error": error_msg}
     except Exception as e:
         error_msg = f"Unexpected error listing containers: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "message": "Failed to list containers",
-            "error": error_msg
-        }
+        return {"status": "error", "message": "Failed to list containers", "error": error_msg}

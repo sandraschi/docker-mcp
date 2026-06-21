@@ -4,6 +4,7 @@ Process and subprocess utilities for Docker MCP.
 This module provides utilities for running subprocesses with proper error handling,
 output capture, and JSON processing.
 """
+
 import logging
 import os
 import subprocess
@@ -16,14 +17,23 @@ logger = logging.getLogger(__name__)
 # Type variable for command output
 try:
     from typing import Literal
-    OutputType = Literal['text', 'json', 'lines']
+
+    OutputType = Literal["text", "json", "lines"]
 except ImportError:
     OutputType = str  # Fallback for Python <3.8
 
+
 class ProcessError(subprocess.SubprocessError):
     """Custom exception for process-related errors."""
-    def __init__(self, message: str, cmd: list[str], returncode: int | None = None,
-                 stdout: str | None = None, stderr: str | None = None):
+
+    def __init__(
+        self,
+        message: str,
+        cmd: list[str],
+        returncode: int | None = None,
+        stdout: str | None = None,
+        stderr: str | None = None,
+    ):
         super().__init__(returncode, cmd, stdout, stderr)
         self.message = message
         self.cmd = cmd
@@ -32,19 +42,22 @@ class ProcessError(subprocess.SubprocessError):
         self.stderr = stderr
 
     def __str__(self) -> str:
-        return f"{self.message}\nCommand: {' '.join(self.cmd)}\nExit code: {self.returncode}" + \
-               (f"\nStdout: {self.stdout}" if self.stdout else "") + \
-               (f"\nStderr: {self.stderr}" if self.stderr else "")
+        return (
+            f"{self.message}\nCommand: {' '.join(self.cmd)}\nExit code: {self.returncode}"
+            + (f"\nStdout: {self.stdout}" if self.stdout else "")
+            + (f"\nStderr: {self.stderr}" if self.stderr else "")
+        )
+
 
 def run_command(
     cmd: str | list[str],
     capture_output: bool = True,
     check: bool = True,
-    output_type: OutputType = 'text',
+    output_type: OutputType = "text",
     cwd: str | Path | None = None,
     env: dict[str, str] | None = None,
     timeout: float | None = None,
-    **kwargs
+    **kwargs,
 ) -> str | dict | list | tuple[int, str, str]:
     """
     Run a command with improved error handling and output processing.
@@ -71,10 +84,10 @@ def run_command(
     """
     # Convert command to list if it's a string
     if isinstance(cmd, str):
-        cmd = [cmd] if ' ' not in cmd else cmd.split()
+        cmd = [cmd] if " " not in cmd else cmd.split()
 
     # Ensure we're capturing output for non-text output types
-    if output_type in ('json', 'lines') and not capture_output:
+    if output_type in ("json", "lines") and not capture_output:
         capture_output = True
 
     # Prepare environment
@@ -95,7 +108,7 @@ def run_command(
             text=True,
             shell=False,
             timeout=timeout,
-            **kwargs
+            **kwargs,
         )
 
         # Log any stderr output
@@ -109,20 +122,17 @@ def run_command(
                 cmd=cmd,
                 returncode=result.returncode,
                 stdout=result.stdout,
-                stderr=result.stderr
+                stderr=result.stderr,
             )
 
         # Return appropriate output based on capture_output and output_type
         if not capture_output:
             return result.returncode, "", ""
 
-        if output_type == 'json':
+        if output_type == "json":
             try:
                 return safe_json_loads(
-                    result.stdout,
-                    default={},
-                    context=f"command output from {' '.join(cmd)}",
-                    strict=check
+                    result.stdout, default={}, context=f"command output from {' '.join(cmd)}", strict=check
                 )
             except JSONValidationError as e:
                 logger.error(f"Invalid JSON output: {e}")
@@ -132,11 +142,11 @@ def run_command(
                         cmd=cmd,
                         returncode=result.returncode,
                         stdout=result.stdout,
-                        stderr=result.stderr
+                        stderr=result.stderr,
                     ) from e
                 return {}
 
-        elif output_type == 'lines':
+        elif output_type == "lines":
             return [line for line in result.stdout.splitlines() if line.strip()]
 
         return result.stdout.strip()
@@ -152,25 +162,22 @@ def run_command(
                 cmd=cmd,
                 returncode=e.returncode,
                 stdout=e.stdout,
-                stderr=e.stderr
+                stderr=e.stderr,
             ) from e
         return e.returncode, e.stdout or "", e.stderr or ""
     except Exception as e:
         logger.error(f"Unexpected error running command: {e}", exc_info=True)
         if check:
-            raise ProcessError(
-                f"Unexpected error: {e!s}",
-                cmd=cmd,
-                returncode=getattr(e, 'returncode', -1)
-            ) from e
+            raise ProcessError(f"Unexpected error: {e!s}", cmd=cmd, returncode=getattr(e, "returncode", -1)) from e
         raise
+
 
 def run_docker_command(
     subcommand: str,
     args: list[str] | None = None,
-    output_type: OutputType | None = 'json',
+    output_type: OutputType | None = "json",
     docker_host: str | None = None,
-    **kwargs
+    **kwargs,
 ) -> str | dict | list | bytes:
     """
     Run a docker command with improved error handling and output processing.
@@ -192,38 +199,36 @@ def run_docker_command(
         args = []
 
     # Build the base command
-    cmd = ['docker']
+    cmd = ["docker"]
 
     # Add Docker host if specified
     if docker_host:
-        cmd.extend(['-H', docker_host])
+        cmd.extend(["-H", docker_host])
 
     # Add subcommand and arguments
     cmd.append(subcommand)
     cmd.extend(args)
 
     # Configure JSON output for commands that support it
-    if output_type == 'json' and '--format' not in args and subcommand in [
-        'ps', 'images', 'volume', 'network', 'system', 'container', 'image', 'node', 'secret', 'service'
-    ]:
-        cmd.extend(['--format', '{{json .}}'])
+    if (
+        output_type == "json"
+        and "--format" not in args
+        and subcommand
+        in ["ps", "images", "volume", "network", "system", "container", "image", "node", "secret", "service"]
+    ):
+        cmd.extend(["--format", "{{json .}}"])
 
     # Set default timeout if not specified
-    if 'timeout' not in kwargs:
-        kwargs['timeout'] = 300  # 5 minute default timeout for Docker commands
+    if "timeout" not in kwargs:
+        kwargs["timeout"] = 300  # 5 minute default timeout for Docker commands
 
     try:
         # Run the command with the appropriate output type
-        result = run_command(
-            cmd,
-            output_type=output_type,
-            check=True,
-            **kwargs
-        )
+        result = run_command(cmd, output_type=output_type, check=True, **kwargs)
 
         # Handle empty results for common list commands
-        if not result and output_type == 'json':
-            if subcommand in ['ps', 'images', 'volume', 'network', 'container', 'image']:
+        if not result and output_type == "json":
+            if subcommand in ["ps", "images", "volume", "network", "container", "image"]:
                 return []
             return {}
 
@@ -232,12 +237,11 @@ def run_docker_command(
     except ProcessError as e:
         # Add more context to the error message
         if "permission denied" in str(e).lower():
-            e.message = "Permission denied when trying to connect to Docker daemon. " \
-                       "Make sure the Docker daemon is running and you have the necessary permissions."
+            e.message = (
+                "Permission denied when trying to connect to Docker daemon. "
+                "Make sure the Docker daemon is running and you have the necessary permissions."
+            )
         raise
     except Exception as e:
         logger.error(f"Unexpected error running docker command: {e}", exc_info=True)
-        raise ProcessError(
-            f"Failed to execute docker {subcommand}: {e!s}",
-            cmd=cmd
-        ) from e
+        raise ProcessError(f"Failed to execute docker {subcommand}: {e!s}", cmd=cmd) from e

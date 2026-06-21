@@ -4,6 +4,7 @@ JSON-RPC request handler for the Docker MCP service.
 This module provides a handler for processing JSON-RPC 2.0 messages
 and dispatching them to the appropriate service methods.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -17,7 +18,8 @@ from pydantic import ValidationError
 from .jsonrpc import JSONRPCRequest, JSONRPCResponse
 
 # Type variable for the handler function
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class RPCHandler:
     """Handler for JSON-RPC 2.0 messages."""
@@ -47,15 +49,16 @@ class RPCHandler:
         Args:
             name: Optional name for the method (defaults to function name)
         """
+
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             method_name = name or func.__name__
             self.register_method(method_name, func)
             return func
+
         return decorator
 
     async def handle_message(
-        self,
-        message: str | bytes | dict[str, Any] | list[dict[str, Any]]
+        self, message: str | bytes | dict[str, Any] | list[dict[str, Any]]
     ) -> dict[str, Any] | list[dict[str, Any]]:
         """Handle an incoming JSON-RPC message.
 
@@ -98,10 +101,7 @@ class RPCHandler:
             self.logger.exception("Error handling message")
             return JSONRPCResponse.internal_error(e).model_dump(exclude_none=True)
 
-    async def _handle_single_request(
-        self,
-        request_data: dict[str, Any]
-    ) -> JSONRPCResponse | None:
+    async def _handle_single_request(self, request_data: dict[str, Any]) -> JSONRPCResponse | None:
         """Handle a single JSON-RPC request.
 
         Args:
@@ -118,11 +118,7 @@ class RPCHandler:
             return JSONRPCResponse.invalid_request(str(e))
 
         # Log the request
-        self.logger.debug(
-            "Processing request: method=%s, id=%s",
-            request.method,
-            request.id
-        )
+        self.logger.debug("Processing request: method=%s, id=%s", request.method, request.id)
 
         # Handle notifications (no response needed)
         if request.is_notification():
@@ -133,9 +129,7 @@ class RPCHandler:
         return await self._execute_method(request, request.id)
 
     async def _execute_method(
-        self,
-        request: JSONRPCRequest[Any],
-        request_id: str | int | None = None
+        self, request: JSONRPCRequest[Any], request_id: str | int | None = None
     ) -> JSONRPCResponse:
         """Execute a method and return the response.
 
@@ -167,10 +161,7 @@ class RPCHandler:
 
         except ValidationError as e:
             self.logger.error("Validation error in %s: %s", request.method, e)
-            return JSONRPCResponse.invalid_params(
-                data={"errors": e.errors()},
-                id=request_id
-            )
+            return JSONRPCResponse.invalid_params(data={"errors": e.errors()}, id=request_id)
         except Exception as e:
             self.logger.exception("Error executing method %s", request.method)
             return JSONRPCResponse.internal_error(e, request_id)
@@ -188,9 +179,10 @@ handler = RPCHandler()
 # Decorator for registering methods
 method = handler.method
 
+
 # Main entry point for handling messages
 async def handle_message(
-    message: str | bytes | dict[str, Any] | list[dict[str, Any]]
+    message: str | bytes | dict[str, Any] | list[dict[str, Any]],
 ) -> dict[str, Any] | list[dict[str, Any]]:
     """Handle a JSON-RPC message.
 

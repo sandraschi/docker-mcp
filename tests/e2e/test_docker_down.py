@@ -21,11 +21,9 @@ from dockermcp.tools.docker_reconnect import docker_reconnect
 from dockermcp.tools.docker_status import docker_status
 
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
+
 
 async def test_docker_status():
     """Test the docker_status tool when Docker is down."""
@@ -37,11 +35,12 @@ async def test_docker_status():
 
     # Verify the status shows Docker as not available
     assert isinstance(status, dict), "docker_status should return a dictionary"
-    assert 'docker_available' in status, "Status should include docker_available flag"
-    assert not status['docker_available'], "docker_available should be False when Docker is down"
-    assert 'error' in status, "Status should include error information"
+    assert "docker_available" in status, "Status should include docker_available flag"
+    assert not status["docker_available"], "docker_available should be False when Docker is down"
+    assert "error" in status, "Status should include error information"
 
     logger.info("✅ docker_status test passed")
+
 
 async def test_list_containers():
     """Test list_containers when Docker is down."""
@@ -62,13 +61,14 @@ async def test_list_containers():
 
     logger.info("✅ list_containers test passed")
 
+
 async def test_docker_reconnect():
     """Test the docker_reconnect tool when Docker is down."""
     logger.info("Testing docker_reconnect tool...")
 
     # First verify Docker is not available
     initial_status = get_docker_status()
-    assert not initial_status['docker_available'], "Docker should not be available initially"
+    assert not initial_status["docker_available"], "Docker should not be available initially"
 
     # Try to reconnect
     result = await docker_reconnect()
@@ -79,12 +79,13 @@ async def test_docker_reconnect():
 
     # Should indicate reconnection failed
     assert isinstance(result, dict), "docker_reconnect should return a dictionary"
-    assert 'success' in result, "Result should include success flag"
+    assert "success" in result, "Result should include success flag"
 
     # Reconnection should fail since we haven't started Docker
-    assert not result.get('success'), "Reconnection should fail when Docker is not running"
+    assert not result.get("success"), "Reconnection should fail when Docker is not running"
 
     logger.info("✅ docker_reconnect test passed")
+
 
 async def run_tests():
     """Run all Docker down tests."""
@@ -104,6 +105,7 @@ async def run_tests():
         logger.error(f"❌ Unexpected error: {e!s}", exc_info=True)
         return False
 
+
 if __name__ == "__main__":
     # Print initial Docker status
     status = get_docker_status()
@@ -112,7 +114,7 @@ if __name__ == "__main__":
     print(f"Error: {status.get('error', 'None')}")
 
     # Ensure Docker is not running before tests
-    if status.get('docker_available', False):
+    if status.get("docker_available", False):
         print("\n❌ ERROR: Docker is running. Please stop Docker Desktop before running these tests.")
         sys.exit(1)
 

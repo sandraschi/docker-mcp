@@ -47,20 +47,12 @@ class ContainerManager:
                 "stdout": result.stdout.strip(),
                 "stderr": result.stderr.strip(),
                 "returncode": result.returncode,
-                "command": " ".join(cmd)
+                "command": " ".join(cmd),
             }
         except subprocess.TimeoutExpired:
-            return {
-                "success": False,
-                "error": f"Command timed out after {timeout} seconds",
-                "command": " ".join(cmd)
-            }
+            return {"success": False, "error": f"Command timed out after {timeout} seconds", "command": " ".join(cmd)}
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Command execution failed: {e!s}",
-                "command": " ".join(cmd)
-            }
+            return {"success": False, "error": f"Command execution failed: {e!s}", "command": " ".join(cmd)}
 
     def list_containers(self, all_states: bool = True) -> dict[str, Any]:
         """
@@ -84,7 +76,7 @@ class ContainerManager:
                 "success": False,
                 "error": result.get("error", result.get("stderr", "Unknown error")),
                 "containers": [],
-                "summary": {"total": 0, "running": 0, "stopped": 0, "error": 0}
+                "summary": {"total": 0, "running": 0, "stopped": 0, "error": 0},
             }
 
         # Parse JSON output
@@ -94,7 +86,7 @@ class ContainerManager:
         error_count = 0
 
         if result["stdout"]:
-            for line in result["stdout"].split('\n'):
+            for line in result["stdout"].split("\n"):
                 if line.strip():
                     try:
                         container_data = json.loads(line)
@@ -108,7 +100,7 @@ class ContainerManager:
                             "state": container_data.get("State", ""),
                             "ports": container_data.get("Ports", ""),
                             "created": container_data.get("CreatedAt", ""),
-                            "size": container_data.get("Size", "")
+                            "size": container_data.get("Size", ""),
                         }
 
                         # Count by status
@@ -133,9 +125,9 @@ class ContainerManager:
                 "total": len(containers),
                 "running": running_count,
                 "stopped": stopped_count,
-                "error": error_count
+                "error": error_count,
             },
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def get_container_info(self, container_name: str) -> dict[str, Any]:
@@ -154,16 +146,13 @@ class ContainerManager:
             return {
                 "success": False,
                 "error": f"Container '{container_name}' not found or inspect failed",
-                "details": result.get("stderr", "")
+                "details": result.get("stderr", ""),
             }
 
         try:
             inspect_data = json.loads(result["stdout"])
             if not inspect_data:
-                return {
-                    "success": False,
-                    "error": f"No data returned for container '{container_name}'"
-                }
+                return {"success": False, "error": f"No data returned for container '{container_name}'"}
 
             container_data = inspect_data[0]
             config = container_data.get("Config", {})
@@ -189,20 +178,20 @@ class ContainerManager:
                 "mounts": container_data.get("Mounts", []),
                 "labels": config.get("Labels", {}),
                 "command": config.get("Cmd", []),
-                "entrypoint": config.get("Entrypoint", [])
+                "entrypoint": config.get("Entrypoint", []),
             }
 
             # Add restart policy
             restart_policy = container_data.get("HostConfig", {}).get("RestartPolicy", {})
             info["restart_policy"] = {
                 "name": restart_policy.get("Name", "no"),
-                "max_retry_count": restart_policy.get("MaximumRetryCount", 0)
+                "max_retry_count": restart_policy.get("MaximumRetryCount", 0),
             }
 
             # Calculate uptime if running
             if info["running"] and info["started"]:
                 try:
-                    started_time = datetime.fromisoformat(info["started"].replace('Z', '+00:00'))
+                    started_time = datetime.fromisoformat(info["started"].replace("Z", "+00:00"))
                     uptime_seconds = (datetime.now(UTC) - started_time).total_seconds()
                     info["uptime_seconds"] = int(uptime_seconds)
                 except Exception:
@@ -211,10 +200,7 @@ class ContainerManager:
             return info
 
         except json.JSONDecodeError as e:
-            return {
-                "success": False,
-                "error": f"Failed to parse container inspect data: {e!s}"
-            }
+            return {"success": False, "error": f"Failed to parse container inspect data: {e!s}"}
 
     def create_container(
         self,
@@ -223,7 +209,7 @@ class ContainerManager:
         ports: dict[str, str] | None = None,
         environment: dict[str, str] | None = None,
         volumes: dict[str, str] | None = None,
-        network: str | None = None
+        network: str | None = None,
     ) -> dict[str, Any]:
         """
         Create a new Docker container with intelligent defaults.
@@ -272,13 +258,13 @@ class ContainerManager:
                 "container_id": container_id,
                 "name": name,
                 "image": image,
-                "message": f"Container '{name}' created successfully"
+                "message": f"Container '{name}' created successfully",
             }
         else:
             return {
                 "success": False,
                 "error": f"Failed to create container '{name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
     def start_container(self, container_name: str) -> dict[str, Any]:
@@ -297,13 +283,13 @@ class ContainerManager:
             return {
                 "success": True,
                 "container": container_name,
-                "message": f"Container '{container_name}' started successfully"
+                "message": f"Container '{container_name}' started successfully",
             }
         else:
             return {
                 "success": False,
                 "error": f"Failed to start container '{container_name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
     def stop_container(self, container_name: str, timeout: int = 10) -> dict[str, Any]:
@@ -328,13 +314,13 @@ class ContainerManager:
             return {
                 "success": True,
                 "container": container_name,
-                "message": f"Container '{container_name}' stopped successfully"
+                "message": f"Container '{container_name}' stopped successfully",
             }
         else:
             return {
                 "success": False,
                 "error": f"Failed to stop container '{container_name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
     def restart_container(self, container_name: str) -> dict[str, Any]:
@@ -353,13 +339,13 @@ class ContainerManager:
             return {
                 "success": True,
                 "container": container_name,
-                "message": f"Container '{container_name}' restarted successfully"
+                "message": f"Container '{container_name}' restarted successfully",
             }
         else:
             return {
                 "success": False,
                 "error": f"Failed to restart container '{container_name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
     def remove_container(self, container_name: str, force: bool = False) -> dict[str, Any]:
@@ -384,21 +370,17 @@ class ContainerManager:
             return {
                 "success": True,
                 "container": container_name,
-                "message": f"Container '{container_name}' removed successfully"
+                "message": f"Container '{container_name}' removed successfully",
             }
         else:
             return {
                 "success": False,
                 "error": f"Failed to remove container '{container_name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
     def get_container_logs(
-        self,
-        container_name: str,
-        lines: int = 100,
-        follow: bool = False,
-        timestamps: bool = True
+        self, container_name: str, lines: int = 100, follow: bool = False, timestamps: bool = True
     ) -> dict[str, Any]:
         """
         Get container logs with formatting and error highlighting.
@@ -432,11 +414,11 @@ class ContainerManager:
             return {
                 "success": False,
                 "error": f"Failed to get logs for container '{container_name}'",
-                "details": result.get("stderr", "Unknown error")
+                "details": result.get("stderr", "Unknown error"),
             }
 
         # Process logs
-        log_lines = result["stdout"].split('\n') if result["stdout"] else []
+        log_lines = result["stdout"].split("\n") if result["stdout"] else []
 
         # Analyze logs for errors and warnings
         error_count = 0
@@ -445,11 +427,11 @@ class ContainerManager:
 
         for line in log_lines[-50:]:  # Check last 50 lines for errors
             line_lower = line.lower()
-            if any(keyword in line_lower for keyword in ['error', 'exception', 'failed', 'fatal']):
+            if any(keyword in line_lower for keyword in ["error", "exception", "failed", "fatal"]):
                 error_count += 1
                 if len(recent_errors) < 10:  # Limit recent errors
                     recent_errors.append(line)
-            elif any(keyword in line_lower for keyword in ['warning', 'warn']):
+            elif any(keyword in line_lower for keyword in ["warning", "warn"]):
                 warning_count += 1
 
         return {
@@ -461,7 +443,7 @@ class ContainerManager:
                 "error_count": error_count,
                 "warning_count": warning_count,
                 "recent_errors": recent_errors,
-                "has_recent_activity": len([_l for _l in log_lines[-10:] if _l.strip()]) > 0
+                "has_recent_activity": len([_l for _l in log_lines[-10:] if _l.strip()]) > 0,
             },
-            "timestamp": datetime.now(UTC).isoformat()
+            "timestamp": datetime.now(UTC).isoformat(),
         }

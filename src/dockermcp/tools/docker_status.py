@@ -4,6 +4,7 @@ Docker Status Tool - Provides Docker daemon status information.
 This module provides functionality to check the status of the Docker daemon
 and related services.
 """
+
 from typing import Any
 
 from dockermcp.docker_context import get_docker_status
@@ -19,6 +20,7 @@ async def get_docker_status_tool() -> dict[str, Any]:
         Dictionary containing Docker status information
     """
     return get_docker_status()
+
 
 def register_tool():
     """Register the Docker status tool with the MCP server.

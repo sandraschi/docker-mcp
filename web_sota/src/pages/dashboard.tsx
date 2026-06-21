@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { API_BASE } from "@/lib/api";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Activity, Box, Cpu, HardDrive, Loader2, AlertCircle } from "lucide-react";
 import { Link } from "react-router-dom";
@@ -59,7 +60,7 @@ export function Dashboard() {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const res = await fetch("/api/dashboard");
+        const res = await fetch(`${API_BASE}/api/dashboard`);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
         setData(json);

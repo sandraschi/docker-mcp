@@ -22,11 +22,7 @@ def build_containers_card(result: dict) -> Card:
                 ]
             )
         )
-    running = sum(
-        1
-        for c in containers
-        if str(c.get("state", c.get("status", ""))).lower() == "running"
-    )
+    running = sum(1 for c in containers if str(c.get("state", c.get("status", ""))).lower() == "running")
     return Card(
         children=rows or [Metric(label="Containers", value="0")],
         title="Docker Containers",

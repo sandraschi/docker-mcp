@@ -8,6 +8,7 @@ This script demonstrates advanced workflow management with DockerMCP, including:
 - Error handling and rollback
 - Parallel operations
 """
+
 import asyncio
 from typing import Any
 
@@ -17,17 +18,14 @@ from fastmcp import MCPClient
 client = MCPClient("http://localhost:8000")
 client.api_key = "your-api-key-here"
 
+
 class AdvancedWorkflow:
     """Advanced workflow management with rollback support."""
 
     def __init__(self, client: MCPClient):
         self.client = client
         self.workflow_id: str | None = None
-        self.resources: dict[str, list[dict[str, Any]]] = {
-            'containers': [],
-            'networks': [],
-            'volumes': []
-        }
+        self.resources: dict[str, list[dict[str, Any]]] = {"containers": [], "networks": [], "volumes": []}
 
     async def create_network(self, name: str, driver: str = "bridge") -> dict[str, Any]:
         """Create a Docker network and track it for cleanup."""
@@ -35,10 +33,7 @@ class AdvancedWorkflow:
         response = await self.client.create_network(name=name, driver=driver)
 
         if response.get("status") == "success":
-            self.resources['networks'].append({
-                'id': response['network_id'],
-                'name': name
-            })
+            self.resources["networks"].append({"id": response["network_id"], "name": name})
             print(f"Network '{name}' created successfully")
         else:
             print(f"Failed to create network '{name}': {response.get('error')}")
@@ -51,10 +46,7 @@ class AdvancedWorkflow:
         response = await self.client.create_volume(name=name, driver=driver)
 
         if response.get("status") == "success":
-            self.resources['volumes'].append({
-                'name': response['name'],
-                'driver': driver
-            })
+            self.resources["volumes"].append({"name": response["name"], "driver": driver})
             print(f"Volume '{name}' created successfully")
         else:
             print(f"Failed to create volume '{name}': {response.get('error')}")
@@ -63,17 +55,14 @@ class AdvancedWorkflow:
 
     async def create_container(self, config: dict[str, Any]) -> dict[str, Any]:
         """Create a Docker container and track it for cleanup."""
-        name = config.get('name', 'unnamed')
+        name = config.get("name", "unnamed")
         print(f"Creating container '{name}'...")
 
         response = await self.client.create_container(**config)
 
         if response.get("status") == "success":
-            container_id = response['container_id']
-            self.resources['containers'].append({
-                'id': container_id,
-                'name': name
-            })
+            container_id = response["container_id"]
+            self.resources["containers"].append({"id": container_id, "name": name})
             print(f"Container '{name}' created with ID: {container_id}")
 
             # Start the container
@@ -87,35 +76,26 @@ class AdvancedWorkflow:
 
         return response
 
-    async def wait_for_service(
-        self,
-        container_name: str,
-        check_interval: int = 2,
-        max_attempts: int = 30
-    ) -> bool:
+    async def wait_for_service(self, container_name: str, check_interval: int = 2, max_attempts: int = 30) -> bool:
         """Wait for a service to become healthy."""
         print(f"Waiting for service '{container_name}' to become healthy...")
 
         for attempt in range(max_attempts):
             # Check container status
             containers = await self.client.list_containers(all=True)
-            container = next(
-                (c for c in containers.get('containers', [])
-                 if c.get('name') == container_name),
-                None
-            )
+            container = next((c for c in containers.get("containers", []) if c.get("name") == container_name), None)
 
             if not container:
                 print(f"Container '{container_name}' not found")
                 return False
 
             # Check health status
-            health = container.get('health', {}).get('status', 'unknown').lower()
+            health = container.get("health", {}).get("status", "unknown").lower()
 
-            if health == 'healthy':
+            if health == "healthy":
                 print(f"Service '{container_name}' is healthy")
                 return True
-            elif health == 'unhealthy':
+            elif health == "unhealthy":
                 print(f"Service '{container_name}' is unhealthy")
                 return False
 
@@ -142,20 +122,16 @@ class AdvancedWorkflow:
             db_config = {
                 "name": "app-db",
                 "image": "postgres:13-alpine",
-                "environment": {
-                    "POSTGRES_PASSWORD": "example",
-                    "POSTGRES_DB": "mydb",
-                    "POSTGRES_USER": "user"
-                },
+                "environment": {"POSTGRES_PASSWORD": "example", "POSTGRES_DB": "mydb", "POSTGRES_USER": "user"},
                 "volumes": ["db-data:/var/lib/postgresql/data"],
                 "networks": ["app-network"],
                 "healthcheck": {
                     "test": ["CMD-SHELL", "pg_isready -U user -d mydb"],
                     "interval": 5000000000,  # 5 seconds
-                    "timeout": 500000000,     # 0.5 seconds
+                    "timeout": 500000000,  # 0.5 seconds
                     "retries": 3,
-                    "start_period": 10000000000  # 10 seconds
-                }
+                    "start_period": 10000000000,  # 10 seconds
+                },
             }
 
             await self.create_container(db_config)
@@ -173,10 +149,10 @@ class AdvancedWorkflow:
                 "healthcheck": {
                     "test": ["CMD", "redis-cli", "ping"],
                     "interval": 5000000000,  # 5 seconds
-                    "timeout": 500000000,     # 0.5 seconds
+                    "timeout": 500000000,  # 0.5 seconds
                     "retries": 3,
-                    "start_period": 5000000000  # 5 seconds
-                }
+                    "start_period": 5000000000,  # 5 seconds
+                },
             }
 
             await self.create_container(cache_config)
@@ -195,7 +171,7 @@ class AdvancedWorkflow:
                         "DB_NAME": "mydb",
                         "DB_USER": "user",
                         "DB_PASSWORD": "example",
-                        "REDIS_HOST": "app-cache"
+                        "REDIS_HOST": "app-cache",
                     },
                     "ports": {"3000": "3000"},
                     "networks": ["app-network"],
@@ -203,10 +179,10 @@ class AdvancedWorkflow:
                     "healthcheck": {
                         "test": ["CMD", "curl", "-f", "http://localhost:3000/health"],
                         "interval": 10000000000,  # 10 seconds
-                        "timeout": 500000000,      # 0.5 seconds
+                        "timeout": 500000000,  # 0.5 seconds
                         "retries": 3,
-                        "start_period": 30000000000  # 30 seconds
-                    }
+                        "start_period": 30000000000,  # 30 seconds
+                    },
                 },
                 {
                     "name": "app-frontend",
@@ -214,10 +190,8 @@ class AdvancedWorkflow:
                     "ports": {"80": "8080"},
                     "networks": ["app-network"],
                     "depends_on": ["app-backend"],
-                    "environment": {
-                        "API_URL": "http://app-backend:3000"
-                    }
-                }
+                    "environment": {"API_URL": "http://app-backend:3000"},
+                },
             ]
 
             # Deploy services in parallel
@@ -247,27 +221,27 @@ class AdvancedWorkflow:
         print("\n=== Starting Rollback ===")
 
         # Stop and remove containers
-        for container in self.resources['containers']:
+        for container in self.resources["containers"]:
             print(f"Stopping container {container['name']} ({container['id']})")
             try:
-                await self.client.stop_container(container['id'])
-                await self.client.remove_container(container['id'])
+                await self.client.stop_container(container["id"])
+                await self.client.remove_container(container["id"])
             except Exception as e:
                 print(f"  Error removing container {container['name']}: {e!s}")
 
         # Remove networks
-        for network in self.resources['networks']:
+        for network in self.resources["networks"]:
             print(f"Removing network {network['name']} ({network['id']})")
             try:
-                await self.client.remove_network(network['id'])
+                await self.client.remove_network(network["id"])
             except Exception as e:
                 print(f"  Error removing network {network['name']}: {e!s}")
 
         # Remove volumes
-        for volume in self.resources['volumes']:
+        for volume in self.resources["volumes"]:
             print(f"Removing volume {volume['name']}")
             try:
-                await self.client.remove_volume(volume['name'])
+                await self.client.remove_volume(volume["name"])
             except Exception as e:
                 print(f"  Error removing volume {volume['name']}: {e!s}")
 
@@ -277,6 +251,7 @@ class AdvancedWorkflow:
         """Clean up all resources."""
         print("\n=== Cleaning Up ===")
         await self.rollback()
+
 
 async def main() -> None:
     """Run the advanced workflow example."""
@@ -298,6 +273,7 @@ async def main() -> None:
 
     finally:
         await workflow.cleanup()
+
 
 if __name__ == "__main__":
     asyncio.run(main())

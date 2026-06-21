@@ -2,12 +2,14 @@
 """
 Test script to verify dockermcp server starts properly after FastMCP 2.12 fixes.
 """
+
 import sys
 import traceback
 from pathlib import Path
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
+
 
 def test_imports():
     """Test that all imports work correctly."""
@@ -45,17 +47,19 @@ def test_imports():
         traceback.print_exc()
         return False
 
+
 def test_tool_discovery():
     """Test that tool discovery works."""
     print("\n🔧 Testing tool discovery...")
 
     try:
         from dockermcp.tools import get_tools
+
         tools = get_tools()
         print(f"  ✓ Found {len(tools)} tools")
 
         # Check if we have some basic tools
-        tool_names = [getattr(tool, 'name', str(tool)) for tool in tools]
+        tool_names = [getattr(tool, "name", str(tool)) for tool in tools]
         print(f"  ✓ Tool names: {tool_names[:5]}{'...' if len(tool_names) > 5 else ''}")
 
         return True
@@ -65,12 +69,14 @@ def test_tool_discovery():
         traceback.print_exc()
         return False
 
+
 def test_server_creation():
     """Test that we can create the MCP server."""
     print("\n🔧 Testing server creation...")
 
     try:
         from dockermcp.server import create_server
+
         server = create_server()
         print("  ✓ Server created successfully")
         return True
@@ -80,16 +86,13 @@ def test_server_creation():
         traceback.print_exc()
         return False
 
+
 def main():
     """Run all tests."""
     print("🚀 Docker MCP FastMCP 2.12 Compatibility Test")
     print("=" * 50)
 
-    tests = [
-        test_imports,
-        test_tool_discovery,
-        test_server_creation
-    ]
+    tests = [test_imports, test_tool_discovery, test_server_creation]
 
     results = []
     for test in tests:
@@ -102,6 +105,7 @@ def main():
     else:
         print("💥 SOME TESTS FAILED! Check the output above for details")
         return 1
+
 
 if __name__ == "__main__":
     sys.exit(main())

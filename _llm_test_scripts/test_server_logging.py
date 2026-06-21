@@ -2,6 +2,7 @@
 """
 Test script to verify server logging configuration.
 """
+
 import json
 import logging
 import sys
@@ -10,28 +11,49 @@ from datetime import UTC, datetime
 
 def setup_logging():
     """Set up JSON logging configuration."""
+
     class JSONFormatter(logging.Formatter):
         """Custom JSON formatter for structured logging."""
 
         def format(self, record):
             log_record = {
-                'timestamp': datetime.now(UTC).isoformat(),
-                'level': record.levelname,
-                'name': record.name,
-                'message': record.getMessage(),
+                "timestamp": datetime.now(UTC).isoformat(),
+                "level": record.levelname,
+                "name": record.name,
+                "message": record.getMessage(),
             }
 
             # Add exception info if present
             if record.exc_info:
-                log_record['exception'] = self.formatException(record.exc_info)
+                log_record["exception"] = self.formatException(record.exc_info)
 
             # Add extra attributes
             for key, value in record.__dict__.items():
-                if key not in ('args', 'asctime', 'created', 'exc_info', 'exc_text', 'filename', 'levelname',
-                              'levelno', 'lineno', 'module', 'msecs', 'message', 'msg', 'name', 'pathname',
-                              'process', 'processName', 'relativeCreated', 'stack_info', 'thread', 'threadName'):
+                if key not in (
+                    "args",
+                    "asctime",
+                    "created",
+                    "exc_info",
+                    "exc_text",
+                    "filename",
+                    "levelname",
+                    "levelno",
+                    "lineno",
+                    "module",
+                    "msecs",
+                    "message",
+                    "msg",
+                    "name",
+                    "pathname",
+                    "process",
+                    "processName",
+                    "relativeCreated",
+                    "stack_info",
+                    "thread",
+                    "threadName",
+                ):
                     if key not in log_record:  # Don't override existing fields
-                        if hasattr(value, 'isoformat'):
+                        if hasattr(value, "isoformat"):
                             log_record[key] = value.isoformat()
                         else:
                             log_record[key] = value
@@ -51,6 +73,7 @@ def setup_logging():
     handler.setFormatter(JSONFormatter())
     root_logger.addHandler(handler)
 
+
 def test_logging():
     """Test logging with different levels and structured data."""
     logger = logging.getLogger("test")
@@ -62,11 +85,12 @@ def test_logging():
 
     try:
         # Generate an error with stack trace
-        result = 1 / 0
+        1 / 0  # intentional
     except Exception:
         logger.error("An error occurred", exc_info=True, extra={"key3": {"nested": "value"}})
 
     logger.critical("This is a critical message", extra={"key4": True})
+
 
 if __name__ == "__main__":
     print("Testing server logging configuration...")

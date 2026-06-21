@@ -1,6 +1,7 @@
 """
 Script to update FastMCP to the latest version.
 """
+
 import subprocess
 import sys
 
@@ -16,5 +17,6 @@ def update_fastmcp():
         print(f"Error updating FastMCP: {e}")
         return False
 
+
 if __name__ == "__main__":
-    update_fastmpc()
+    update_fastmcp()

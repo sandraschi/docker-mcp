@@ -3,6 +3,7 @@ Container management API endpoints.
 
 This module provides FastMCP tool endpoints for container operations.
 """
+
 import logging
 
 from pydantic import Field
@@ -15,14 +16,14 @@ logger = logging.getLogger(__name__)
 # Get the shared FastMCP instance
 mcp = get_mcp()
 
+
 class ContainerListResponse(BaseResponse):
     """Response model for listing containers."""
+
     data: list[ContainerInfo] = Field(default_factory=list)
 
-@mcp.tool(
-    name="list_containers",
-    description="List all Docker containers with detailed information"
-)
+
+@mcp.tool(name="list_containers", description="List all Docker containers with detailed information")
 async def list_containers(all: bool = True) -> ContainerListResponse:
     """
     List all Docker containers.
@@ -57,14 +58,11 @@ async def list_containers(all: bool = True) -> ContainerListResponse:
         return ContainerListResponse(
             success=True,
             message="Containers retrieved successfully",
-            data=[]  # Placeholder
+            data=[],  # Placeholder
         )
     except Exception as e:
         logger.error(f"Error listing containers: {e!s}")
-        return ContainerListResponse(
-            success=False,
-            message="Failed to list containers",
-            error=str(e)
-        )
+        return ContainerListResponse(success=False, message="Failed to list containers", error=str(e))
+
 
 # Add more container-related endpoints here

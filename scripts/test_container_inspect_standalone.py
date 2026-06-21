@@ -2,13 +2,14 @@
 Standalone test for container_inspect functionality.
 This script tests the container inspection without loading the entire application.
 """
+
 import asyncio
 import os
 import sys
 from unittest.mock import MagicMock, patch
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Now we can import the function we want to test
 from dockermcp.tools.containers.container_inspect import inspect_container
@@ -19,10 +20,10 @@ async def test_inspect_container():
     # Create a mock container
     mock_container = MagicMock()
     mock_container.attrs = {
-        'Id': 'test123',
-        'Name': 'test-container',
-        'State': {'Status': 'running'},
-        'Config': {'Image': 'test-image'},
+        "Id": "test123",
+        "Name": "test-container",
+        "State": {"Status": "running"},
+        "Config": {"Image": "test-image"},
     }
 
     # Create a mock Docker client
@@ -30,19 +31,20 @@ async def test_inspect_container():
     mock_docker.containers.get.return_value = mock_container
 
     # Mock the Docker client in the module
-    with patch('docker.from_env', return_value=mock_docker):
+    with patch("docker.from_env", return_value=mock_docker):
         # Call the function
-        result = await inspect_container(container_id='test123')
+        result = await inspect_container(container_id="test123")
 
         # Verify the result
-        assert 'container_id' in result
-        assert result['status'] == 'success'
-        assert 'data' in result
-        assert result['data']['id'] == 'test123'
-        assert result['data']['name'] == 'test-container'
+        assert "container_id" in result
+        assert result["status"] == "success"
+        assert "data" in result
+        assert result["data"]["id"] == "test123"
+        assert result["data"]["name"] == "test-container"
 
         print("✅ Test passed: inspect_container")
         return True
+
 
 if __name__ == "__main__":
     asyncio.run(test_inspect_container())

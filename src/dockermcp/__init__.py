@@ -2,7 +2,7 @@
 DockerMCP - FastMCP 3.3 server for Docker operations.
 """
 
-__version__ = "3.3.0"
+__version__ = "3.4.0"
 
 from .docker_context import (
     ContainerManager,
@@ -52,6 +52,7 @@ __all__ = [
     "container_mgr",
     "docker_available",
     "docker_client",
+    "docker_error",
     "get_docker_status",
     "image_mgr",
     "initialize_docker_connection",

@@ -3,10 +3,11 @@ import sys
 
 try:
     import fastmcp
+
     print("FastMCP is installed.")
 
     # Print version if available
-    if hasattr(fastmcp, '__version__'):
+    if hasattr(fastmcp, "__version__"):
         print(f"FastMCP version: {fastmcp.__version__}")
     else:
         print("FastMCP version not found in module attributes.")
@@ -20,7 +21,7 @@ try:
         print(f"- {name}: {type(obj).__name__}")
 
     # Check if tools submodule exists
-    if hasattr(fastmcp, 'tools'):
+    if hasattr(fastmcp, "tools"):
         print("\nFastMCP.tools attributes:")
         for name, obj in inspect.getmembers(fastmcp.tools):
             print(f"- {name}: {type(obj).__name__}")

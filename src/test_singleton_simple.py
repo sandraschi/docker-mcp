@@ -1,6 +1,7 @@
 """
 Simple test script to verify FastMCP singleton behavior.
 """
+
 import sys
 import threading
 from pathlib import Path
@@ -32,13 +33,10 @@ class FastMCPSingleton:
             self._initialized = True
             print("Initializing FastMCP singleton instance")
             self.mcp = FastMCP(
-                name="test-mcp",
-                version="1.0.0",
-                json_response=True,
-                include_fastmcp_meta=False,
-                log_level="CRITICAL"
+                name="test-mcp", version="1.0.0", json_response=True, include_fastmcp_meta=False, log_level="CRITICAL"
             )
             print("FastMCP instance created")
+
 
 def test_singleton():
     """Test that only one instance of FastMCP is created."""
@@ -57,6 +55,7 @@ def test_singleton():
     assert mcp1.name == "test-mcp", "Unexpected FastMCP instance name"
 
     print("✅ Singleton test passed: Only one FastMCP instance exists")
+
 
 def test_thread_safety():
     """Test that the singleton is thread-safe."""
@@ -83,6 +82,7 @@ def test_thread_safety():
         assert instance is first, "Thread safety violation: Different instances detected"
 
     print("✅ Thread safety test passed: Only one instance across threads")
+
 
 if __name__ == "__main__":
     print("Testing FastMCP singleton implementation...")

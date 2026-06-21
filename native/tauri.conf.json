@@ -2,15 +2,17 @@
   "productName": "Docker MCP",
   "version": "3.3.0",
   "identifier": "ai.fleet.docker-mcp",
-  "build": {
-    "frontendDist": "../web_sota/dist",
-    "devUrl": "http://127.0.0.1:10806",
-    "beforeDevCommand": "npm --prefix ../web_sota run dev"
-  },
+    "build": {
+        "frontendDist": "../web_sota/dist",
+        "devUrl": "http://127.0.0.1:10806",
+        "beforeDevCommand": "npm --prefix ../web_sota run dev",
+        "beforeBuildCommand": "pwsh -NoProfile -Command \"$env:VITE_API_BASE='http://127.0.0.1:10807'; npm --prefix ../web_sota run build\""
+    },
   "app": {
     "windows": [
       {
         "title": "Docker MCP",
+        "label": "main",
         "width": 1200,
         "height": 800,
         "minWidth": 900,
@@ -23,7 +25,6 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
@@ -31,11 +32,33 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/docker-mcp-backend"]
+    "resources": [
+      "resources/docker-mcp-backend.exe"
+    ],
+    "targets": [
+      "nsis"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "skip"
+      },
+      "nsis": {
+        "installMode": "currentUser",
+        "createDesktopShortcut": true,
+        "createStartMenuShortcut": true,
+        "installerHooks": "./windows/hooks.nsh"
+      }
+    }
   },
   "plugins": {
-    "shell": { "open": true },
-    "fs": { "requireLiteralLeadingDot": false },
-    "process": { "all": true }
+    "shell": {
+      "open": true
+    },
+    "fs": {
+      "requireLiteralLeadingDot": false
+    },
+    "process": {
+      "all": true
+    }
   }
 }

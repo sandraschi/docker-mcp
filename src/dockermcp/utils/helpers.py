@@ -3,6 +3,7 @@ Utility functions for DockerMCP.
 
 This module provides helper functions used throughout the DockerMCP application.
 """
+
 import json
 import logging
 import os
@@ -15,6 +16,7 @@ from docker.errors import DockerException
 
 # Configure logger
 logger = logging.getLogger(__name__)
+
 
 def get_docker_client() -> DockerClient:
     """Get a Docker client instance.
@@ -33,6 +35,7 @@ def get_docker_client() -> DockerClient:
             "Docker is not installed or the Docker daemon is not running. "
             "Please make sure Docker is installed and running."
         ) from e
+
 
 def run_command(
     cmd: str | list[str],
@@ -81,6 +84,7 @@ def run_command(
         logger.error("Command not found: %s", cmd)
         raise RuntimeError(f"Command not found: {cmd[0] if isinstance(cmd, list) else cmd}") from e
 
+
 def parse_json_output(output: str) -> Any:
     """Parse JSON output from a command.
 
@@ -99,6 +103,7 @@ def parse_json_output(output: str) -> Any:
         logger.error("Failed to parse JSON: %s", e)
         raise ValueError(f"Invalid JSON output: {e}") from e
 
+
 def ensure_directory(path: str | Path) -> Path:
     """Ensure a directory exists, creating it if necessary.
 
@@ -112,6 +117,7 @@ def ensure_directory(path: str | Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
 
+
 def format_bytes(size: float) -> str:
     """Format a size in bytes to a human-readable string.
 
@@ -121,7 +127,7 @@ def format_bytes(size: float) -> str:
     Returns:
         Formatted string with appropriate unit (e.g., "1.5 MB").
     """
-    for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
+    for unit in ["B", "KB", "MB", "GB", "TB"]:
         if size < 1024.0:
             return f"{size:.1f} {unit}"
         size /= 1024.0
@@ -159,9 +165,9 @@ def parse_size(size_str: str) -> int:
         raise ValueError("Empty size string")
 
     # Find the numeric part
-    num_str = ''
+    num_str = ""
     i = 0
-    while i < len(size_str) and (size_str[i].isdigit() or size_str[i] == '.'):
+    while i < len(size_str) and (size_str[i].isdigit() or size_str[i] == "."):
         num_str += size_str[i]
         i += 1
 
@@ -174,19 +180,19 @@ def parse_size(size_str: str) -> int:
         raise ValueError(f"Invalid number in size: {num_str}") from e
 
     # Get the unit
-    unit = size_str[i:] if i < len(size_str) else 'B'
+    unit = size_str[i:] if i < len(size_str) else "B"
 
     # Convert to bytes
     units = {
-        'B': 1,
-        'K': 1024,
-        'KB': 1024,
-        'M': 1024 ** 2,
-        'MB': 1024 ** 2,
-        'G': 1024 ** 3,
-        'GB': 1024 ** 3,
-        'T': 1024 ** 4,
-        'TB': 1024 ** 4,
+        "B": 1,
+        "K": 1024,
+        "KB": 1024,
+        "M": 1024**2,
+        "MB": 1024**2,
+        "G": 1024**3,
+        "GB": 1024**3,
+        "T": 1024**4,
+        "TB": 1024**4,
     }
 
     if unit not in units:
@@ -211,6 +217,7 @@ def human_readable_to_bytes(size_str: str) -> int:
     """
     return parse_size(size_str)
 
+
 def is_docker_installed() -> bool:
     """Check if Docker is installed and running.
 
@@ -224,22 +231,24 @@ def is_docker_installed() -> bool:
     except Exception:
         return False
 
+
 def get_environment_vars() -> dict[str, str]:
     """Get environment variables with sensitive values redacted.
 
     Returns:
         Dictionary of environment variables with sensitive values redacted.
     """
-    sensitive_keys = {'PASSWORD', 'SECRET', 'TOKEN', 'KEY', 'CREDENTIALS'}
+    sensitive_keys = {"PASSWORD", "SECRET", "TOKEN", "KEY", "CREDENTIALS"}
     env_vars = {}
 
     for key, value in os.environ.items():
         if any(sensitive in key.upper() for sensitive in sensitive_keys):
-            env_vars[key] = '***REDACTED***'
+            env_vars[key] = "***REDACTED***"
         else:
             env_vars[key] = value
 
     return env_vars
+
 
 def validate_file_exists(file_path: str | Path) -> Path:
     """Validate that a file exists and return its Path object.
@@ -259,6 +268,7 @@ def validate_file_exists(file_path: str | Path) -> Path:
     if not path.is_file():
         raise ValueError(f"Path is not a file: {file_path}")
     return path
+
 
 def validate_directory_exists(dir_path: str | Path) -> Path:
     """Validate that a directory exists and return its Path object.

@@ -3,6 +3,7 @@ Basic Usage Examples for DockerMCP
 
 This script demonstrates how to use the DockerMCP API to perform common Docker operations.
 """
+
 import asyncio
 
 from fastmcp import MCPClient
@@ -12,6 +13,7 @@ client = MCPClient("http://localhost:8000")
 
 # Set your API key (replace with your actual API key)
 client.api_key = "your-api-key-here"
+
 
 async def list_containers() -> None:
     """List all running containers."""
@@ -28,6 +30,7 @@ async def list_containers() -> None:
     else:
         print(f"Error: {response.get('error')}")
 
+
 async def create_container() -> None:
     """Create a new Nginx container."""
     print("\n=== Creating Nginx Container ===")
@@ -36,7 +39,7 @@ async def create_container() -> None:
         "name": "web-server",
         "ports": {"80/tcp": 8080},
         "environment": {"ENV": "development"},
-        "labels": {"app": "demo"}
+        "labels": {"app": "demo"},
     }
 
     response = await client.create_container(**container_config)
@@ -44,13 +47,14 @@ async def create_container() -> None:
         print(f"Container created with ID: {response['container_id']}")
 
         # Start the container
-        start_response = await client.start_container(response['container_id'])
+        start_response = await client.start_container(response["container_id"])
         if start_response.get("status") == "success":
             print("Container started successfully")
         else:
             print(f"Failed to start container: {start_response.get('error')}")
     else:
         print(f"Failed to create container: {response.get('error')}")
+
 
 async def manage_images() -> None:
     """Demonstrate image management operations."""
@@ -61,7 +65,7 @@ async def manage_images() -> None:
     response = await client.list_images(all=True)
     if response.get("status") == "success":
         for image in response.get("images", [])[:3]:  # Show first 3 images
-            print(f"- {image.get('repo_tags', ['<none>'])[0]} (Size: {image.get('size', 0) / (1024*1024):.2f} MB)")
+            print(f"- {image.get('repo_tags', ['<none>'])[0]} (Size: {image.get('size', 0) / (1024 * 1024):.2f} MB)")
     else:
         print(f"Error: {response.get('error')}")
 
@@ -72,6 +76,7 @@ async def manage_images() -> None:
         print("Redis image pulled successfully")
     else:
         print(f"Failed to pull image: {pull_response.get('error')}")
+
 
 async def network_operations() -> None:
     """Demonstrate network operations."""
@@ -88,16 +93,13 @@ async def network_operations() -> None:
 
     # Create a new network
     print("\nCreating a new network:")
-    network_config = {
-        "name": "my-network",
-        "driver": "bridge",
-        "labels": {"purpose": "demo"}
-    }
+    network_config = {"name": "my-network", "driver": "bridge", "labels": {"purpose": "demo"}}
     create_response = await client.create_network(**network_config)
     if create_response.get("status") == "success":
         print(f"Network created with ID: {create_response['network_id']}")
     else:
         print(f"Failed to create network: {create_response.get('error')}")
+
 
 async def volume_operations() -> None:
     """Demonstrate volume operations."""
@@ -114,16 +116,13 @@ async def volume_operations() -> None:
 
     # Create a new volume
     print("\nCreating a new volume:")
-    volume_config = {
-        "name": "app-data",
-        "driver": "local",
-        "labels": {"app": "demo"}
-    }
+    volume_config = {"name": "app-data", "driver": "local", "labels": {"app": "demo"}}
     create_response = await client.create_volume(**volume_config)
     if create_response.get("status") == "success":
         print(f"Volume created with name: {create_response['name']}")
     else:
         print(f"Failed to create volume: {create_response.get('error')}")
+
 
 async def system_info() -> None:
     """Display system information."""
@@ -138,7 +137,7 @@ async def system_info() -> None:
         print(f"Containers: {info.get('containers_running', 0)} running, {info.get('containers_stopped', 0)} stopped")
         print(f"Images: {info.get('images', 0)}")
         print(f"CPUs: {info.get('n_cpu', 0)}")
-        print(f"Total Memory: {info.get('mem_total', 0) / (1024*1024*1024):.2f} GB")
+        print(f"Total Memory: {info.get('mem_total', 0) / (1024 * 1024 * 1024):.2f} GB")
     else:
         print(f"Error: {response.get('error')}")
 
@@ -147,11 +146,12 @@ async def system_info() -> None:
     usage_response = await client.disk_usage()
     if usage_response.get("status") == "success":
         usage = usage_response["disk_usage"]
-        print(f"Total Space: {usage.get('total_space', 0) / (1024*1024):.2f} MB")
-        print(f"Used Space: {usage.get('used_space', 0) / (1024*1024):.2f} MB")
-        print(f"Reclaimable Space: {usage.get('reclaimable_space', 0) / (1024*1024):.2f} MB")
+        print(f"Total Space: {usage.get('total_space', 0) / (1024 * 1024):.2f} MB")
+        print(f"Used Space: {usage.get('used_space', 0) / (1024 * 1024):.2f} MB")
+        print(f"Reclaimable Space: {usage.get('reclaimable_space', 0) / (1024 * 1024):.2f} MB")
     else:
         print(f"Error: {usage_response.get('error')}")
+
 
 async def workflow_example() -> None:
     """Demonstrate workflow operations."""
@@ -161,23 +161,14 @@ async def workflow_example() -> None:
     workflow_definition = {
         "name": "web-app",
         "services": {
-            "web": {
-                "image": "nginx:alpine",
-                "ports": {"80": "8080"},
-                "depends_on": ["db"]
-            },
+            "web": {"image": "nginx:alpine", "ports": {"80": "8080"}, "depends_on": ["db"]},
             "db": {
                 "image": "postgres:13-alpine",
-                "environment": {
-                    "POSTGRES_PASSWORD": "example",
-                    "POSTGRES_DB": "mydb"
-                },
-                "volumes": ["postgres_data:/var/lib/postgresql/data"]
-            }
+                "environment": {"POSTGRES_PASSWORD": "example", "POSTGRES_DB": "mydb"},
+                "volumes": ["postgres_data:/var/lib/postgresql/data"],
+            },
         },
-        "volumes": {
-            "postgres_data": {}
-        }
+        "volumes": {"postgres_data": {}},
     }
 
     # Create the workflow
@@ -224,6 +215,7 @@ async def workflow_example() -> None:
     else:
         print(f"Failed to stop workflow: {stop_response.get('error')}")
 
+
 async def main() -> None:
     """Run all examples."""
     try:
@@ -241,6 +233,7 @@ async def main() -> None:
         print("\nAll examples completed!")
     except Exception as e:
         print(f"An error occurred: {e!s}")
+
 
 if __name__ == "__main__":
     asyncio.run(main())

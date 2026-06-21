@@ -1,4 +1,5 @@
 """Integration tests for monitoring stack."""
+
 import time
 from typing import Any
 
@@ -12,8 +13,9 @@ SERVICES = [
     {"name": "loki", "port": 3101, "path": "/ready"},
     {"name": "cadvisor", "port": 8082, "path": "/healthz"},
     {"name": "node-exporter", "port": 9100, "path": ""},
-    {"name": "redis", "port": 6379, "path": ""}
+    {"name": "redis", "port": 6379, "path": ""},
 ]
+
 
 def is_service_healthy(url: str, timeout: int = 5) -> bool:
     """Check if a service is healthy by making an HTTP request."""
@@ -22,6 +24,7 @@ def is_service_healthy(url: str, timeout: int = 5) -> bool:
         return response.status_code in (200, 204)
     except (requests.RequestException, ConnectionError):
         return False
+
 
 @pytest.mark.integration
 class TestMonitoringStack:
@@ -51,8 +54,7 @@ class TestMonitoringStack:
         assert data["status"] == "success", "Prometheus API returned error status"
 
         # Check that we have active targets
-        active_targets = [t for t in data["data"]["activeTargets"]
-                         if t["health"] == "up"]
+        active_targets = [t for t in data["data"]["activeTargets"] if t["health"] == "up"]
         assert len(active_targets) > 0, "No active Prometheus targets found"
 
     def test_grafana_datasources(self):
@@ -66,8 +68,7 @@ class TestMonitoringStack:
         expected_datasources = ["Prometheus", "Loki"]
 
         for ds in expected_datasources:
-            assert any(d["type"] == ds.lower() for d in datasources), \
-                   f"{ds} datasource not found in Grafana"
+            assert any(d["type"] == ds.lower() for d in datasources), f"{ds} datasource not found in Grafana"
 
     def test_loki_logs(self):
         """Test that Loki is receiving logs from Promtail."""
@@ -82,6 +83,7 @@ class TestMonitoringStack:
         assert data["status"] == "success", "Loki API returned error status"
         assert "values" in data["data"], "No labels found in Loki"
 
+
 @pytest.mark.integration
 class TestMonitoringTools:
     """Integration tests for monitoring tools."""
@@ -93,20 +95,16 @@ class TestMonitoringTools:
         from dockermcp.tools.monitoring.alerts import add_alert_rule, list_alert_rules
 
         # Test adding a rule
-        add_result = asyncio.run(add_alert_rule(
-            name="TestRule",
-            condition="up == 0",
-            duration="1m",
-            severity="warning"
-        ))
+        add_result = asyncio.run(
+            add_alert_rule(name="TestRule", condition="up == 0", duration="1m", severity="warning")
+        )
 
         assert add_result["status"] == "success", "Failed to add alert rule"
 
         # Test listing rules
         list_result = asyncio.run(list_alert_rules())
         assert list_result["status"] == "success", "Failed to list alert rules"
-        assert any(r["name"] == "TestRule" for r in list_result["rules"]), \
-               "Added rule not found in list"
+        assert any(r["name"] == "TestRule" for r in list_result["rules"]), "Added rule not found in list"
 
     def test_backup_restore(self):
         """Test backup and restore functionality."""

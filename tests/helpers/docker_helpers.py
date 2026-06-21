@@ -1,4 +1,5 @@
 """Helper functions for Docker-related tests."""
+
 import logging
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
@@ -8,6 +9,7 @@ import aiodocker
 import docker
 
 logger = logging.getLogger(__name__)
+
 
 class DockerTestHelper:
     """Helper class for Docker-related test operations."""
@@ -47,7 +49,7 @@ class DockerTestHelper:
         command: str = "sleep 3600",
         environment: dict[str, str] | None = None,
         network: str | None = None,
-        **kwargs
+        **kwargs,
     ) -> AsyncGenerator[dict[str, Any], None]:
         """Create a temporary container that's automatically removed after the test."""
         await self.ensure_image_exists(image)
@@ -62,8 +64,8 @@ class DockerTestHelper:
                 "HostConfig": {
                     "AutoRemove": True,
                 },
-                **kwargs
-            }
+                **kwargs,
+            },
         )
 
         self._test_containers.append(container.id)
@@ -81,11 +83,13 @@ class DockerTestHelper:
     async def create_test_network(self) -> str:
         """Create a test network and return its ID."""
         network_name = f"{self.test_config.TEST_NETWORK_NAME}_{self._random_suffix()}"
-        network = await self.async_docker.networks.create({
-            "Name": network_name,
-            "CheckDuplicate": True,
-            "Driver": "bridge",
-        })
+        network = await self.async_docker.networks.create(
+            {
+                "Name": network_name,
+                "CheckDuplicate": True,
+                "Driver": "bridge",
+            }
+        )
         self._test_networks.append(network.id)
         return network.id
 
@@ -119,4 +123,5 @@ class DockerTestHelper:
         """Generate a random suffix for resource names."""
         import random
         import string
-        return ''.join(random.choices(string.ascii_lowercase + string.digits, k=8))
+
+        return "".join(random.choices(string.ascii_lowercase + string.digits, k=8))

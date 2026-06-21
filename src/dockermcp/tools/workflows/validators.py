@@ -4,6 +4,7 @@ Workflow validators for dependencies and constraints.
 This module contains validators for ensuring workflow integrity, including
 service dependencies, resource constraints, and workflow state transitions.
 """
+
 import re
 from datetime import datetime
 from typing import Any, ClassVar, TypeVar
@@ -11,19 +12,26 @@ from typing import Any, ClassVar, TypeVar
 from .models import ServiceDefinition, WorkflowResponse, WorkflowStatus
 
 # Type variable for generic validator classes
-T = TypeVar('T')
+T = TypeVar("T")
+
 
 class ValidationError(Exception):
     """Base exception for validation errors."""
+
     pass
+
 
 class DependencyError(ValidationError):
     """Raised when there are issues with service dependencies."""
+
     pass
+
 
 class ConstraintError(ValidationError):
     """Raised when constraints are violated."""
+
     pass
+
 
 class WorkflowValidator[T]:
     """Base class for workflow validators."""
@@ -75,9 +83,7 @@ class ServiceDependencyValidator(WorkflowValidator[dict[str, ServiceDefinition]]
         for service_name, service in services.items():
             for dep in service.depends_on:
                 if dep not in service_names:
-                    raise DependencyError(
-                        f"Service '{service_name}' depends on non-existent service '{dep}'"
-                    )
+                    raise DependencyError(f"Service '{service_name}' depends on non-existent service '{dep}'")
 
     def _check_for_cycles(self, services: dict[str, ServiceDefinition]) -> None:
         """Check for circular dependencies using depth-first search."""
@@ -86,7 +92,7 @@ class ServiceDependencyValidator(WorkflowValidator[dict[str, ServiceDefinition]]
 
         def visit(service_name: str, path: list[str]) -> None:
             if service_name in recursion_stack:
-                cycle = ' -> '.join([*path[path.index(service_name):], service_name])
+                cycle = " -> ".join([*path[path.index(service_name) :], service_name])
                 raise DependencyError(f"Circular dependency detected: {cycle}")
 
             if service_name in visited:
@@ -115,12 +121,7 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
     3. Resource requests don't exceed limits
     """
 
-    def __init__(
-        self,
-        max_cpu: float = 16.0,
-        max_memory: str = '64Gi',
-        max_services: int = 100
-    ):
+    def __init__(self, max_cpu: float = 16.0, max_memory: str = "64Gi", max_services: int = 100):
         """Initialize the validator with cluster constraints.
 
         Args:
@@ -145,10 +146,7 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
             ConstraintError: If resource constraints are violated
         """
         if len(services) > self.max_services:
-            raise ConstraintError(
-                f"Workflow exceeds maximum number of services: "
-                f"{len(services)} > {self.max_services}"
-            )
+            raise ConstraintError(f"Workflow exceeds maximum number of services: {len(services)} > {self.max_services}")
 
         for service_name, service in services.items():
             self._validate_service_resources(service_name, service)
@@ -158,30 +156,26 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
     def _validate_service_resources(self, service_name: str, service: ServiceDefinition) -> None:
         """Validate resource constraints for a single service."""
         resources = service.resources or {}
-        limits = resources.get('limits', {})
-        requests = resources.get('requests', {})
+        limits = resources.get("limits", {})
+        requests = resources.get("requests", {})
 
         # Check CPU limits
-        if 'cpu' in limits:
-            cpu = self._parse_cpu(limits['cpu'])
+        if "cpu" in limits:
+            cpu = self._parse_cpu(limits["cpu"])
             if cpu > self.max_cpu:
                 raise ConstraintError(
-                    f"Service '{service_name}' CPU limit ({cpu}) exceeds "
-                    f"maximum allowed ({self.max_cpu})"
+                    f"Service '{service_name}' CPU limit ({cpu}) exceeds maximum allowed ({self.max_cpu})"
                 )
 
             # Ensure requests don't exceed limits
-            if 'cpu' in requests:
-                req_cpu = self._parse_cpu(requests['cpu'])
+            if "cpu" in requests:
+                req_cpu = self._parse_cpu(requests["cpu"])
                 if req_cpu > cpu:
-                    raise ConstraintError(
-                        f"Service '{service_name}' CPU request ({req_cpu}) "
-                        f"exceeds limit ({cpu})"
-                    )
+                    raise ConstraintError(f"Service '{service_name}' CPU request ({req_cpu}) exceeds limit ({cpu})")
 
         # Check memory limits
-        if 'memory' in limits:
-            memory = self._parse_memory(limits['memory'])
+        if "memory" in limits:
+            memory = self._parse_memory(limits["memory"])
             if memory > self.max_memory:
                 raise ConstraintError(
                     f"Service '{service_name}' memory limit ({self._format_memory(memory)}) "
@@ -189,8 +183,8 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
                 )
 
             # Ensure requests don't exceed limits
-            if 'memory' in requests:
-                req_memory = self._parse_memory(requests['memory'])
+            if "memory" in requests:
+                req_memory = self._parse_memory(requests["memory"])
                 if req_memory > memory:
                     raise ConstraintError(
                         f"Service '{service_name}' memory request ({self._format_memory(req_memory)}) "
@@ -204,7 +198,7 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
             return float(cpu)
 
         if isinstance(cpu, str):
-            if cpu.endswith('m'):
+            if cpu.endswith("m"):
                 return float(cpu[:-1]) / 1000
             return float(cpu)
 
@@ -223,35 +217,35 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
         memory = memory.upper().strip()
 
         # Special case for '64GI' format (uppercase I)
-        if memory.endswith('GI'):
-            memory = memory.replace('GI', 'G')
+        if memory.endswith("GI"):
+            memory = memory.replace("GI", "G")
 
         # Parse numeric part and unit
-        match = re.match(r'^(\d+)([KMGTP]?[iI]?[bB]?|[bB])?$', memory)
+        match = re.match(r"^(\d+)([KMGTP]?[iI]?[bB]?|[bB])?$", memory)
         if not match:
             raise ValueError(f"Invalid memory format: {memory}")
 
         value = int(match.group(1))
-        unit = (match.group(2) or '').upper().replace('B', '').replace('I', 'i')
+        unit = (match.group(2) or "").upper().replace("B", "").replace("I", "i")
 
         # Handle case-insensitive units
-        if unit == 'I':
-            unit = 'i'
+        if unit == "I":
+            unit = "i"
 
         # Convert to bytes
         units = {
-            '': 1,          # bytes
-            'i': 1,         # bytes (case-insensitive)
-            'K': 1000,      # kilobytes
-            'M': 1000**2,   # megabytes
-            'G': 1000**3,   # gigabytes
-            'T': 1000**4,   # terabytes
-            'P': 1000**5,   # petabytes
-            'KI': 1024,     # kibibytes
-            'MI': 1024**2,  # mebibytes
-            'GI': 1024**3,  # gibibytes
-            'TI': 1024**4,  # tebibytes
-            'PI': 1024**5   # pebibytes
+            "": 1,  # bytes
+            "i": 1,  # bytes (case-insensitive)
+            "K": 1000,  # kilobytes
+            "M": 1000**2,  # megabytes
+            "G": 1000**3,  # gigabytes
+            "T": 1000**4,  # terabytes
+            "P": 1000**5,  # petabytes
+            "KI": 1024,  # kibibytes
+            "MI": 1024**2,  # mebibytes
+            "GI": 1024**3,  # gibibytes
+            "TI": 1024**4,  # tebibytes
+            "PI": 1024**5,  # pebibytes
         }
 
         return value * units[unit]
@@ -259,7 +253,7 @@ class ResourceConstraintValidator(WorkflowValidator[dict[str, ServiceDefinition]
     @staticmethod
     def _format_memory(bytes_val: int) -> str:
         """Format bytes to human-readable string."""
-        for unit in ['', 'Ki', 'Mi', 'Gi', 'Ti', 'Pi', 'Ei']:  # noqa: B007
+        for unit in ["", "Ki", "Mi", "Gi", "Ti", "Pi", "Ei"]:  # noqa: B007
             if bytes_val < 1024:
                 break
             bytes_val /= 1024
@@ -276,40 +270,25 @@ class WorkflowStateValidator(WorkflowValidator[WorkflowResponse]):
 
     # Valid state transitions: {from_state: {to_state1, to_state2, ...}}
     VALID_TRANSITIONS: ClassVar[dict] = {
-        WorkflowStatus.PENDING: {
-            WorkflowStatus.RUNNING,
-            WorkflowStatus.PAUSED,
-            WorkflowStatus.CANCELLED
-        },
+        WorkflowStatus.PENDING: {WorkflowStatus.RUNNING, WorkflowStatus.PAUSED, WorkflowStatus.CANCELLED},
         WorkflowStatus.RUNNING: {
             WorkflowStatus.COMPLETED,
             WorkflowStatus.FAILED,
             WorkflowStatus.PAUSED,
             WorkflowStatus.CANCELLED,
-            WorkflowStatus.RETRYING
+            WorkflowStatus.RETRYING,
         },
-        WorkflowStatus.PAUSED: {
-            WorkflowStatus.RUNNING,
-            WorkflowStatus.CANCELLED
-        },
-        WorkflowStatus.RETRYING: {
-            WorkflowStatus.RUNNING,
-            WorkflowStatus.FAILED,
-            WorkflowStatus.CANCELLED
-        },
+        WorkflowStatus.PAUSED: {WorkflowStatus.RUNNING, WorkflowStatus.CANCELLED},
+        WorkflowStatus.RETRYING: {WorkflowStatus.RUNNING, WorkflowStatus.FAILED, WorkflowStatus.CANCELLED},
         # Terminal states (no valid transitions from these)
         WorkflowStatus.COMPLETED: set(),
         WorkflowStatus.FAILED: set(),
         WorkflowStatus.CANCELLED: set(),
         WorkflowStatus.TIMED_OUT: set(),
-        WorkflowStatus.SKIPPED: set()
+        WorkflowStatus.SKIPPED: set(),
     }
 
-    def validate(
-        self,
-        current: WorkflowResponse,
-        new_status: WorkflowStatus
-    ) -> WorkflowResponse:
+    def validate(self, current: WorkflowResponse, new_status: WorkflowStatus) -> WorkflowResponse:
         """Validate a workflow state transition.
 
         Args:
@@ -325,9 +304,7 @@ class WorkflowStateValidator(WorkflowValidator[WorkflowResponse]):
         current_status = WorkflowStatus(current.status)
 
         if new_status not in self.VALID_TRANSITIONS.get(current_status, set()):
-            raise ConstraintError(
-                f"Invalid state transition: {current_status} -> {new_status}"
-            )
+            raise ConstraintError(f"Invalid state transition: {current_status} -> {new_status}")
 
         # Update the workflow status and timestamp
         current.status = new_status
@@ -356,7 +333,4 @@ RESOURCE_CONSTRAINT_VALIDATOR = ResourceConstraintValidator()
 WORKFLOW_STATE_VALIDATOR = WorkflowStateValidator()
 
 # Validator for new workflows
-WORKFLOW_VALIDATOR = WorkflowValidatorChain(
-    SERVICE_DEPENDENCY_VALIDATOR,
-    RESOURCE_CONSTRAINT_VALIDATOR
-)
+WORKFLOW_VALIDATOR = WorkflowValidatorChain(SERVICE_DEPENDENCY_VALIDATOR, RESOURCE_CONSTRAINT_VALIDATOR)

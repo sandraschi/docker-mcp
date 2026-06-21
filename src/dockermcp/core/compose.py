@@ -3,6 +3,7 @@ Docker Compose Manager for DockerMCP.
 
 This module provides a high-level interface for managing Docker Compose projects.
 """
+
 import asyncio
 import json
 import logging
@@ -20,6 +21,7 @@ from pydantic import ValidationError
 
 class ComposeError(Exception):
     """Base exception for Docker Compose related errors."""
+
     pass
 
 

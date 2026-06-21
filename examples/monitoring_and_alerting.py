@@ -8,6 +8,7 @@ containers using DockerMCP. It includes:
 - Alerting based on thresholds
 - Integration with external monitoring tools
 """
+
 import asyncio
 import json
 import logging
@@ -21,13 +22,11 @@ from fastmcp import MCPClient
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler('monitoring.log')
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(), logging.FileHandler("monitoring.log")],
 )
-logger = logging.getLogger('docker-monitor')
+logger = logging.getLogger("docker-monitor")
+
 
 class ContainerMonitor:
     """Monitor Docker containers and trigger alerts based on metrics."""
@@ -43,19 +42,15 @@ class ContainerMonitor:
 
         # Alert thresholds
         self.thresholds = {
-            'cpu_percent': 80.0,  # Alert if CPU > 80%
-            'memory_percent': 80.0,  # Alert if memory > 80%
-            'memory_usage': 1024 * 1024 * 1024,  # 1GB
-            'restart_count': 3,  # Alert if container restarts > 3 times
-            'health_status': 'unhealthy'  # Alert if container is unhealthy
+            "cpu_percent": 80.0,  # Alert if CPU > 80%
+            "memory_percent": 80.0,  # Alert if memory > 80%
+            "memory_usage": 1024 * 1024 * 1024,  # 1GB
+            "restart_count": 3,  # Alert if container restarts > 3 times
+            "health_status": "unhealthy",  # Alert if container is unhealthy
         }
 
         # Alert handlers
-        self.alert_handlers = {
-            'log': self._log_alert,
-            'console': self._console_alert,
-            'webhook': self._webhook_alert
-        }
+        self.alert_handlers = {"log": self._log_alert, "console": self._console_alert, "webhook": self._webhook_alert}
 
     async def start(self) -> None:
         """Start the monitoring service."""
@@ -98,19 +93,19 @@ class ContainerMonitor:
                 return
 
             # Update monitored containers
-            current_containers = {c['id']: c for c in response.get('containers', [])}
+            current_containers = {c["id"]: c for c in response.get("containers", [])}
 
             # Add new containers to monitoring
             for container_id, container in current_containers.items():
                 if container_id not in self.monitored_containers:
                     logger.info(f"Discovered new container: {container.get('name')} ({container_id[:12]})")
                     self.monitored_containers[container_id] = {
-                        'name': container.get('name'),
-                        'image': container.get('image'),
-                        'status': container.get('status'),
-                        'started_at': datetime.utcnow().isoformat(),
-                        'metrics': {},
-                        'last_alert': {}
+                        "name": container.get("name"),
+                        "image": container.get("image"),
+                        "status": container.get("status"),
+                        "started_at": datetime.utcnow().isoformat(),
+                        "metrics": {},
+                        "last_alert": {},
                     }
                     self.metrics_history[container_id] = []
                     self.alerts[container_id] = []
@@ -125,7 +120,7 @@ class ContainerMonitor:
                 del self.alerts[container_id]
 
             # Collect metrics for each container
-            for container_id, container in self.monitored_containers.items():
+            for container_id, _container in self.monitored_containers.items():
                 if container_id in current_containers:
                     await self._collect_metrics(container_id, current_containers[container_id])
 
@@ -147,52 +142,54 @@ class ContainerMonitor:
             stats = stats_response.get("stats", {})
 
             # Calculate CPU usage percentage
-            cpu_delta = stats.get('cpu_stats', {}).get('cpu_usage', {}).get('total_usage', 0) - \
-                       stats.get('precpu_stats', {}).get('cpu_usage', {}).get('total_usage', 0)
+            cpu_delta = stats.get("cpu_stats", {}).get("cpu_usage", {}).get("total_usage", 0) - stats.get(
+                "precpu_stats", {}
+            ).get("cpu_usage", {}).get("total_usage", 0)
 
-            system_delta = stats.get('cpu_stats', {}).get('system_cpu_usage', 0) - \
-                          stats.get('precpu_stats', {}).get('system_cpu_usage', 0)
+            system_delta = stats.get("cpu_stats", {}).get("system_cpu_usage", 0) - stats.get("precpu_stats", {}).get(
+                "system_cpu_usage", 0
+            )
 
             cpu_percent = 0.0
             if system_delta > 0 and cpu_delta > 0:
                 cpu_percent = (cpu_delta / system_delta) * 100.0
-                cpu_percent *= stats.get('cpu_stats', {}).get('online_cpus', 1)
+                cpu_percent *= stats.get("cpu_stats", {}).get("online_cpus", 1)
 
             # Calculate memory usage
-            memory_stats = stats.get('memory_stats', {})
-            memory_usage = memory_stats.get('usage', 0)
-            memory_limit = memory_stats.get('limit', 1)  # Avoid division by zero
+            memory_stats = stats.get("memory_stats", {})
+            memory_usage = memory_stats.get("usage", 0)
+            memory_limit = memory_stats.get("limit", 1)  # Avoid division by zero
             memory_percent = (memory_usage / memory_limit) * 100.0
 
             # Get container health status
-            health_status = container.get('health', {}).get('status', 'unknown').lower()
+            health_status = container.get("health", {}).get("status", "unknown").lower()
 
             # Create metrics snapshot
             timestamp = datetime.utcnow().isoformat()
             metrics = {
-                'timestamp': timestamp,
-                'cpu_percent': round(cpu_percent, 2),
-                'memory_usage': memory_usage,
-                'memory_limit': memory_limit,
-                'memory_percent': round(memory_percent, 2),
-                'network_rx': stats.get('network', {}).get('rx_bytes', 0),
-                'network_tx': stats.get('network', {}).get('tx_bytes', 0),
-                'block_read': stats.get('blkio_stats', {}).get('io_service_bytes_recursive', [{}])[0].get('value', 0),
-                'block_write': stats.get('blkio_stats', {}).get('io_service_bytes_recursive', [{}])[1].get('value', 0),
-                'health_status': health_status,
-                'restart_count': container.get('restart_count', 0)
+                "timestamp": timestamp,
+                "cpu_percent": round(cpu_percent, 2),
+                "memory_usage": memory_usage,
+                "memory_limit": memory_limit,
+                "memory_percent": round(memory_percent, 2),
+                "network_rx": stats.get("network", {}).get("rx_bytes", 0),
+                "network_tx": stats.get("network", {}).get("tx_bytes", 0),
+                "block_read": stats.get("blkio_stats", {}).get("io_service_bytes_recursive", [{}])[0].get("value", 0),
+                "block_write": stats.get("blkio_stats", {}).get("io_service_bytes_recursive", [{}])[1].get("value", 0),
+                "health_status": health_status,
+                "restart_count": container.get("restart_count", 0),
             }
 
             # Update container metrics
-            self.monitored_containers[container_id]['metrics'] = metrics
-            self.monitored_containers[container_id]['status'] = container.get('status')
+            self.monitored_containers[container_id]["metrics"] = metrics
+            self.monitored_containers[container_id]["status"] = container.get("status")
 
             # Store metrics history
             if container_id in self.metrics_history:
                 self.metrics_history[container_id].append(metrics)
                 # Keep only the most recent data points
                 if len(self.metrics_history[container_id]) > self.max_history:
-                    self.metrics_history[container_id] = self.metrics_history[container_id][-self.max_history:]
+                    self.metrics_history[container_id] = self.metrics_history[container_id][-self.max_history :]
 
             logger.debug(f"Collected metrics for {container.get('name')}: {json.dumps(metrics, indent=2)}")
 
@@ -201,80 +198,71 @@ class ContainerMonitor:
 
     async def _check_alerts(self) -> None:
         """Check for alert conditions and trigger alerts."""
-        for container_id, container in self.monitored_containers.items():
-            metrics = container.get('metrics', {})
-            container_name = container.get('name', container_id[:12])
+        for container_id, _container in self.monitored_containers.items():
+            metrics = container.get("metrics", {})
+            container_name = container.get("name", container_id[:12])
 
             # Check CPU threshold
-            if metrics.get('cpu_percent', 0) > self.thresholds['cpu_percent']:
+            if metrics.get("cpu_percent", 0) > self.thresholds["cpu_percent"]:
                 await self._trigger_alert(
                     container_id,
-                    'high_cpu',
+                    "high_cpu",
                     f"High CPU usage: {metrics.get('cpu_percent')}% > {self.thresholds['cpu_percent']}%",
-                    metrics
+                    metrics,
                 )
 
             # Check memory threshold (percentage)
-            if metrics.get('memory_percent', 0) > self.thresholds['memory_percent']:
+            if metrics.get("memory_percent", 0) > self.thresholds["memory_percent"]:
                 await self._trigger_alert(
                     container_id,
-                    'high_memory_percent',
+                    "high_memory_percent",
                     f"High memory usage: {metrics.get('memory_percent'):.1f}% > {self.thresholds['memory_percent']}%",
-                    metrics
+                    metrics,
                 )
 
             # Check memory threshold (absolute)
-            if metrics.get('memory_usage', 0) > self.thresholds['memory_usage']:
+            if metrics.get("memory_usage", 0) > self.thresholds["memory_usage"]:
                 await self._trigger_alert(
                     container_id,
-                    'high_memory_usage',
-                    f"High memory usage: {metrics.get('memory_usage') / (1024*1024):.1f}MB > {self.thresholds['memory_usage'] / (1024*1024):.1f}MB",
-                    metrics
+                    "high_memory_usage",
+                    f"High memory usage: {metrics.get('memory_usage') / (1024 * 1024):.1f}MB > {self.thresholds['memory_usage'] / (1024 * 1024):.1f}MB",
+                    metrics,
                 )
 
             # Check restart count
-            if metrics.get('restart_count', 0) > self.thresholds['restart_count']:
+            if metrics.get("restart_count", 0) > self.thresholds["restart_count"]:
                 await self._trigger_alert(
                     container_id,
-                    'high_restart_count',
+                    "high_restart_count",
                     f"High restart count: {metrics.get('restart_count')} > {self.thresholds['restart_count']}",
-                    metrics
+                    metrics,
                 )
 
             # Check health status
-            if metrics.get('health_status') == self.thresholds['health_status']:
+            if metrics.get("health_status") == self.thresholds["health_status"]:
                 await self._trigger_alert(
-                    container_id,
-                    'unhealthy',
-                    f"Container is unhealthy: {metrics.get('health_status')}",
-                    metrics
+                    container_id, "unhealthy", f"Container is unhealthy: {metrics.get('health_status')}", metrics
                 )
 
-    async def _trigger_alert(
-        self,
-        container_id: str,
-        alert_type: str,
-        message: str,
-        metrics: dict[str, Any]
-    ) -> None:
+    async def _trigger_alert(self, container_id: str, alert_type: str, message: str, metrics: dict[str, Any]) -> None:
         """Trigger an alert for a container."""
         container = self.monitored_containers.get(container_id, {})
-        container_name = container.get('name', container_id[:12])
+        container_name = container.get("name", container_id[:12])
 
         # Check if this alert was recently triggered to avoid spam
-        last_alert = container.get('last_alert', {}).get(alert_type)
+        last_alert = container.get("last_alert", {}).get(alert_type)
         if last_alert and (datetime.utcnow() - datetime.fromisoformat(last_alert)) < timedelta(minutes=5):
             logger.debug(f"Alert {alert_type} for {container_name} was recently triggered, skipping")
             return
 
         # Create alert
         alert = {
-            'timestamp': datetime.utcnow().isoformat(),
-            'container_id': container_id,
-            'container_name': container_name,
-            'alert_type': alert_type,
-            'message': message,
-            'metrics': metrics
+            "timestamp": datetime.utcnow().isoformat(),
+            "container_id": container_id,
+            "container_name": container_name,
+            "alert_type": alert_type,
+            "message": message,
+            "metrics": metrics,
         }
 
         # Store alert
@@ -283,9 +271,9 @@ class ContainerMonitor:
         self.alerts[container_id].append(alert)
 
         # Update last alert time
-        if 'last_alert' not in self.monitored_containers[container_id]:
-            self.monitored_containers[container_id]['last_alert'] = {}
-        self.monitored_containers[container_id]['last_alert'][alert_type] = alert['timestamp']
+        if "last_alert" not in self.monitored_containers[container_id]:
+            self.monitored_containers[container_id]["last_alert"] = {}
+        self.monitored_containers[container_id]["last_alert"][alert_type] = alert["timestamp"]
 
         # Log the alert
         logger.warning(f"ALERT: {container_name} - {message}")
@@ -299,8 +287,8 @@ class ContainerMonitor:
 
     async def _log_alert(self, alert: dict[str, Any]) -> None:
         """Log alert to file."""
-        with open('alerts.log', 'a') as f:
-            f.write(json.dumps(alert) + '\n')
+        with open("alerts.log", "a") as f:
+            f.write(json.dumps(alert) + "\n")
 
     async def _console_alert(self, alert: dict[str, Any]) -> None:
         """Print alert to console."""
@@ -337,7 +325,8 @@ class ContainerMonitor:
             all_alerts = []
             for alerts in self.alerts.values():
                 all_alerts.extend(alerts)
-            return sorted(all_alerts, key=lambda x: x['timestamp'], reverse=True)[:limit]
+            return sorted(all_alerts, key=lambda x: x["timestamp"], reverse=True)[:limit]
+
 
 async def main() -> None:
     """Run the monitoring example."""
@@ -362,11 +351,13 @@ async def main() -> None:
             if int(datetime.utcnow().timestamp()) % 30 == 0:  # Every 30 seconds
                 print("\n=== Status Update ===")
                 for container_id, container in monitor.monitored_containers.items():
-                    metrics = container.get('metrics', {})
+                    metrics = container.get("metrics", {})
                     print(f"{container.get('name', container_id[:12])}:")
                     print(f"  Status: {container.get('status')}")
                     print(f"  CPU: {metrics.get('cpu_percent', 0):.1f}%")
-                    print(f"  Memory: {metrics.get('memory_usage', 0) / (1024*1024):.1f}MB / {metrics.get('memory_limit', 1) / (1024*1024):.1f}MB ({metrics.get('memory_percent', 0):.1f}%)")
+                    print(
+                        f"  Memory: {metrics.get('memory_usage', 0) / (1024 * 1024):.1f}MB / {metrics.get('memory_limit', 1) / (1024 * 1024):.1f}MB ({metrics.get('memory_percent', 0):.1f}%)"
+                    )
                     print(f"  Health: {metrics.get('health_status', 'unknown')}")
                     print()
 
@@ -377,7 +368,7 @@ async def main() -> None:
     finally:
         # Stop monitoring
         monitor.running = False
-        if 'monitor_task' in locals():
+        if "monitor_task" in locals():
             monitor_task.cancel()
             try:
                 await monitor_task
@@ -385,6 +376,7 @@ async def main() -> None:
                 pass
 
         logger.info("Monitor stopped")
+
 
 if __name__ == "__main__":
     try:

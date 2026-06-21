@@ -1,8 +1,11 @@
+import shutil
+
 """
 Tests for Docker network tools.
 
 This module contains tests for the network management functionality in the Docker MCP.
 """
+
 import os
 import sys
 from collections.abc import Callable
@@ -12,40 +15,40 @@ from unittest.mock import Mock, patch
 import pytest
 
 # Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../..')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+
 
 # Mock FastMCP components
 class ToolError(Exception):
     """Mock ToolError for testing."""
+
     pass
 
+
 # Mock the Tool decorator
-def Tool(
-    name: str,
-    description: str,
-    parameters: dict[str, Any],
-    returns: dict[str, Any],
-    **kwargs
-) -> Callable:
+def Tool(name: str, description: str, parameters: dict[str, Any], returns: dict[str, Any], **kwargs) -> Callable:
     """Mock Tool decorator for testing."""
+
     def decorator(func):
         func.tool_metadata = {
-            'name': name,
-            'description': description,
-            'parameters': parameters,
-            'returns': returns,
-            **kwargs
+            "name": name,
+            "description": description,
+            "parameters": parameters,
+            "returns": returns,
+            **kwargs,
         }
         return func
+
     return decorator
 
+
 # Mock the network tools module
-sys.modules['fastmcp'] = Mock()
-sys.modules['fastmcp.exceptions'] = Mock(ToolError=ToolError)
-sys.modules['fastmcp.tools'] = Mock(Tool=Tool)
+sys.modules["fastmcp"] = Mock()
+sys.modules["fastmcp.exceptions"] = Mock(ToolError=ToolError)
+sys.modules["fastmcp.tools"] = Mock(Tool=Tool)
 
 # Now import the tools to test
-with patch('fastmcp.tools.Tool', Tool):
+with patch("fastmcp.tools.Tool", Tool):
     from dockermcp.tools.networks.network_tools import (
         connect_container_to_network,
         create_network,
@@ -62,13 +65,15 @@ TEST_NETWORK_ID = "7d86d31b1478e7cc9a2c8b8c4b982a5eafc70b5349d0d5a5875a855d0f2d2
 TEST_NETWORK_NAME = "test-network"
 TEST_CONTAINER_ID = "c8a8e6d5f7g9h1j2k3l4m5n6o7p8q9r0"
 
+
 # Fixtures
 @pytest.fixture
 def mock_run_docker_command():
     """Mock the run_docker_command function."""
-    with patch('dockermcp.tools.networks.network_tools.run_docker_command') as mock:
+    with patch("dockermcp.tools.networks.network_tools.run_docker_command") as mock:
         mock.side_effect = mock_run_docker_command
         yield mock
+
 
 # Test classes
 class TestPruneNetworks:
@@ -78,18 +83,11 @@ class TestPruneNetworks:
     async def test_prune_networks_success(self, mock_run_docker_command):
         """Test successful network pruning."""
         # Mock the Docker command response
-        mock_response = {
-            "NetworksDeleted": ["network1", "network2"],
-            "SpaceReclaimed": 1024
-        }
+        mock_response = {"NetworksDeleted": ["network1", "network2"], "SpaceReclaimed": 1024}
         mock_run_docker_command.return_value = mock_response
 
         # Call the function with a valid filter
-        result = await prune_networks(
-            filters={"until": "24h"},
-            force=True,
-            timeout=30
-        )
+        result = await prune_networks(filters={"until": "24h"}, force=True, timeout=30)
 
         # Verify the result
         assert result["success"] is True
@@ -159,6 +157,7 @@ class TestPruneNetworks:
         with pytest.raises(ValueError):
             await prune_networks(filters={"invalid_filter": 123})
 
+
 # Add more test classes for other network tools
 class TestListNetworks:
     """Tests for the list_networks function."""
@@ -167,12 +166,7 @@ class TestListNetworks:
     async def test_list_networks_success(self, mock_run_docker_command):
         """Test successful network listing."""
         # Mock the Docker command response
-        mock_response = [{
-            "Id": TEST_NETWORK_ID,
-            "Name": TEST_NETWORK_NAME,
-            "Driver": "bridge",
-            "Scope": "local"
-        }]
+        mock_response = [{"Id": TEST_NETWORK_ID, "Name": TEST_NETWORK_NAME, "Driver": "bridge", "Scope": "local"}]
         mock_run_docker_command.return_value = mock_response
 
         # Call the function
@@ -187,6 +181,7 @@ class TestListNetworks:
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
+
 class TestCreateNetwork:
     """Tests for the create_network function."""
 
@@ -194,18 +189,11 @@ class TestCreateNetwork:
     async def test_create_network_success(self, mock_run_docker_command):
         """Test successful network creation."""
         # Mock the Docker command response
-        mock_response = {
-            "Id": TEST_NETWORK_ID,
-            "Warning": ""
-        }
+        mock_response = {"Id": TEST_NETWORK_ID, "Warning": ""}
         mock_run_docker_command.return_value = mock_response
 
         # Call the function
-        result = await create_network(
-            name=TEST_NETWORK_NAME,
-            driver="bridge",
-            enable_ipv6=False
-        )
+        result = await create_network(name=TEST_NETWORK_NAME, driver="bridge", enable_ipv6=False)
 
         # Verify the result
         assert result["success"] is True
@@ -214,6 +202,7 @@ class TestCreateNetwork:
 
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
+
 
 class TestRemoveNetwork:
     """Tests for the remove_network function."""
@@ -225,11 +214,7 @@ class TestRemoveNetwork:
         mock_run_docker_command.return_value = None  # No output on success
 
         # Call the function
-        result = await remove_network(
-            network_id=TEST_NETWORK_ID,
-            force=True,
-            timeout=30
-        )
+        result = await remove_network(network_id=TEST_NETWORK_ID, force=True, timeout=30)
 
         # Verify the result
         assert result["success"] is True
@@ -237,6 +222,7 @@ class TestRemoveNetwork:
 
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
+
 
 class TestConnectContainerToNetwork:
     """Tests for the connect_container_to_network function."""
@@ -253,7 +239,7 @@ class TestConnectContainerToNetwork:
             network_id=TEST_NETWORK_ID,
             ipv4_address="172.20.0.2",
             aliases=["test-alias"],
-            timeout=30
+            timeout=30,
         )
 
         # Verify the result
@@ -262,6 +248,7 @@ class TestConnectContainerToNetwork:
 
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
+
 
 class TestDisconnectContainerFromNetwork:
     """Tests for the disconnect_container_from_network function."""
@@ -274,10 +261,7 @@ class TestDisconnectContainerFromNetwork:
 
         # Call the function
         result = await disconnect_container_from_network(
-            container_id=TEST_CONTAINER_ID,
-            network_id=TEST_NETWORK_ID,
-            force=True,
-            timeout=30
+            container_id=TEST_CONTAINER_ID, network_id=TEST_NETWORK_ID, force=True, timeout=30
         )
 
         # Verify the result
@@ -287,6 +271,7 @@ class TestDisconnectContainerFromNetwork:
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
+
 class TestGetNetworkStats:
     """Tests for the get_network_stats function."""
 
@@ -294,48 +279,36 @@ class TestGetNetworkStats:
     async def test_get_network_stats_success(self, mock_run_docker_command):
         """Test successful retrieval of network statistics."""
         # Mock the Docker command responses
-        mock_inspect_response = [{
-            "Id": TEST_NETWORK_ID,
-            "Name": TEST_NETWORK_NAME,
-            "Driver": "bridge",
-            "IPAM": {
-                "Driver": "default",
-                "Config": [{"Subnet": "172.20.0.0/16"}]
-            },
-            "Containers": {
-                TEST_CONTAINER_ID: {
-                    "Name": "test-container",
-                    "EndpointID": "abc123",
-                    "MacAddress": "02:42:ac:14:00:02",
-                    "IPv4Address": "172.20.0.2/16",
-                    "IPv6Address": ""
-                }
+        mock_inspect_response = [
+            {
+                "Id": TEST_NETWORK_ID,
+                "Name": TEST_NETWORK_NAME,
+                "Driver": "bridge",
+                "IPAM": {"Driver": "default", "Config": [{"Subnet": "172.20.0.0/16"}]},
+                "Containers": {
+                    TEST_CONTAINER_ID: {
+                        "Name": "test-container",
+                        "EndpointID": "abc123",
+                        "MacAddress": "02:42:ac:14:00:02",
+                        "IPv4Address": "172.20.0.2/16",
+                        "IPv6Address": "",
+                    }
+                },
             }
-        }]
+        ]
 
         mock_stats_response = {
-            "networks": {
-                "eth0": {
-                    "rx_bytes": 1024,
-                    "rx_packets": 10,
-                    "tx_bytes": 512,
-                    "tx_packets": 5
-                }
-            }
+            "networks": {"eth0": {"rx_bytes": 1024, "rx_packets": 10, "tx_bytes": 512, "tx_packets": 5}}
         }
 
         # Configure the mock to return different values on subsequent calls
         mock_run_docker_command.side_effect = [
             mock_inspect_response,  # network inspect
-            mock_stats_response    # container stats
+            mock_stats_response,  # container stats
         ]
 
         # Call the function
-        result = await get_network_stats(
-            network_id=TEST_NETWORK_ID,
-            verbose=True,
-            timeout=30
-        )
+        result = await get_network_stats(network_id=TEST_NETWORK_ID, verbose=True, timeout=30)
 
         # Verify the result
         assert result["success"] is True
@@ -347,6 +320,7 @@ class TestGetNetworkStats:
         # Verify the Docker commands were called correctly
         assert mock_run_docker_command.await_count == 2
 
+
 class TestInspectNetwork:
     """Tests for the inspect_network function."""
 
@@ -354,24 +328,20 @@ class TestInspectNetwork:
     async def test_inspect_network_success(self, mock_run_docker_command):
         """Test successful network inspection."""
         # Mock the Docker command response
-        mock_response = [{
-            "Id": TEST_NETWORK_ID,
-            "Name": TEST_NETWORK_NAME,
-            "Driver": "bridge",
-            "IPAM": {
-                "Driver": "default",
-                "Config": [{"Subnet": "172.20.0.0/16"}]
-            },
-            "Containers": {},
-            "Options": {}
-        }]
+        mock_response = [
+            {
+                "Id": TEST_NETWORK_ID,
+                "Name": TEST_NETWORK_NAME,
+                "Driver": "bridge",
+                "IPAM": {"Driver": "default", "Config": [{"Subnet": "172.20.0.0/16"}]},
+                "Containers": {},
+                "Options": {},
+            }
+        ]
         mock_run_docker_command.return_value = mock_response
 
         # Call the function
-        result = await inspect_network(
-            network_id=TEST_NETWORK_ID,
-            verbose=True
-        )
+        result = await inspect_network(network_id=TEST_NETWORK_ID, verbose=True)
 
         # Verify the result
         assert result["success"] is True
@@ -382,14 +352,15 @@ class TestInspectNetwork:
         # Verify the Docker command was called correctly
         mock_run_docker_command.assert_awaited_once()
 
+
 # Helper functions for testing
 def validate_network_response(response: dict[str, Any]) -> None:
     """
     Validate the structure of a network response.
-    
+
     Args:
         response: The response dictionary to validate
-        
+
     Raises:
         AssertionError: If the response structure is invalid
     """
@@ -399,45 +370,35 @@ def validate_network_response(response: dict[str, Any]) -> None:
     assert isinstance(response["message"], str), "Message must be a string"
 
     if response["success"]:
-        assert "id" in response or "networks" in response, \
-            "Successful response must contain 'id' or 'networks' key"
+        assert "id" in response or "networks" in response, "Successful response must contain 'id' or 'networks' key"
     else:
         assert "error" in response, "Error response must contain 'error' key"
 
+
 # Skip tests if Docker is not available
-pytestmark = pytest.mark.skipif(
-    not shutil.which("docker"),
-    reason="Docker is not available"
-)
+pytestmark = pytest.mark.skipif(not shutil.which("docker"), reason="Docker is not available")
+
 
 # Mock the run_docker_command function
 def mock_run_docker_command(*args, **kwargs):
     """Mock function for run_docker_command."""
-    if 'network' in args[1] and 'prune' in args[1]:
-        return {
-            "NetworksDeleted": ["network1", "network2"],
-            "SpaceReclaimed": 1024
-        }
-    elif 'network' in args[1] and 'ls' in args[1]:
-        return [{
-            "Id": TEST_NETWORK_ID,
-            "Name": TEST_NETWORK_NAME,
-            "Driver": "bridge",
-            "Scope": "local"
-        }]
-    elif 'network' in args[1] and 'inspect' in args[1]:
-        return [{
-            "Id": TEST_NETWORK_ID,
-            "Name": TEST_NETWORK_NAME,
-            "Driver": "bridge",
-            "IPAM": {
-                "Driver": "default",
-                "Config": [{"Subnet": "172.20.0.0/16"}]
-            },
-            "Containers": {},
-            "Options": {}
-        }]
+    if "network" in args[1] and "prune" in args[1]:
+        return {"NetworksDeleted": ["network1", "network2"], "SpaceReclaimed": 1024}
+    elif "network" in args[1] and "ls" in args[1]:
+        return [{"Id": TEST_NETWORK_ID, "Name": TEST_NETWORK_NAME, "Driver": "bridge", "Scope": "local"}]
+    elif "network" in args[1] and "inspect" in args[1]:
+        return [
+            {
+                "Id": TEST_NETWORK_ID,
+                "Name": TEST_NETWORK_NAME,
+                "Driver": "bridge",
+                "IPAM": {"Driver": "default", "Config": [{"Subnet": "172.20.0.0/16"}]},
+                "Containers": {},
+                "Options": {},
+            }
+        ]
     return None
+
 
 # Ensure test output directory exists
 test_output_dir = os.path.join(os.path.dirname(__file__), "test_output")

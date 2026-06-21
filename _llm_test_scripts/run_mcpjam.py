@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """MCPJam launcher script for Docker MCP."""
+
 import sys
 from pathlib import Path
 

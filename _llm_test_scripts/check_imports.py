@@ -7,7 +7,8 @@ Quick verification script to check all imports that container_management.py expe
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
 
 def check_import(module_path, import_name):
     """Check if a specific import exists in a module."""
@@ -22,6 +23,7 @@ def check_import(module_path, import_name):
     except ImportError as e:
         print(f"❌ {module_path}.{import_name} - IMPORT ERROR: {e}")
         return False
+
 
 def main():
     """Check all the imports that container_management.py expects."""
@@ -95,6 +97,7 @@ def main():
     else:
         print("❌ Some imports are missing and need to be fixed.")
         return False
+
 
 if __name__ == "__main__":
     success = main()

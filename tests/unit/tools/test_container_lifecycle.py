@@ -3,6 +3,7 @@ Test suite for container lifecycle management tools.
 
 This module contains tests for container lifecycle operations like create, start, stop, etc.
 """
+
 import asyncio
 import os
 import sys
@@ -10,7 +11,7 @@ import unittest
 from unittest.mock import AsyncMock, MagicMock, patch
 
 # Add the src directory to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'src')))
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src")))
 
 from fastmcp.exceptions import ToolError
 from pydantic import ValidationError
@@ -38,6 +39,7 @@ TEST_CONTAINER_ID = "test-container-id"
 TEST_CONTAINER_NAME = "test-container"
 TEST_IMAGE = "test-image:latest"
 
+
 class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     """Test cases for container lifecycle management tools."""
 
@@ -48,52 +50,48 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         self.mock_container = MagicMock()
         self.mock_container.id = TEST_CONTAINER_ID
         self.mock_container.name = TEST_CONTAINER_NAME
-        self.mock_container.status = 'running'
+        self.mock_container.status = "running"
 
         # Configure the container mock
         self.mock_container.attrs = {
-            'Id': TEST_CONTAINER_ID,
-            'Name': TEST_CONTAINER_NAME,
-            'State': {
-                'Status': 'running',
-                'Running': True,
-                'Paused': False,
-                'Restarting': False,
-                'OOMKilled': False,
-                'Dead': False,
-                'Pid': 12345,
-                'ExitCode': 0,
-                'Error': '',
-                'StartedAt': '2023-01-01T00:00:00Z',
-                'FinishedAt': '0001-01-01T00:00:00Z'
+            "Id": TEST_CONTAINER_ID,
+            "Name": TEST_CONTAINER_NAME,
+            "State": {
+                "Status": "running",
+                "Running": True,
+                "Paused": False,
+                "Restarting": False,
+                "OOMKilled": False,
+                "Dead": False,
+                "Pid": 12345,
+                "ExitCode": 0,
+                "Error": "",
+                "StartedAt": "2023-01-01T00:00:00Z",
+                "FinishedAt": "0001-01-01T00:00:00Z",
             },
-            'Config': {
-                'Image': TEST_IMAGE,
-                'Labels': {},
-                'Env': []
-            },
-            'Image': 'sha256:test123'
+            "Config": {"Image": TEST_IMAGE, "Labels": {}, "Env": []},
+            "Image": "sha256:test123",
         }
 
         # Add reload method to the mock container
         def reload_mock():
             # Update the status based on the last operation
-            if hasattr(self.mock_container, 'paused') and self.mock_container.paused:
-                self.mock_container.status = 'paused'
-                self.mock_container.attrs['State']['Paused'] = True
-                self.mock_container.attrs['State']['Running'] = True
-            elif hasattr(self.mock_container, 'stopped') and self.mock_container.stopped:
-                self.mock_container.status = 'exited'
-                self.mock_container.attrs['State']['Running'] = False
+            if hasattr(self.mock_container, "paused") and self.mock_container.paused:
+                self.mock_container.status = "paused"
+                self.mock_container.attrs["State"]["Paused"] = True
+                self.mock_container.attrs["State"]["Running"] = True
+            elif hasattr(self.mock_container, "stopped") and self.mock_container.stopped:
+                self.mock_container.status = "exited"
+                self.mock_container.attrs["State"]["Running"] = False
             else:
-                self.mock_container.status = 'running'
-                self.mock_container.attrs['State']['Running'] = True
-                self.mock_container.attrs['State']['Paused'] = False
+                self.mock_container.status = "running"
+                self.mock_container.attrs["State"]["Running"] = True
+                self.mock_container.attrs["State"]["Paused"] = False
 
         self.mock_container.reload = MagicMock(side_effect=reload_mock)
 
         # Patch the Docker client
-        self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
+        self.docker_patcher = patch("docker.from_env", return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
 
         # Set up the mock to return our test container
@@ -131,40 +129,36 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
 
         # Reset the container state
         self.mock_container.attrs = {
-            'Id': TEST_CONTAINER_ID,
-            'Name': TEST_CONTAINER_NAME,
-            'State': {
-                'Status': 'running',
-                'Running': True,
-                'Paused': False,
-                'Restarting': False,
-                'OOMKilled': False,
-                'Dead': False,
-                'Pid': 12345,
-                'ExitCode': 0,
-                'Error': '',
-                'StartedAt': '2023-01-01T00:00:00Z',
-                'FinishedAt': '0001-01-01T00:00:00Z'
+            "Id": TEST_CONTAINER_ID,
+            "Name": TEST_CONTAINER_NAME,
+            "State": {
+                "Status": "running",
+                "Running": True,
+                "Paused": False,
+                "Restarting": False,
+                "OOMKilled": False,
+                "Dead": False,
+                "Pid": 12345,
+                "ExitCode": 0,
+                "Error": "",
+                "StartedAt": "2023-01-01T00:00:00Z",
+                "FinishedAt": "0001-01-01T00:00:00Z",
             },
-            'Config': {
-                'Image': TEST_IMAGE,
-                'Labels': {},
-                'Env': []
-            },
-            'Image': 'sha256:test123'
+            "Config": {"Image": TEST_IMAGE, "Labels": {}, "Env": []},
+            "Image": "sha256:test123",
         }
 
         # Reset any custom attributes
-        if hasattr(self.mock_container, 'paused'):
-            delattr(self.mock_container, 'paused')
-        if hasattr(self.mock_container, 'stopped'):
-            delattr(self.mock_container, 'stopped')
+        if hasattr(self.mock_container, "paused"):
+            delattr(self.mock_container, "paused")
+        if hasattr(self.mock_container, "stopped"):
+            delattr(self.mock_container, "stopped")
 
         # Set up the Docker client mock
         self.docker_client.containers.get.return_value = self.mock_container
 
         # Patch the Docker client
-        self.docker_patcher = patch('docker.from_env', return_value=self.docker_client)
+        self.docker_patcher = patch("docker.from_env", return_value=self.docker_client)
         self.mock_docker = self.docker_patcher.start()
 
         # Import the module after patching
@@ -182,14 +176,11 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_start_container(self):
         """Test starting a container."""
         # Set initial state: container is stopped
-        self.mock_container.attrs['State']['Running'] = False
-        self.mock_container.status = 'exited'
+        self.mock_container.attrs["State"]["Running"] = False
+        self.mock_container.status = "exited"
 
         # Create the request
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.START
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.START)
 
         # Call the implementation directly for testing
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -204,12 +195,12 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         self.mock_container.start.assert_called_once()
 
         # Verify the container state was updated
-        self.assertTrue(self.mock_container.attrs['State']['Running'])
+        self.assertTrue(self.mock_container.attrs["State"]["Running"])
         self.docker_client.containers.get.assert_called_once_with(TEST_CONTAINER_ID)
 
         # Test 2: Start already running container
         self.mock_container.start.reset_mock()
-        self.mock_container.attrs['State']['Running'] = True
+        self.mock_container.attrs["State"]["Running"] = True
 
         response = await manage_container_lifecycle(request)
         self.assertTrue(response["success"])
@@ -217,13 +208,9 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
 
         # Test 3: Start with custom timeout
         self.mock_container.start.reset_mock()
-        self.mock_container.attrs['State']['Running'] = False
+        self.mock_container.attrs["State"]["Running"] = False
 
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.START,
-            timeout=30
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.START, timeout=30)
 
         await manage_container_lifecycle(request)
         self.mock_container.start.assert_called_once()
@@ -231,15 +218,11 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_stop_container(self):
         """Test stopping a container."""
         # Set initial state: container is running
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'running'
+        self.mock_container.attrs["State"]["Running"] = True
+        self.mock_container.status = "running"
 
         # Create the request with a custom timeout
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.STOP,
-            timeout=10
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.STOP, timeout=10)
 
         # Execute - use the implementation directly for testing
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -254,7 +237,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
 
         # Test stopping an already stopped container
         self.mock_container.stop.reset_mock()
-        self.mock_container.attrs['State']['Running'] = False
+        self.mock_container.attrs["State"]["Running"] = False
 
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
         self.assertTrue(response["success"])
@@ -263,15 +246,11 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_restart_container(self):
         """Test restarting a container."""
         # Set initial state: container is running
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'running'
+        self.mock_container.attrs["State"]["Running"] = True
+        self.mock_container.status = "running"
 
         # Create the request with a custom timeout
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.RESTART,
-            timeout=5
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.RESTART, timeout=5)
 
         # Execute - use the implementation directly for testing
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -286,7 +265,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
 
         # Test restarting a stopped container
         self.mock_container.restart.reset_mock()
-        self.mock_container.attrs['State']['Running'] = False
+        self.mock_container.attrs["State"]["Running"] = False
 
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
         self.assertTrue(response["success"])
@@ -295,15 +274,12 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_remove_container(self):
         """Test removing a container."""
         # Set initial state: container is stopped
-        self.mock_container.attrs['State']['Running'] = False
-        self.mock_container.status = 'exited'
+        self.mock_container.attrs["State"]["Running"] = False
+        self.mock_container.status = "exited"
 
         # Test force remove on stopped container
         request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.REMOVE,
-            force=True,
-            remove_volumes=True
+            container_id=TEST_CONTAINER_ID, action=ContainerAction.REMOVE, force=True, remove_volumes=True
         )
 
         # Execute - use the implementation directly for testing
@@ -321,24 +297,21 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         """Test handling of containers in various abnormal states."""
         # Test with paused container
         self.mock_container.paused = True
-        self.mock_container.attrs['State']['Paused'] = True
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'paused'
+        self.mock_container.attrs["State"]["Paused"] = True
+        self.mock_container.attrs["State"]["Running"] = True
+        self.mock_container.status = "paused"
 
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.START
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.START)
 
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
         self.assertTrue(response["success"])
         self.mock_container.unpause.assert_called_once()
-        self.assertFalse(hasattr(self.mock_container, 'paused'))  # Should be removed by the wrapper
+        self.assertFalse(hasattr(self.mock_container, "paused"))  # Should be removed by the wrapper
 
         # Test with dead container
-        self.mock_container.attrs['State']['Dead'] = True
-        self.mock_container.attrs['State']['Running'] = False
-        self.mock_container.status = 'dead'
+        self.mock_container.attrs["State"]["Dead"] = True
+        self.mock_container.attrs["State"]["Running"] = False
+        self.mock_container.status = "dead"
 
         with self.assertRaises(ToolError) as context:
             await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -347,14 +320,10 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_force_remove_container(self):
         """Test force removal of a running container."""
         # Test force remove on running container
-        self.mock_container.attrs['State']['Running'] = True
-        self.mock_container.status = 'running'
+        self.mock_container.attrs["State"]["Running"] = True
+        self.mock_container.status = "running"
 
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.REMOVE,
-            force=True
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.REMOVE, force=True)
 
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
         self.assertTrue(response["success"])
@@ -363,10 +332,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
     async def test_restart_policies(self):
         """Test container restart with different policies."""
         # Test with default policy (no restart)
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.RESTART
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.RESTART)
 
         # Call the implementation directly for testing
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -376,11 +342,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         # Test with custom timeout
         self.mock_container.restart.reset_mock()
 
-        request = ContainerLifecycleRequest(
-            container_id=TEST_CONTAINER_ID,
-            action=ContainerAction.RESTART,
-            timeout=5
-        )
+        request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.RESTART, timeout=5)
 
         # Call the implementation directly for testing
         response = await container_lifecycle._manage_container_lifecycle_impl(request)
@@ -391,27 +353,23 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         """Test validation of request parameters."""
         # Test invalid action
         with self.assertRaises(ValidationError):
-            ContainerLifecycleRequest(
-                container_id="test-container",
-                action="invalid_action"
-            )
+            ContainerLifecycleRequest(container_id="test-container", action="invalid_action")
 
         # Test missing container_id
         with self.assertRaises(ValidationError):
-            ContainerLifecycleRequest(
-                action=ContainerAction.START
-            )
+            ContainerLifecycleRequest(action=ContainerAction.START)
 
         # Test invalid timeout (should be ge 0)
         with self.assertRaises(ValidationError):
             ContainerLifecycleRequest(
                 container_id="test-container",
                 action=ContainerAction.START,
-                timeout=-1  # Invalid timeout
+                timeout=-1,  # Invalid timeout
             )
 
     async def test_concurrent_operations(self):
         """Test handling of concurrent operations on the same container."""
+
         # Simulate a slow operation
         async def slow_start():
             await asyncio.sleep(0.1)
@@ -426,10 +384,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         async def run_operation():
             # Simulate acquiring a lock on the container
             async with operation_lock:
-                request = ContainerLifecycleRequest(
-                    container_id=TEST_CONTAINER_ID,
-                    action=ContainerAction.START
-                )
+                request = ContainerLifecycleRequest(container_id=TEST_CONTAINER_ID, action=ContainerAction.START)
                 return await container_lifecycle._manage_container_lifecycle_impl(request)
 
         # Start multiple operations concurrently
@@ -445,6 +400,7 @@ class TestContainerLifecycle(unittest.IsolatedAsyncioTestCase):
         # Verify the container was started once for each operation
         # (In a real scenario, you might want to implement operation deduplication)
         self.assertEqual(self.mock_container.start.call_count, 3)
+
 
 # Helper function to run async tests
 if __name__ == "__main__":

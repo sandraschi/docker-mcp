@@ -80,5 +80,5 @@ __all__ = [
     "stop_container",
     "unmount_volume_from_container",
     "unpause_container",
-    "update_container"
+    "update_container",
 ]

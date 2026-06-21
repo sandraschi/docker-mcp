@@ -18,8 +18,11 @@ a = Analysis(
     ["run_server.py"],
     pathex=["src"],
     binaries=[],
+    
     datas=datas,
     hiddenimports=[
+
+    "_datetime",
         "uvicorn.logging",
         "uvicorn.loops",
         "uvicorn.loops.asyncio",
@@ -36,12 +39,14 @@ a = Analysis(
         "dockermcp.fleet_surface",
         "dockermcp.prefabs",
         "customization.server",
-    ],
+    "_strptime",
+],
     hookspath=[],
+    
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
-    noarchive=False,
+    noarchive=True,
     optimize=0,
 )
 pyz = PYZ(a.pure)
@@ -51,12 +56,18 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
+    
     name="docker-mcp-backend",
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=True,
     disable_windowed_traceback=False,
     argv_emulation=False,
 )
+
+
+
+
+

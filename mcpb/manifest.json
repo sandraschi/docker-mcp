@@ -1,0 +1,59 @@
+{
+  "manifest_version": "0.2",
+  "name": "schip-mcp-docker",
+  "version": "3.3.0",
+  "description": "FastMCP 3.3 server for comprehensive Docker operations",
+  "author": { "name": "sandraschi" },
+  "server": {
+    "type": "python",
+    "entry_point": "run_server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run","--directory","${PWD}","run_server.py"],
+      "env": {
+        "PYTHONPATH": "${PWD}/src",
+        "PYTHONUNBUFFERED": "1"
+      }
+    }
+  },
+  "tools": [
+    { "name": "main_stdio", "description": "main(stdio)" },
+    { "name": "main_http", "description": "main(http)" },
+    { "name": "main_sse", "description": "main(sse)" },
+    { "name": "docker_containers_card", "description": "docker_containers_card" },
+    { "name": "docker_desktop_status_card", "description": "docker_desktop_status_card" },
+    { "name": "docker_system_info_card", "description": "Engine system info as a Prefab card." },
+    { "name": "health", "description": "health" },
+    { "name": "get_dashboard", "description": "Get dashboard overview with system info and container status" },
+    { "name": "get_containers", "description": "Get list of all containers" },
+    { "name": "get_tools", "description": "Get list of available MCP tools" },
+    { "name": "list_containers", "description": "list_containers" },
+    { "name": "example_tool", "description": "example_tool" },
+    { "name": "agentic_container_workflow", "description": "agentic_container_workflow" },
+    { "name": "get_docker_status_tool", "description": "get_docker_status_tool" },
+    { "name": "docker_daemon_recover", "description": "docker_daemon_recover" },
+    { "name": "docker_daemon_restart", "description": "docker_daemon_restart" },
+    { "name": "docker_desktop_status", "description": "docker_desktop_status" },
+    { "name": "docker_desktop_update", "description": "docker_desktop_update" },
+    { "name": "list_gpus", "description": "list_gpus" },
+    { "name": "get_gpu_info", "description": "get_gpu_info" },
+    { "name": "monitor_gpu_usage", "description": "monitor_gpu_usage" },
+    { "name": "get_image_history", "description": "get_image_history" },
+    { "name": "list_volumes", "description": "list_volumes" },
+    { "name": "create_volume", "description": "create_volume" },
+    { "name": "remove_volume", "description": "remove_volume" },
+    { "name": "prune_volumes", "description": "prune_volumes" },
+    { "name": "capabilities", "description": "capabilities" },
+    { "name": "list_tools", "description": "list_tools" },
+    { "name": "llm_providers", "description": "llm_providers" },
+    { "name": "logs_query", "description": "logs_query" },
+    { "name": "logs_stats", "description": "logs_stats" },
+    { "name": "logs_export", "description": "logs_export" },
+    { "name": "logs_clear", "description": "logs_clear" },
+    { "name": "api_containers", "description": "api_containers" },
+    { "name": "api_system", "description": "api_system" },
+    { "name": "api_images", "description": "api_images" },
+    { "name": "api_dashboard", "description": "api_dashboard" },
+    { "name": "chat", "description": "chat" }
+  ]
+}

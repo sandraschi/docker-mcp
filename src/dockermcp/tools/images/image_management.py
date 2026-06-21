@@ -9,6 +9,7 @@ This module provides comprehensive tools for managing Docker images including:
 - Managing image history and layers
 - Cleaning up unused images
 """
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -29,59 +30,61 @@ from dockermcp.mcp_instance import mcp
 
 class ImagePullPolicy(StrEnum):
     """Policy for pulling container images."""
+
     ALWAYS = "always"
     IF_NOT_PRESENT = "if-not-present"
     NEVER = "never"
 
+
 class ImageBuildStatus(StrEnum):
     """Status of an image build operation."""
+
     SUCCESS = "success"
     FAILED = "failed"
     CANCELLED = "cancelled"
 
+
 class ImagePullProgress(BaseModel):
     """Progress information for an image pull operation."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "id": "sha256:...",
-        "status": "Downloading",
-        "progress": "[=====>              ] 45%"
-    }})
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {"id": "sha256:...", "status": "Downloading", "progress": "[=====>              ] 45%"}
+        }
+    )
 
     id: str | None = Field(default=None, description="Image or layer ID")
     status: str | None = Field(default=None, description="Status message")
     progress: str | None = Field(default=None, description="Progress bar")
-    progress_detail: dict[str, Any] = Field(
-        default_factory=dict,
-        description="Detailed progress information"
-    )
+    progress_detail: dict[str, Any] = Field(default_factory=dict, description="Detailed progress information")
     error: str | None = Field(default=None, description="Error message if any")
+
 
 class ImageBuildResult(BaseModel):
     """Result of an image build operation."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "image_id": "sha256:...",
-        "status": "success",
-        "logs": [{"stream": "Successfully built abc123"}]
-    }})
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "image_id": "sha256:...",
+                "status": "success",
+                "logs": [{"stream": "Successfully built abc123"}],
+            }
+        }
+    )
 
     image_id: str | None = Field(default=None, description="ID of the built image")
-    logs: list[dict[str, Any]] = Field(
-        default_factory=list,
-        description="Build output logs"
-    )
-    status: ImageBuildStatus = Field(
-        default=ImageBuildStatus.SUCCESS,
-        description="Build status"
-    )
+    logs: list[dict[str, Any]] = Field(default_factory=list, description="Build output logs")
+    status: ImageBuildStatus = Field(default=ImageBuildStatus.SUCCESS, description="Build status")
     error: str | None = Field(default=None, description="Error message if build failed")
+
 
 class ImageLayer(BaseModel):
     """Represents a layer in a Docker image."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "id": "sha256:...",
-        "size": 12345678,
-        "empty_layer": False
-    }})
+
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"id": "sha256:...", "size": 12345678, "empty_layer": False}}
+    )
 
     id: str = Field(..., description="Layer ID")
     created: datetime | None = Field(default=None, description="Creation timestamp")
@@ -90,14 +93,20 @@ class ImageLayer(BaseModel):
     comment: str | None = Field(default=None, description="Optional comment")
     empty_layer: bool = Field(default=False, description="Whether this is an empty layer")
 
+
 class ImageHistoryItem(BaseModel):
     """Represents an entry in the image history."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "id": "sha256:...",
-        "created": "2023-01-01T12:00:00Z",
-        "created_by": "/bin/sh -c #(nop) ADD file:...",
-        "size": 12345678
-    }})
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "id": "sha256:...",
+                "created": "2023-01-01T12:00:00Z",
+                "created_by": "/bin/sh -c #(nop) ADD file:...",
+                "size": 12345678,
+            }
+        }
+    )
 
     id: str = Field(..., description="Layer ID")
     created: datetime = Field(..., description="Creation timestamp")
@@ -106,14 +115,20 @@ class ImageHistoryItem(BaseModel):
     comment: str = Field(default="", description="Comment for this layer")
     tags: list[str] = Field(default_factory=list, description="Tags for this layer")
 
+
 class ImageSearchResult(BaseModel):
     """Result of an image search operation."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "name": "nginx",
-        "description": "Official build of Nginx.",
-        "is_official": True,
-        "star_count": 15000
-    }})
+
+    model_config = ConfigDict(
+        json_schema_extra={
+            "example": {
+                "name": "nginx",
+                "description": "Official build of Nginx.",
+                "is_official": True,
+                "star_count": 15000,
+            }
+        }
+    )
 
     name: str = Field(..., description="Image name")
     description: str = Field(default="", description="Image description")
@@ -122,21 +137,17 @@ class ImageSearchResult(BaseModel):
     star_count: int = Field(default=0, description="Number of stars")
     pull_count: int = Field(default=0, description="Number of pulls")
 
+
 class ImagePruneResult(BaseModel):
     """Result of an image prune operation."""
-    model_config = ConfigDict(json_schema_extra={"example": {
-        "images_deleted": ["sha256:..."],
-        "space_reclaimed": 123456789
-    }})
 
-    images_deleted: list[str] = Field(
-        default_factory=list,
-        description="List of deleted image IDs"
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"images_deleted": ["sha256:..."], "space_reclaimed": 123456789}}
     )
-    space_reclaimed: int = Field(
-        default=0,
-        description="Disk space reclaimed in bytes"
-    )
+
+    images_deleted: list[str] = Field(default_factory=list, description="List of deleted image IDs")
+    space_reclaimed: int = Field(default=0, description="Disk space reclaimed in bytes")
+
 
 @mcp.tool
 @check_docker_available
@@ -144,10 +155,9 @@ async def list_images(
     name: str | None = Field(default=None, description="Filter by image name or name:tag"),
     all: bool = Field(default=False, description="Show all images (default hides intermediate images)"),
     filters: dict[str, str] = Field(
-        default_factory=dict,
-        description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"
+        default_factory=dict, description="Filter output based on conditions provided (e.g., `{'dangling': ['true']}`)"
     ),
-    digests: bool = Field(default=False, description="Show image digests")
+    digests: bool = Field(default=False, description="Show image digests"),
 ) -> dict[str, Any]:
     """
     List Docker images with filtering options.
@@ -195,7 +205,7 @@ async def list_images(
 
         # Apply name filter if provided
         if name:
-            filters['reference'] = [name]
+            filters["reference"] = [name]
 
         # Get images
         images = client.images.list(all=all, filters=filters)
@@ -207,24 +217,21 @@ async def list_images(
             # Get detailed information for each image
             try:
                 image_info = {
-                    'id': image.id,
-                    'repo_tags': image.tags if hasattr(image, 'tags') else [],
-                    'repo_digests': image.attrs.get('RepoDigests', []),
-                    'created': datetime.fromtimestamp(
-                        image.attrs['Created'],
-                        tz=UTC
-                    ).isoformat(),
-                    'size': image.attrs['Size'],
-                    'virtual_size': image.attrs.get('VirtualSize', image.attrs['Size']),
-                    'labels': image.labels,
-                    'os': image.attrs.get('Os'),
-                    'architecture': image.attrs.get('Architecture'),
-                    'docker_version': image.attrs.get('DockerVersion')
+                    "id": image.id,
+                    "repo_tags": image.tags if hasattr(image, "tags") else [],
+                    "repo_digests": image.attrs.get("RepoDigests", []),
+                    "created": datetime.fromtimestamp(image.attrs["Created"], tz=UTC).isoformat(),
+                    "size": image.attrs["Size"],
+                    "virtual_size": image.attrs.get("VirtualSize", image.attrs["Size"]),
+                    "labels": image.labels,
+                    "os": image.attrs.get("Os"),
+                    "architecture": image.attrs.get("Architecture"),
+                    "docker_version": image.attrs.get("DockerVersion"),
                 }
 
                 # Only include digests if requested
                 if not digests:
-                    image_info.pop('repo_digests', None)
+                    image_info.pop("repo_digests", None)
 
                 image_list.append(image_info)
 
@@ -232,11 +239,7 @@ async def list_images(
                 logger.warning(f"Error processing image {image.id}: {e!s}")
                 continue
 
-        return {
-            'status': 'success',
-            'images': image_list,
-            'count': len(image_list)
-        }
+        return {"status": "success", "images": image_list, "count": len(image_list)}
 
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
@@ -252,6 +255,7 @@ async def list_images(
         error_msg = f"Unexpected error listing images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
+
 
 @mcp.tool()
 @check_docker_available
@@ -296,10 +300,7 @@ async def get_image_history(image_id: str) -> dict[str, Any]:
         try:
             image = client.images.get(image_id)
         except ImageNotFound:
-            return {
-                'status': 'error',
-                'error': f'Image not found: {image_id}'
-            }
+            return {"status": "error", "error": f"Image not found: {image_id}"}
 
         # Get the image history
         history = image.history()
@@ -310,22 +311,22 @@ async def get_image_history(image_id: str) -> dict[str, Any]:
 
         for item in history:
             history_item = {
-                'id': item['Id'],
-                'created': datetime.fromtimestamp(item['Created']).isoformat(),
-                'created_by': item.get('CreatedBy', ''),
-                'size': item.get('Size', 0),
-                'comment': item.get('Comment', ''),
-                'tags': item.get('Tags', [])
+                "id": item["Id"],
+                "created": datetime.fromtimestamp(item["Created"]).isoformat(),
+                "created_by": item.get("CreatedBy", ""),
+                "size": item.get("Size", 0),
+                "comment": item.get("Comment", ""),
+                "tags": item.get("Tags", []),
             }
             history_list.append(history_item)
-            total_size += item.get('Size', 0)
+            total_size += item.get("Size", 0)
 
         return {
-            'status': 'success',
-            'image_id': image.id,
-            'history': history_list,
-            'total_size': total_size,
-            'layer_count': len(history_list)
+            "status": "success",
+            "image_id": image.id,
+            "history": history_list,
+            "total_size": total_size,
+            "layer_count": len(history_list),
         }
 
     except APIError as e:
@@ -343,13 +344,14 @@ async def get_image_history(image_id: str) -> dict[str, Any]:
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg}
 
+
 @mcp.tool
 @check_docker_available
 async def tag_image(
     image_id: str = Field(..., description="Source image ID or name (optionally with tag)"),
     repository: str = Field(..., description="Repository to tag the image with"),
     tag: str = Field(default="latest", description="Tag to apply to the image"),
-    force: bool = Field(default=False, description="Force tagging even if the tag already exists")
+    force: bool = Field(default=False, description="Force tagging even if the tag already exists"),
 ) -> dict[str, Any]:
     """
     Tag a Docker image.
@@ -381,10 +383,7 @@ async def tag_image(
         try:
             image = client.images.get(image_id)
         except ImageNotFound:
-            return {
-                'status': 'error',
-                'error': f'Source image not found: {image_id}'
-            }
+            return {"status": "error", "error": f"Source image not found: {image_id}"}
 
         # Construct the target image reference
         target_ref = f"{repository}:{tag}" if tag else repository
@@ -395,9 +394,9 @@ async def tag_image(
                 existing = client.images.get(target_ref)
                 if existing.id != image.id:
                     return {
-                        'status': 'error',
-                        'error': f'Tag {target_ref} already exists and points to a different image',
-                        'existing_image_id': existing.id
+                        "status": "error",
+                        "error": f"Tag {target_ref} already exists and points to a different image",
+                        "existing_image_id": existing.id,
                     }
             except ImageNotFound:
                 pass  # Target doesn't exist, which is fine
@@ -406,43 +405,25 @@ async def tag_image(
         result = image.tag(repository=repository, tag=tag, force=force)
 
         if not result:
-            return {
-                'status': 'error',
-                'error': f'Failed to tag image {image_id} as {target_ref}'
-            }
+            return {"status": "error", "error": f"Failed to tag image {image_id} as {target_ref}"}
 
-        return {
-            'status': 'success',
-            'source_image': image_id,
-            'target_image': target_ref
-        }
+        return {"status": "success", "source_image": image_id, "target_image": target_ref}
 
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'image_id': image_id,
-            'target': f"{repository}:{tag}"
-        }
+        return {"status": "error", "error": error_msg, "image_id": image_id, "target": f"{repository}:{tag}"}
 
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available",
-            'image_id': image_id
-        }
+        return {"status": "error", "error": "Docker daemon not available", "image_id": image_id}
 
     except Exception as e:
         error_msg = f"Unexpected error tagging image: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        return {"status": "error", "error": error_msg}
+
 
 @mcp.tool
 @check_docker_available
@@ -450,9 +431,8 @@ async def search_images(
     term: str = Field(..., description="Search term"),
     limit: int = Field(default=25, ge=1, le=100, description="Maximum number of results to return (1-100)"),
     filters: dict[str, str] = Field(
-        default_factory=dict,
-        description="Additional filters (e.g., {'is-official': 'true'}"
-    )
+        default_factory=dict, description="Additional filters (e.g., {'is-official': 'true'}"
+    ),
 ) -> dict[str, Any]:
     """
     Search Docker Hub for images.
@@ -500,55 +480,42 @@ async def search_images(
         result_list = []
 
         for item in results:
-            result_list.append({
-                'name': item['name'],
-                'description': item.get('description', ''),
-                'is_official': item.get('is_official', False),
-                'is_automated': item.get('is_automated', False),
-                'star_count': item.get('star_count', 0),
-                'pull_count': item.get('pull_count', 0)
-            })
+            result_list.append(
+                {
+                    "name": item["name"],
+                    "description": item.get("description", ""),
+                    "is_official": item.get("is_official", False),
+                    "is_automated": item.get("is_automated", False),
+                    "star_count": item.get("star_count", 0),
+                    "pull_count": item.get("pull_count", 0),
+                }
+            )
 
-        return {
-            'status': 'success',
-            'results': result_list,
-            'count': len(result_list)
-        }
+        return {"status": "success", "results": result_list, "count": len(result_list)}
 
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'term': term
-        }
+        return {"status": "error", "error": error_msg, "term": term}
 
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available"
-        }
+        return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
         error_msg = f"Unexpected error searching images: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg,
-            'term': term
-        }
+        return {"status": "error", "error": error_msg, "term": term}
+
 
 @mcp.tool
 @check_docker_available
 async def prune_images(
     filters: dict[str, str] = Field(
-        default_factory=dict,
-        description="Filters to process on the prune (e.g., {'dangling': ['true']}"
+        default_factory=dict, description="Filters to process on the prune (e.g., {'dangling': ['true']}"
     ),
-    dry_run: bool = Field(default=False, description="If true, only show what would be deleted")
+    dry_run: bool = Field(default=False, description="If true, only show what would be deleted"),
 ) -> dict[str, Any]:
     """
     Remove unused Docker images.
@@ -582,18 +549,18 @@ async def prune_images(
         if dry_run:
             # For dry run, we'll just list the images that would be removed
             client = docker_client
-            dangling_images = client.images.list(filters={'dangling': True})
+            dangling_images = client.images.list(filters={"dangling": True})
 
             # Calculate total size
-            total_size = sum(img.attrs['Size'] for img in dangling_images)
+            total_size = sum(img.attrs["Size"] for img in dangling_images)
 
             return {
-                'status': 'success',
-                'dry_run': True,
-                'images_that_would_be_deleted': [img.id for img in dangling_images],
-                'space_that_would_be_reclaimed': total_size,
-                'count': len(dangling_images),
-                'message': f'Would remove {len(dangling_images)} images ({total_size/1024/1024:.1f} MB)'
+                "status": "success",
+                "dry_run": True,
+                "images_that_would_be_deleted": [img.id for img in dangling_images],
+                "space_that_would_be_reclaimed": total_size,
+                "count": len(dangling_images),
+                "message": f"Would remove {len(dangling_images)} images ({total_size / 1024 / 1024:.1f} MB)",
             }
 
         # Use shared client
@@ -603,37 +570,28 @@ async def prune_images(
         result = client.images.prune(filters=filters)
 
         # Process the result
-        images_deleted = result.get('ImagesDeleted', [])
-        space_reclaimed = result.get('SpaceReclaimed', 0)
+        images_deleted = result.get("ImagesDeleted", [])
+        space_reclaimed = result.get("SpaceReclaimed", 0)
 
         return {
-            'status': 'success',
-            'images_deleted': images_deleted,
-            'space_reclaimed': space_reclaimed,
-            'count': len(images_deleted),
-            'message': f'Pruned {len(images_deleted)} images ({space_reclaimed/1024/1024:.1f} MB)'
+            "status": "success",
+            "images_deleted": images_deleted,
+            "space_reclaimed": space_reclaimed,
+            "count": len(images_deleted),
+            "message": f"Pruned {len(images_deleted)} images ({space_reclaimed / 1024 / 1024:.1f} MB)",
         }
 
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        return {"status": "error", "error": error_msg}
 
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
-        return {
-            'status': 'error',
-            'error': "Docker daemon not available"
-        }
+        return {"status": "error", "error": "Docker daemon not available"}
 
     except Exception as e:
         error_msg = f"Unexpected error pruning images: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            'status': 'error',
-            'error': error_msg
-        }
+        return {"status": "error", "error": error_msg}

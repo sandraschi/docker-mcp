@@ -3,6 +3,7 @@ Tool Template for FastMCP 2.12+
 
 This file serves as a template for creating new tools following FastMCP 2.12+ standards.
 """
+
 from __future__ import annotations
 
 from typing import Any
@@ -19,19 +20,12 @@ mcp = FastMCP("Docker MCP")
 
 class ExampleToolParams(BaseModel):
     """Parameters for the example tool."""
-    param1: str = Field(
-        ...,
-        description="First parameter"
-    )
-    param2: int = Field(
-        default=42,
-        description="Second parameter"
-    )
 
-@mcp.tool(
-    name="example_tool",
-    description="Example tool following FastMCP 2.12+ standards"
-)
+    param1: str = Field(..., description="First parameter")
+    param2: int = Field(default=42, description="Second parameter")
+
+
+@mcp.tool(name="example_tool", description="Example tool following FastMCP 2.12+ standards")
 async def example_tool(params: ExampleToolParams) -> dict[str, Any]:
     """
     Example tool that demonstrates the FastMCP 2.12+ pattern.
@@ -63,20 +57,13 @@ async def example_tool(params: ExampleToolParams) -> dict[str, Any]:
     try:
         # Your implementation here
         result = {
-            'status': 'success',
-            'message': 'Operation completed successfully',
-            'data': {
-                'param1': params.param1,
-                'param2': params.param2,
-                'processed': True
-            }
+            "status": "success",
+            "message": "Operation completed successfully",
+            "data": {"param1": params.param1, "param2": params.param2, "processed": True},
         }
         return result
 
     except Exception as e:
         error_msg = f"Error in example_tool: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "message": error_msg
-        }
+        return {"status": "error", "message": error_msg}

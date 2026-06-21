@@ -1,4 +1,5 @@
 """Run the FastMCP import fix script"""
+
 import os
 import subprocess
 import sys

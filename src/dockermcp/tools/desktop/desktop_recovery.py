@@ -57,13 +57,11 @@ async def docker_daemon_recover() -> dict[str, Any]:
             result["recommendations"].append("Daemon recovered successfully!")
         else:
             result["recommendations"].append(
-                "Daemon still not responsive after restart. "
-                "Try: docker_desktop_update with full_wipe=True"
+                "Daemon still not responsive after restart. Try: docker_desktop_update with full_wipe=True"
             )
     else:
         result["recommendations"].append(
-            "Failed to restart Docker. Check if it's installed at: "
-            "C:/Program Files/Docker/Docker/Docker.exe"
+            "Failed to restart Docker. Check if it's installed at: C:/Program Files/Docker/Docker/Docker.exe"
         )
 
     output = _format_recovery_report(result)
@@ -117,15 +115,14 @@ async def docker_daemon_restart() -> dict[str, Any]:
         for _attempt in range(5):
             try:
                 process = await asyncio.create_subprocess_exec(
-                    "docker", "version",
+                    "docker",
+                    "version",
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
 
                 try:
-                    _stdout, _stderr = await asyncio.wait_for(
-                        process.communicate(), timeout=5.0
-                    )
+                    _stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
                     if process.returncode == 0:
                         result["restart_status"] = "successful"
                         result["responsive_after"] = True
@@ -148,11 +145,11 @@ async def docker_daemon_restart() -> dict[str, Any]:
     output = f"""
 ========== Docker Daemon Restart Report ==========
 
-Timestamp: {result['timestamp']}
-Restart Status: {result['restart_status']}
-Responsive: {'✅ Yes' if result['responsive_after'] else '❌ No'}
+Timestamp: {result["timestamp"]}
+Restart Status: {result["restart_status"]}
+Responsive: {"✅ Yes" if result["responsive_after"] else "❌ No"}
 
-{"" if result['responsive_after'] else 'Daemon may still be initializing. Wait 30 seconds and try again.'}
+{"" if result["responsive_after"] else "Daemon may still be initializing. Wait 30 seconds and try again."}
 
 ==================================================
 """.strip()
@@ -180,7 +177,10 @@ async def _kill_hung_processes() -> dict:
     for proc_name in processes:
         try:
             await asyncio.create_subprocess_exec(
-                "taskkill", "/IM", proc_name, "/F",
+                "taskkill",
+                "/IM",
+                proc_name,
+                "/F",
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
@@ -217,15 +217,14 @@ async def _verify_daemon_responsiveness(max_attempts: int = 5) -> dict:
     for attempt in range(max_attempts):
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "version",
+                "docker",
+                "version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
             try:
-                _stdout, _stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=5.0
-                )
+                _stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
                 if process.returncode == 0:
                     return {
                         "responsive": True,
@@ -274,13 +273,9 @@ def _format_recovery_report(result: dict) -> str:
     # Verify
     verify_result = result["stages"].get("verify", {})
     if verify_result.get("responsive"):
-        lines.append(
-            f"✅ Daemon responsive (verified in {verify_result['attempts']} attempt)"
-        )
+        lines.append(f"✅ Daemon responsive (verified in {verify_result['attempts']} attempt)")
     else:
-        lines.append(
-            f"❌ Daemon not responsive after {verify_result.get('attempts', '?')} attempts"
-        )
+        lines.append(f"❌ Daemon not responsive after {verify_result.get('attempts', '?')} attempts")
 
     lines.append("")
 
@@ -298,6 +293,6 @@ def _format_recovery_report(result: dict) -> str:
         for rec in result["recommendations"]:
             lines.append(f"  - {rec}")
 
-    lines.append("\n" + "="*50)
+    lines.append("\n" + "=" * 50)
 
     return "\n".join(lines)

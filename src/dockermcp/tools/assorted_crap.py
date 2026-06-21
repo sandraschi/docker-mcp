@@ -4,6 +4,7 @@ Miscellaneous utilities and helper classes for Docker MCP.
 This module contains various utility functions and classes that don't fit neatly
 into other modules.
 """
+
 import json
 import logging
 from typing import Any, TextIO
@@ -16,6 +17,7 @@ JSONRPCResponse = dict[str, Any]
 # Configure logger
 logger = logging.getLogger(__name__)
 
+
 class SafeJSONEncoder(json.JSONEncoder):
     """A JSON encoder that safely handles non-serializable types."""
 
@@ -27,14 +29,12 @@ class SafeJSONEncoder(json.JSONEncoder):
             # Convert non-serializable objects to string representation
             return str(obj)
 
+
 class SafeFastMCP(FastMCP):
     """A safer version of FastMCP with enhanced error handling."""
 
     async def _handle_request(
-        self,
-        method: str,
-        params: dict | list | None = None,
-        request_id: int | str | None = None
+        self, method: str, params: dict | list | None = None, request_id: int | str | None = None
     ) -> JSONRPCResponse:
         """Handle JSON-RPC requests with enhanced error handling."""
         try:
@@ -44,8 +44,9 @@ class SafeFastMCP(FastMCP):
             return self._create_error_response(
                 code=-32603,  # Internal error
                 message=f"Internal error: {e!s}",
-                request_id=request_id
+                request_id=request_id,
             )
+
 
 def warn_with_log(
     message: str | Warning,
@@ -53,7 +54,7 @@ def warn_with_log(
     filename: str = "",
     lineno: int = 0,
     file: TextIO | None = None,
-    line: str | None = None
+    line: str | None = None,
 ) -> None:
     """
     Log a warning message and emit a warning.

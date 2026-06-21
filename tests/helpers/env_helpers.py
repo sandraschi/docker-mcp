@@ -1,4 +1,5 @@
 """Helper functions for managing environment variables in tests."""
+
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -7,13 +8,13 @@ from contextlib import contextmanager
 @contextmanager
 def set_env_vars(env_vars: dict[str, str]) -> Iterator[None]:
     """Temporarily set environment variables for testing.
-    
+
     Args:
         env_vars: Dictionary of environment variables to set
-        
+
     Yields:
         None
-        
+
     Example:
         with set_env_vars({"MY_VAR": "test"}):
             # Environment variable is set here
@@ -44,6 +45,7 @@ def set_env_vars(env_vars: dict[str, str]) -> Iterator[None]:
             else:
                 os.environ[key] = old_value
 
+
 def get_test_env() -> dict[str, str]:
     """Get a dictionary of test environment variables."""
     return {
@@ -54,26 +56,27 @@ def get_test_env() -> dict[str, str]:
         "LOG_LEVEL": os.environ.get("LOG_LEVEL", "INFO"),
     }
 
+
 def is_ci_environment() -> bool:
     """Check if running in a CI environment."""
-    return os.environ.get("CI", "false").lower() == "true" or \
-           os.environ.get("GITHUB_ACTIONS", "false").lower() == "true"
+    return (
+        os.environ.get("CI", "false").lower() == "true" or os.environ.get("GITHUB_ACTIONS", "false").lower() == "true"
+    )
+
 
 def skip_if_ci():
     """Decorator to skip a test if running in CI environment."""
     import pytest
-    return pytest.mark.skipif(
-        is_ci_environment(),
-        reason="Test skipped in CI environment"
-    )
+
+    return pytest.mark.skipif(is_ci_environment(), reason="Test skipped in CI environment")
+
 
 def only_in_ci():
     """Decorator to run a test only in CI environment."""
     import pytest
-    return pytest.mark.skipif(
-        not is_ci_environment(),
-        reason="Test only runs in CI environment"
-    )
+
+    return pytest.mark.skipif(not is_ci_environment(), reason="Test only runs in CI environment")
+
 
 def skip_if_no_docker():
     """Decorator to skip a test if Docker is not available."""

@@ -1,6 +1,7 @@
 """
 Test script for container_stats.py
 """
+
 import asyncio
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
@@ -22,6 +23,7 @@ from dockermcp.tools.containers.container_stats import (
 
 # Fixtures
 
+
 @pytest.fixture
 def mock_docker_container():
     """Create a mock Docker container."""
@@ -30,6 +32,7 @@ def mock_docker_container():
     container.name = "test-container"
     return container
 
+
 @pytest.fixture
 def mock_docker_client(mock_docker_container):
     """Create a mock Docker client."""
@@ -37,66 +40,46 @@ def mock_docker_client(mock_docker_container):
     client.containers.get.return_value = mock_docker_container
     return client
 
+
 # Test data
 SAMPLE_STATS = {
-    'cpu_stats': {
-        'cpu_usage': {
-            'total_usage': 1000000000,
-            'usage_in_kernelmode': 100000000,
-            'usage_in_usermode': 900000000
-        },
-        'system_cpu_usage': 5000000000,
-        'online_cpus': 4,
-        'throttling_data': {
-            'periods': 0,
-            'throttled_periods': 0,
-            'throttled_time': 0
+    "cpu_stats": {
+        "cpu_usage": {"total_usage": 1000000000, "usage_in_kernelmode": 100000000, "usage_in_usermode": 900000000},
+        "system_cpu_usage": 5000000000,
+        "online_cpus": 4,
+        "throttling_data": {"periods": 0, "throttled_periods": 0, "throttled_time": 0},
+    },
+    "precpu_stats": {
+        "cpu_usage": {"total_usage": 900000000, "usage_in_kernelmode": 90000000, "usage_in_usermode": 810000000},
+        "system_cpu_usage": 4500000000,
+    },
+    "memory_stats": {
+        "usage": 100000000,
+        "max_usage": 200000000,
+        "limit": 1000000000,
+        "stats": {"cache": 10000000, "rss": 90000000, "swap": 0},
+    },
+    "networks": {
+        "eth0": {
+            "rx_bytes": 1000,
+            "rx_packets": 10,
+            "rx_errors": 0,
+            "rx_dropped": 0,
+            "tx_bytes": 2000,
+            "tx_packets": 20,
+            "tx_errors": 0,
+            "tx_dropped": 0,
         }
     },
-    'precpu_stats': {
-        'cpu_usage': {
-            'total_usage': 900000000,
-            'usage_in_kernelmode': 90000000,
-            'usage_in_usermode': 810000000
-        },
-        'system_cpu_usage': 4500000000
+    "blkio_stats": {
+        "io_service_bytes_recursive": [{"op": "Read", "value": 1000000}, {"op": "Write", "value": 500000}],
+        "io_serviced_recursive": [{"op": "Read", "value": 100}, {"op": "Write", "value": 50}],
     },
-    'memory_stats': {
-        'usage': 100000000,
-        'max_usage': 200000000,
-        'limit': 1000000000,
-        'stats': {
-            'cache': 10000000,
-            'rss': 90000000,
-            'swap': 0
-        }
-    },
-    'networks': {
-        'eth0': {
-            'rx_bytes': 1000,
-            'rx_packets': 10,
-            'rx_errors': 0,
-            'rx_dropped': 0,
-            'tx_bytes': 2000,
-            'tx_packets': 20,
-            'tx_errors': 0,
-            'tx_dropped': 0
-        }
-    },
-    'blkio_stats': {
-        'io_service_bytes_recursive': [
-            {'op': 'Read', 'value': 1000000},
-            {'op': 'Write', 'value': 500000}
-        ],
-        'io_serviced_recursive': [
-            {'op': 'Read', 'value': 100},
-            {'op': 'Write', 'value': 50}
-        ]
-    },
-    'pids_stats': {'current': 5}
+    "pids_stats": {"current": 5},
 }
 
 # Tests
+
 
 @pytest.mark.asyncio
 async def test_get_container_stats_one_shot(mock_docker_container, mock_docker_client):
@@ -105,17 +88,14 @@ async def test_get_container_stats_one_shot(mock_docker_container, mock_docker_c
     mock_docker_container.stats.return_value = SAMPLE_STATS
 
     # Create test params
-    params = ContainerStatsParams(
-        container_id="test-container",
-        one_shot=True
-    )
+    params = ContainerStatsParams(container_id="test-container", one_shot=True)
 
     # Patch docker client
-    with patch('docker.from_env', return_value=mock_docker_client):
+    with patch("docker.from_env", return_value=mock_docker_client):
         response = await get_container_stats(params)
 
     # Convert to dict if it's a Pydantic model
-    if hasattr(response, 'model_dump'):
+    if hasattr(response, "model_dump"):
         result = response.model_dump()
     else:
         result = response
@@ -127,6 +107,7 @@ async def test_get_container_stats_one_shot(mock_docker_container, mock_docker_c
     assert result["stats"]["name"] == "test-container"
     assert result["stats"]["pids"] == 5
 
+
 @pytest.mark.asyncio
 async def test_get_container_stats_stream(mock_docker_container, mock_docker_client):
     """Test streaming stats."""
@@ -134,12 +115,7 @@ async def test_get_container_stats_stream(mock_docker_container, mock_docker_cli
     mock_docker_container.stats.return_value = SAMPLE_STATS
 
     # Create test params
-    params = ContainerStatsParams(
-        container_id="test-container",
-        stream=True,
-        interval=0.1,
-        timeout=0.3
-    )
+    params = ContainerStatsParams(container_id="test-container", stream=True, interval=0.1, timeout=0.3)
 
     # Create a mock for the async generator
     async def mock_stats_generator():
@@ -148,15 +124,17 @@ async def test_get_container_stats_stream(mock_docker_container, mock_docker_cli
             await asyncio.sleep(0.1)
 
     # Patch the _stream_stats function to return our mock generator
-    with patch('docker.from_env', return_value=mock_docker_client), \
-         patch('dockermcp.tools.containers.container_stats._stream_stats',
-               return_value=mock_stats_generator()) as mock_stream:
-
+    with (
+        patch("docker.from_env", return_value=mock_docker_client),
+        patch(
+            "dockermcp.tools.containers.container_stats._stream_stats", return_value=mock_stats_generator()
+        ) as mock_stream,
+    ):
         # Call the function
         response = await get_container_stats(params)
 
         # Convert to dict if it's a Pydantic model
-        if hasattr(response, 'model_dump'):
+        if hasattr(response, "model_dump"):
             response = response.model_dump()
 
         # Verify the response structure
@@ -175,11 +153,8 @@ async def test_get_container_stats_stream(mock_docker_container, mock_docker_cli
         assert count == 3
 
         # Verify the mock was called with correct parameters
-        mock_stream.assert_called_once_with(
-            mock_docker_container,
-            interval=0.1,
-            timeout=0.3
-        )
+        mock_stream.assert_called_once_with(mock_docker_container, interval=0.1, timeout=0.3)
+
 
 @pytest.mark.asyncio
 async def test_get_container_stats_not_found():
@@ -192,11 +167,11 @@ async def test_get_container_stats_not_found():
     params = ContainerStatsParams(container_id="nonexistent-container")
 
     # Patch docker client
-    with patch('docker.from_env', return_value=mock_client):
+    with patch("docker.from_env", return_value=mock_client):
         response = await get_container_stats(params)
 
     # Convert to dict if it's a Pydantic model
-    if hasattr(response, 'model_dump'):
+    if hasattr(response, "model_dump"):
         result = response.model_dump()
     else:
         result = response
@@ -204,6 +179,7 @@ async def test_get_container_stats_not_found():
     # Verify error response
     assert result["status"] == "error"
     assert "not found" in result["error"].lower()
+
 
 def test_container_stats_model():
     """Test ContainerStats model validation."""
@@ -220,7 +196,7 @@ def test_container_stats_model():
             usage_in_usermode=900000000,
             throttling_periods=0,
             throttled_time=0,
-            percent_usage=20.0
+            percent_usage=20.0,
         ),
         memory=MemoryStats(
             usage=100000000,
@@ -229,26 +205,23 @@ def test_container_stats_model():
             percent_usage=10.0,
             cache=10000000,
             rss=90000000,
-            swap=0
+            swap=0,
         ),
-        network={"eth0": NetworkStats(
-            rx_bytes=1000,
-            rx_packets=10,
-            rx_errors=0,
-            rx_dropped=0,
-            tx_bytes=2000,
-            tx_packets=20,
-            tx_errors=0,
-            tx_dropped=0
-        )},
-        block_io=BlockIOStats(
-            read_bytes=1000000,
-            write_bytes=500000,
-            read_ops=100,
-            write_ops=50
-        ),
+        network={
+            "eth0": NetworkStats(
+                rx_bytes=1000,
+                rx_packets=10,
+                rx_errors=0,
+                rx_dropped=0,
+                tx_bytes=2000,
+                tx_packets=20,
+                tx_errors=0,
+                tx_dropped=0,
+            )
+        },
+        block_io=BlockIOStats(read_bytes=1000000, write_bytes=500000, read_ops=100, write_ops=50),
         pids=5,
-        error=None
+        error=None,
     )
 
     # Convert to dict and back to validate serialization
@@ -257,11 +230,7 @@ def test_container_stats_model():
 
     # Test response model with stats
     response = ContainerStatsResponse(
-        status="success",
-        container_id="test-container-id",
-        stats=stats_dict,
-        stream=None,
-        error=None
+        status="success", container_id="test-container-id", stats=stats_dict, stream=None, error=None
     )
     assert response.status == "success"
     assert response.container_id == "test-container-id"

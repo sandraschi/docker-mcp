@@ -17,9 +17,7 @@ class LLMManager:
     def __init__(self) -> None:
         self.providers: dict[str, dict[str, Any]] = {}
 
-    def register(
-        self, provider_type: str, base_url: str, *, models: list[str] | None = None
-    ) -> None:
+    def register(self, provider_type: str, base_url: str, *, models: list[str] | None = None) -> None:
         self.providers[provider_type] = {
             "type": provider_type,
             "base_url": base_url,
@@ -51,11 +49,7 @@ class LLMManager:
                     response = await client.get(f"{ollama_url}/api/tags")
                     if response.status_code == 200:
                         payload = response.json()
-                        models = [
-                            m.get("name", "")
-                            for m in payload.get("models", [])
-                            if m.get("name")
-                        ]
+                        models = [m.get("name", "") for m in payload.get("models", []) if m.get("name")]
                         self.register("ollama", ollama_url, models=models)
                 except Exception:
                     logger.debug("LLM glom: Ollama not reachable", exc_info=True)
@@ -64,9 +58,7 @@ class LLMManager:
                     response = await client.get(f"{lm_url}/v1/models")
                     if response.status_code == 200:
                         payload = response.json()
-                        models = [
-                            m.get("id", "") for m in payload.get("data", []) if m.get("id")
-                        ]
+                        models = [m.get("id", "") for m in payload.get("data", []) if m.get("id")]
                         self.register("lmstudio", lm_url, models=models)
                 except Exception:
                     logger.debug("LLM glom: LM Studio not reachable", exc_info=True)

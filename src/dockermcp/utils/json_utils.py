@@ -4,6 +4,7 @@ JSON utilities for Docker MCP.
 Provides robust JSON parsing and serialization with consistent error handling,
 validation, and recovery mechanisms.
 """
+
 import json
 import logging
 import os
@@ -15,11 +16,14 @@ from typing import Any, TypeVar
 logger = logging.getLogger(__name__)
 
 # Type variable for JSON-serializable types
-T = TypeVar('T', dict, list, str, int, float, bool, None)
+T = TypeVar("T", dict, list, str, int, float, bool, None)
+
 
 class JSONValidationError(ValueError):
     """Raised when JSON validation fails."""
+
     pass
+
 
 def validate_json_schema(data: Any, schema: dict) -> bool:
     """
@@ -37,6 +41,7 @@ def validate_json_schema(data: Any, schema: dict) -> bool:
     """
     try:
         from jsonschema import ValidationError, validate
+
         validate(instance=data, schema=schema)
         return True
     except ImportError:
@@ -45,12 +50,9 @@ def validate_json_schema(data: Any, schema: dict) -> bool:
     except ValidationError as e:
         raise JSONValidationError(f"JSON validation error: {e}") from e
 
+
 def safe_json_loads(
-    json_str: str,
-    default: Any = None,
-    context: str = "",
-    schema: dict | None = None,
-    strict: bool = False
+    json_str: str, default: Any = None, context: str = "", schema: dict | None = None, strict: bool = False
 ) -> dict | list | Any:
     """
     Safely parse JSON string with error handling, validation, and recovery.
@@ -98,14 +100,12 @@ def safe_json_loads(
     # Try common recovery patterns
     recovery_attempts = [
         # Try extracting JSON from the string
-        lambda s: try_parse(s[s.find('{'):]) or try_parse(s[s.find('['):]),
-
+        lambda s: try_parse(s[s.find("{") :]) or try_parse(s[s.find("[") :]),
         # Try fixing common JSON syntax errors
-        lambda s: try_parse(re.sub(r',\s*([}\]])', r'\1', s)),  # Trailing commas
-        lambda s: try_parse(re.sub(r'([{\[,])\s*([}\],])', r'\1null\2', s)),  # Missing values
-
+        lambda s: try_parse(re.sub(r",\s*([}\]])", r"\1", s)),  # Trailing commas
+        lambda s: try_parse(re.sub(r"([{\[,])\s*([}\],])", r"\1null\2", s)),  # Missing values
         # Try parsing as JSON Lines
-        lambda s: [try_parse(line) for line in s.splitlines() if try_parse(line)] or None
+        lambda s: [try_parse(line) for line in s.splitlines() if try_parse(line)] or None,
     ]
 
     for attempt in recovery_attempts:
@@ -124,13 +124,8 @@ def safe_json_loads(
         raise JSONValidationError(f"Failed to parse JSON after recovery attempts: {json_str[:100]}...")
     return default
 
-def safe_json_dumps(
-    data: Any,
-    default: Any = None,
-    schema: dict | None = None,
-    strict: bool = False,
-    **kwargs
-) -> str:
+
+def safe_json_dumps(data: Any, default: Any = None, schema: dict | None = None, strict: bool = False, **kwargs) -> str:
     """
     Safely serialize data to JSON with error handling and validation.
 
@@ -160,9 +155,9 @@ def safe_json_dumps(
         def json_serial(obj):
             if isinstance(obj, (datetime,)):
                 return obj.isoformat()
-            if hasattr(obj, '__dict__'):
+            if hasattr(obj, "__dict__"):
                 return obj.__dict__
-            if hasattr(obj, 'to_dict'):
+            if hasattr(obj, "to_dict"):
                 return obj.to_dict()
             raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
 
@@ -173,12 +168,13 @@ def safe_json_dumps(
         logger.error(f"Failed to serialize to JSON: {e}")
         return default if default is not None else "{}"
 
+
 def safe_json_parse_file(
     file_path: str | Path,
     default: Any = None,
-    encoding: str = 'utf-8',
+    encoding: str = "utf-8",
     schema: dict | None = None,
-    strict: bool = False
+    strict: bool = False,
 ) -> dict | list | Any:
     """
     Safely parse JSON from a file with validation and error recovery.
@@ -204,7 +200,7 @@ def safe_json_parse_file(
         if not file_path.exists():
             raise FileNotFoundError(f"File not found: {file_path}")
 
-        with file_path.open('r', encoding=encoding) as f:
+        with file_path.open("r", encoding=encoding) as f:
             content = f.read()
 
         result = safe_json_loads(content, default=default, context=str(file_path), schema=schema, strict=strict)
@@ -225,17 +221,18 @@ def safe_json_parse_file(
         logger.error(f"Invalid JSON in {file_path}: {e}")
         return default
 
+
 def safe_json_dump_file(
     data: Any,
     file_path: str | Path,
     default: Any = None,
-    encoding: str = 'utf-8',
+    encoding: str = "utf-8",
     schema: dict | None = None,
     ensure_ascii: bool = False,
     indent: int = 2,
     sort_keys: bool = True,
     strict: bool = False,
-    **kwargs
+    **kwargs,
 ) -> bool:
     """
     Safely write data to a JSON file with validation and atomic write.
@@ -274,18 +271,11 @@ def safe_json_dump_file(
         file_path.parent.mkdir(parents=True, exist_ok=True)
 
         # Use a temporary file for atomic write
-        temp_path = file_path.with_suffix(f'.{os.urandom(4).hex()}.tmp')
+        temp_path = file_path.with_suffix(f".{os.urandom(4).hex()}.tmp")
 
         try:
-            with temp_path.open('w', encoding=encoding) as f:
-                json.dump(
-                    data,
-                    f,
-                    ensure_ascii=ensure_ascii,
-                    indent=indent,
-                    sort_keys=sort_keys,
-                    **kwargs
-                )
+            with temp_path.open("w", encoding=encoding) as f:
+                json.dump(data, f, ensure_ascii=ensure_ascii, indent=indent, sort_keys=sort_keys, **kwargs)
 
             # On Windows, we need to remove the destination file first
             if file_path.exists():

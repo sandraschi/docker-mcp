@@ -1,6 +1,7 @@
 """
 Loki handler for Loguru to ship logs to a Loki instance.
 """
+
 import json
 import logging
 import os
@@ -13,6 +14,7 @@ import requests
 LOGURU_AVAILABLE = False
 try:
     from loguru import logger
+
     LOGURU_AVAILABLE = True
 except ImportError:
     # Create a dummy logger if loguru is not available
@@ -23,7 +25,8 @@ except ImportError:
     logger = DummyLogger()
 
 # Only enable Loki if explicitly requested
-ENABLE_LOKI = os.environ.get('ENABLE_LOKI', 'false').lower() == 'true' and LOGURU_AVAILABLE
+ENABLE_LOKI = os.environ.get("ENABLE_LOKI", "false").lower() == "true" and LOGURU_AVAILABLE
+
 
 class LokiHandler:
     """A handler for Loguru that sends logs to a Loki instance."""
@@ -47,11 +50,7 @@ class LokiHandler:
         """
         self.url = url
         self.tags = tags or {}
-        self.labels = labels or {
-            "job": "dockermcp",
-            "app": "dockermcp",
-            "environment": "development"
-        }
+        self.labels = labels or {"job": "dockermcp", "app": "dockermcp", "environment": "development"}
         self.batch_size = batch_size
         self.batch_timeout = batch_timeout
         self._buffer: list[dict[str, Any]] = []
@@ -90,11 +89,7 @@ class LokiHandler:
         timestamp_ns = int(record.get("time", {}).get("timestamp", time.time() * 1e9))
 
         # Prepare labels (Loki requires string values)
-        labels = {
-            "level": level,
-            **self.labels,
-            **self.tags
-        }
+        labels = {"level": level, **self.labels, **self.tags}
 
         # Add any extra fields as labels (with string conversion)
         extra = record.get("extra", {})
@@ -103,10 +98,7 @@ class LokiHandler:
                 labels[key] = str(value)
 
         # Prepare log entry
-        log_entry = {
-            "stream": labels,
-            "values": [[str(timestamp_ns), message]]
-        }
+        log_entry = {"stream": labels, "values": [[str(timestamp_ns), message]]}
 
         return log_entry
 
@@ -115,8 +107,7 @@ class LokiHandler:
         now = time.time()
 
         # Check if we should send the batch
-        if not force and len(self._buffer) < self.batch_size and \
-           (now - self._last_send) < self.batch_timeout:
+        if not force and len(self._buffer) < self.batch_size and (now - self._last_send) < self.batch_timeout:
             return
 
         if not self._buffer:
@@ -124,17 +115,10 @@ class LokiHandler:
 
         try:
             # Prepare the payload for Loki
-            payload = {
-                "streams": self._buffer
-            }
+            payload = {"streams": self._buffer}
 
             # Send to Loki
-            response = requests.post(
-                self.url,
-                json=payload,
-                headers={"Content-Type": "application/json"},
-                timeout=10.0
-            )
+            response = requests.post(self.url, json=payload, headers={"Content-Type": "application/json"}, timeout=10.0)
 
             # Check for errors
             response.raise_for_status()
@@ -202,10 +186,7 @@ def add_loki_handler(
 
         # Add the handler to the logger
         handler_id = logger_instance.add(
-            handler,
-            level=level.upper(),
-            format="{message}",
-            filter=lambda record: "loki" in record["extra"]
+            handler, level=level.upper(), format="{message}", filter=lambda record: "loki" in record["extra"]
         )
 
         logger.info(f"Loki logging enabled. Sending logs to {url}")

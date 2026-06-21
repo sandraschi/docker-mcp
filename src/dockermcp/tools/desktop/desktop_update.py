@@ -67,9 +67,7 @@ async def docker_desktop_update(full_wipe: bool = False) -> dict[str, Any]:
                 "4. Install any available updates",
             ]
         else:
-            result["next_steps"].append(
-                "Daemon not responding - try manual restart"
-            )
+            result["next_steps"].append("Daemon not responding - try manual restart")
 
     output = _format_update_report(result, full_wipe)
 
@@ -84,7 +82,10 @@ async def _stop_docker_desktop() -> dict:
     """Stop Docker Desktop gracefully."""
     try:
         await asyncio.create_subprocess_exec(
-            "taskkill", "/IM", "Docker Desktop.exe", "/T",
+            "taskkill",
+            "/IM",
+            "Docker Desktop.exe",
+            "/T",
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
@@ -100,6 +101,7 @@ async def _clear_update_temp() -> dict:
 
         if temp_path.exists():
             import shutil
+
             shutil.rmtree(temp_path)
             return {
                 "success": True,
@@ -130,6 +132,7 @@ async def _wipe_docker_data() -> dict:
         try:
             if path.exists():
                 import shutil
+
                 shutil.rmtree(path)
                 wiped.append(str(path))
         except Exception as e:
@@ -168,15 +171,14 @@ async def _verify_daemon_startup() -> dict:
     for attempt in range(10):
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "version",
+                "docker",
+                "version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
 
             try:
-                _stdout, _stderr = await asyncio.wait_for(
-                    process.communicate(), timeout=5.0
-                )
+                _stdout, _stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
                 if process.returncode == 0:
                     return {
                         "responsive": True,
@@ -241,13 +243,9 @@ def _format_update_report(result: dict, full_wipe: bool) -> str:
     # Verify
     verify_result = result["stages"].get("verify", {})
     if verify_result.get("responsive"):
-        lines.append(
-            f"✅ Daemon responsive (verified in {verify_result['attempts']} attempt)"
-        )
+        lines.append(f"✅ Daemon responsive (verified in {verify_result['attempts']} attempt)")
     else:
-        lines.append(
-            f"⚠️  Daemon not yet responsive ({verify_result.get('attempts')} attempts)"
-        )
+        lines.append(f"⚠️  Daemon not yet responsive ({verify_result.get('attempts')} attempts)")
 
     lines.append("")
 
@@ -265,6 +263,6 @@ def _format_update_report(result: dict, full_wipe: bool) -> str:
         for step in result["next_steps"]:
             lines.append(f"  {step}")
 
-    lines.append("\n" + "="*55)
+    lines.append("\n" + "=" * 55)
 
     return "\n".join(lines)

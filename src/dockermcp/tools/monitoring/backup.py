@@ -3,6 +3,7 @@ Backup and Restore Tools for Monitoring Stack
 
 This module provides tools to backup and restore the monitoring stack's data.
 """
+
 import shutil
 import tarfile
 import tempfile
@@ -17,6 +18,7 @@ from dockermcp.mcp_instance import mcp
 
 # Default backup directory
 DEFAULT_BACKUP_DIR = Path("/var/backups/dockermcp/monitoring")
+
 
 class MonitoringBackup:
     """Handles backup and restore of monitoring stack data."""
@@ -72,13 +74,10 @@ class MonitoringBackup:
                 "status": "success",
                 "message": "Backup created successfully",
                 "backup_file": str(output_file),
-                "size_mb": output_file.stat().st_size / (1024 * 1024)
+                "size_mb": output_file.stat().st_size / (1024 * 1024),
             }
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to create backup: {e!s}"
-            }
+            return {"status": "error", "error": f"Failed to create backup: {e!s}"}
 
     def restore_backup(self, backup_file: str | Path, target_dir: str | Path = "/") -> dict[str, Any]:
         """Restore monitoring data from a backup."""
@@ -87,16 +86,13 @@ class MonitoringBackup:
             target_dir = Path(target_dir)
 
             if not backup_file.exists():
-                return {
-                    "status": "error",
-                    "error": f"Backup file not found: {backup_file}"
-                }
+                return {"status": "error", "error": f"Backup file not found: {backup_file}"}
 
             # Extract the backup
             with tarfile.open(backup_file, "r:gz") as tar:
                 # Extract to a temporary directory first
                 with tempfile.TemporaryDirectory() as tmp_dir:
-                    tar.extractall(tmp_dir, filter='data')
+                    tar.extractall(tmp_dir, filter="data")
 
                     # Move files to target directory
                     for item in Path(tmp_dir).iterdir():
@@ -112,91 +108,72 @@ class MonitoringBackup:
                 "status": "success",
                 "message": "Backup restored successfully",
                 "backup_file": str(backup_file),
-                "target_dir": str(target_dir)
+                "target_dir": str(target_dir),
             }
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to restore backup: {e!s}"
-            }
+            return {"status": "error", "error": f"Failed to restore backup: {e!s}"}
 
     def list_backups(self) -> dict[str, Any]:
         """List available backups."""
         try:
             if not self.backup_dir.exists():
-                return {
-                    "status": "success",
-                    "backups": [],
-                    "backup_dir": str(self.backup_dir)
-                }
+                return {"status": "success", "backups": [], "backup_dir": str(self.backup_dir)}
 
             backups = []
             for file in sorted(self.backup_dir.glob("*.tar.gz"), key=lambda f: f.stat().st_mtime, reverse=True):
-                backups.append({
-                    "name": file.name,
-                    "path": str(file),
-                    "size_mb": file.stat().st_size / (1024 * 1024),
-                    "modified": datetime.fromtimestamp(file.stat().st_mtime).isoformat()
-                })
+                backups.append(
+                    {
+                        "name": file.name,
+                        "path": str(file),
+                        "size_mb": file.stat().st_size / (1024 * 1024),
+                        "modified": datetime.fromtimestamp(file.stat().st_mtime).isoformat(),
+                    }
+                )
 
-            return {
-                "status": "success",
-                "backups": backups,
-                "backup_dir": str(self.backup_dir)
-            }
+            return {"status": "success", "backups": backups, "backup_dir": str(self.backup_dir)}
         except Exception as e:
-            return {
-                "status": "error",
-                "error": f"Failed to list backups: {e!s}"
-            }
+            return {"status": "error", "error": f"Failed to list backups: {e!s}"}
+
 
 # Pydantic Models for Parameters
 class CreateBackupParams(BaseModel):
     """Parameters for creating a monitoring backup."""
-    output_file: str | None = Field(
-        None,
-        description="Path to save the backup file (optional)"
-    )
-    backup_dir: str | None = Field(
-        None,
-        description="Directory to save the backup (if output_file not specified)"
-    )
+
+    output_file: str | None = Field(None, description="Path to save the backup file (optional)")
+    backup_dir: str | None = Field(None, description="Directory to save the backup (if output_file not specified)")
 
     model_config = ConfigDict(
         json_schema_extra={
-            "example": {
-                "output_file": "/path/to/backup.tar.gz",
-                "backup_dir": "/var/backups/dockermcp/monitoring"
-            }
+            "example": {"output_file": "/path/to/backup.tar.gz", "backup_dir": "/var/backups/dockermcp/monitoring"}
         }
     )
 
+
 class RestoreBackupParams(BaseModel):
     """Parameters for restoring a monitoring backup."""
+
     backup_file: str = Field(..., description="Path to the backup file to restore")
-    target_dir: str = Field(
-        "/",
-        description="Target directory to restore to (default: /)"
-    )
+    target_dir: str = Field("/", description="Target directory to restore to (default: /)")
 
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
                 "backup_file": "/var/backups/dockermcp/monitoring/backup_20230912_123456.tar.gz",
-                "target_dir": "/"
+                "target_dir": "/",
             }
         }
     )
 
+
 class ListBackupsParams(BaseModel):
     """Parameters for listing monitoring backups."""
-    backup_dir: str | None = Field(
-        None,
-        description="Directory containing the backups (optional)"
-    )
+
+    backup_dir: str | None = Field(None, description="Directory containing the backups (optional)")
+
 
 # Create a default instance
 backup_manager = MonitoringBackup()
+
 
 @mcp.tool
 async def create_monitoring_backup(params: CreateBackupParams) -> dict[str, Any]:
@@ -224,10 +201,8 @@ async def create_monitoring_backup(params: CreateBackupParams) -> dict[str, Any]
     except Exception as e:
         error_msg = f"Failed to create backup: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}
+
 
 @mcp.tool
 async def restore_monitoring_backup(params: RestoreBackupParams) -> dict[str, Any]:
@@ -256,10 +231,8 @@ async def restore_monitoring_backup(params: RestoreBackupParams) -> dict[str, An
     except Exception as e:
         error_msg = f"Failed to restore backup: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}
+
 
 @mcp.tool
 async def list_monitoring_backups(params: ListBackupsParams) -> dict[str, Any]:
@@ -293,7 +266,4 @@ async def list_monitoring_backups(params: ListBackupsParams) -> dict[str, Any]:
     except Exception as e:
         error_msg = f"Failed to list backups: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return {
-            "status": "error",
-            "error": error_msg
-        }
+        return {"status": "error", "error": error_msg}

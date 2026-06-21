@@ -135,9 +135,7 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
 
     @app.get("/api/system")
     async def api_system():
-        sys_resp = await get_system_info(
-            SystemInfoRequest(include_disk_usage=True, include_swarm_info=False)
-        )
+        sys_resp = await get_system_info(SystemInfoRequest(include_disk_usage=True, include_swarm_info=False))
         disk_resp = await get_disk_usage(DiskUsageRequest(detailed=True))
         return {
             "system": sys_resp.model_dump() if hasattr(sys_resp, "model_dump") else sys_resp,
@@ -151,18 +149,12 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/dashboard")
     async def api_dashboard():
         try:
-            containers_result = await list_containers(
-                ListContainersParams(all_states=True)
-            )
-            system_result = await get_system_info(
-                SystemInfoRequest(include_disk_usage=True, include_swarm_info=False)
-            )
+            containers_result = await list_containers(ListContainersParams(all_states=True))
+            system_result = await get_system_info(SystemInfoRequest(include_disk_usage=True, include_swarm_info=False))
             disk_result = await get_disk_usage(DiskUsageRequest(detailed=False))
             images_result = await list_images()
 
-            containers_dict = (
-                containers_result if isinstance(containers_result, dict) else {}
-            )
+            containers_dict = containers_result if isinstance(containers_result, dict) else {}
             images_dict = images_result if isinstance(images_result, dict) else {}
 
             sys_info = (
@@ -173,13 +165,9 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
                 else None
             )
             disk_data = (
-                disk_result.disk_usage
-                if hasattr(disk_result, "disk_usage") and disk_result.disk_usage
-                else None
+                disk_result.disk_usage if hasattr(disk_result, "disk_usage") and disk_result.disk_usage else None
             )
-            disk_summary = (
-                disk_data.get("summary", {}) if isinstance(disk_data, dict) else None
-            )
+            disk_summary = disk_data.get("summary", {}) if isinstance(disk_data, dict) else None
             log_activity("tool_call", "dashboard aggregate")
             return {
                 "containers": containers_dict.get("containers", []),
@@ -189,9 +177,7 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
                 "system_status": getattr(
                     system_result,
                     "status",
-                    system_result.get("status")
-                    if isinstance(system_result, dict)
-                    else None,
+                    system_result.get("status") if isinstance(system_result, dict) else None,
                 ),
                 "disk_summary": disk_summary,
                 "images": images_dict.get("images", []),

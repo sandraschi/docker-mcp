@@ -4,6 +4,7 @@ Grafana integration utilities for Docker MCP.
 This module provides functionality to interact with Grafana instances running in Docker,
 including setup instructions, dashboard management, and monitoring.
 """
+
 import logging
 import os
 from typing import Any
@@ -12,6 +13,7 @@ from urllib.parse import urljoin
 import requests
 
 logger = logging.getLogger(__name__)
+
 
 class GrafanaManager:
     """Manager for Grafana integration with Docker MCP."""
@@ -54,17 +56,14 @@ class GrafanaManager:
                         "container_id": container.short_id,
                         "host": host,
                         "port": host_port,
-                        "state": container.status
+                        "state": container.status,
                     }
 
             return {"status": "not_running"}
 
         except Exception as e:
             logger.error(f"Error checking Grafana status: {e!s}")
-            return {
-                "status": "error",
-                "error": str(e)
-            }
+            return {"status": "error", "error": str(e)}
 
     async def setup_grafana(self, port: int = 3000, volume: str = "grafana-storage") -> dict[str, Any]:
         """Set up a Grafana container with default configuration.
@@ -80,11 +79,7 @@ class GrafanaManager:
             # Check if Grafana is already running
             status = await self.is_grafana_running()
             if status["status"] == "running":
-                return {
-                    "success": True,
-                    "message": "Grafana is already running",
-                    "details": status
-                }
+                return {"success": True, "message": "Grafana is already running", "details": status}
 
             # Pull the Grafana image if not present
             try:
@@ -107,8 +102,8 @@ class GrafanaManager:
                 environment={
                     "GF_SECURITY_ADMIN_USER": self.DEFAULT_USER,
                     "GF_SECURITY_ADMIN_PASSWORD": self.DEFAULT_PASSWORD,
-                    "GF_USERS_ALLOW_SIGN_UP": "false"
-                }
+                    "GF_USERS_ALLOW_SIGN_UP": "false",
+                },
             )
 
             return {
@@ -119,21 +114,18 @@ class GrafanaManager:
                     "host": f"http://localhost:{port}",
                     "username": self.DEFAULT_USER,
                     "password": self.DEFAULT_PASSWORD,
-                    "note": "Please change the default password on first login"
-                }
+                    "note": "Please change the default password on first login",
+                },
             }
 
         except Exception as e:
             error_msg = f"Failed to set up Grafana: {e!s}"
             logger.error(error_msg, exc_info=True)
-            return {
-                "success": False,
-                "error": error_msg,
-                "details": str(e)
-            }
+            return {"success": False, "error": error_msg, "details": str(e)}
 
-    async def get_grafana_dashboard(self, dashboard_uid: str, host: str | None = None,
-                                 auth: tuple | None = None) -> dict[str, Any]:
+    async def get_grafana_dashboard(
+        self, dashboard_uid: str, host: str | None = None, auth: tuple | None = None
+    ) -> dict[str, Any]:
         """Get a Grafana dashboard by UID.
 
         Args:
@@ -158,22 +150,16 @@ class GrafanaManager:
             response = requests.get(url, auth=auth, timeout=30)
             response.raise_for_status()
 
-            return {
-                "success": True,
-                "dashboard": response.json()
-            }
+            return {"success": True, "dashboard": response.json()}
 
         except requests.exceptions.RequestException as e:
             return {
                 "success": False,
                 "error": f"Failed to fetch dashboard: {e!s}",
-                "status_code": getattr(e.response, 'status_code', None)
+                "status_code": getattr(e.response, "status_code", None),
             }
         except Exception as e:
-            return {
-                "success": False,
-                "error": f"Error: {e!s}"
-            }
+            return {"success": False, "error": f"Error: {e!s}"}
 
     @staticmethod
     def get_grafana_documentation() -> dict[str, Any]:
@@ -189,7 +175,7 @@ class GrafanaManager:
                     "Grafana is an open-source platform that transforms your home automation data into "
                     "beautiful, real-time dashboards. It's perfect for monitoring security cameras, "
                     "smart devices, and environmental sensors throughout your home."
-                )
+                ),
             },
             "key_features": {
                 "title": "Key Features for Home Monitoring",
@@ -199,8 +185,8 @@ class GrafanaManager:
                     "Smart device status and energy usage tracking",
                     "Custom dashboards for different areas of your home",
                     "Mobile-friendly interface for remote monitoring",
-                    "Alerting for security and maintenance issues"
-                ]
+                    "Alerting for security and maintenance issues",
+                ],
             },
             "getting_started": {
                 "title": "Getting Started with Home Monitoring",
@@ -209,8 +195,8 @@ class GrafanaManager:
                     "2. Access Grafana at http://localhost:13000 (admin/admin)",
                     "3. Add your data sources (e.g., MQTT, InfluxDB, Prometheus)",
                     "4. Import home automation dashboards or create custom ones",
-                    "5. Set up alerts for motion detection or sensor thresholds"
-                ]
+                    "5. Set up alerts for motion detection or sensor thresholds",
+                ],
             },
             "recommended_integrations": {
                 "title": "Recommended Integrations",
@@ -219,8 +205,8 @@ class GrafanaManager:
                     "Sensors: Temperature, humidity, motion, and door/window sensors",
                     "Smart Home: Home Assistant, OpenHAB, or Node-RED integration",
                     "Data Storage: InfluxDB for time-series data, PostgreSQL for events",
-                    "Alerting: Push notifications, email, or SMS alerts"
-                ]
+                    "Alerting: Push notifications, email, or SMS alerts",
+                ],
             },
             "example_dashboards": {
                 "title": "Example Home Dashboards",
@@ -228,8 +214,8 @@ class GrafanaManager:
                     "Security Overview: Camera feeds, motion events, and door/window status",
                     "Environmental: Temperature, humidity, and air quality trends",
                     "Energy Usage: Smart plug and appliance monitoring",
-                    "Network: Internet speed and device connectivity"
-                ]
+                    "Network: Internet speed and device connectivity",
+                ],
             },
             "resources": {
                 "title": "Useful Resources",
@@ -237,7 +223,7 @@ class GrafanaManager:
                     "Grafana Home Automation Guide: https://grafana.com/grafana/dashboards/?search=home+automation",
                     "Home Assistant Integration: https://www.home-assistant.io/integrations/grafana/",
                     "Community Dashboards: https://grafana.com/grafana/dashboards/",
-                    "Alerting Setup: https://grafana.com/docs/grafana/latest/alerting/"
-                ]
-            }
+                    "Alerting Setup: https://grafana.com/docs/grafana/latest/alerting/",
+                ],
+            },
         }

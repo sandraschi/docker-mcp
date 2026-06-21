@@ -1,6 +1,7 @@
 """
 Run a test and capture its output to a file.
 """
+
 import subprocess
 import sys
 from datetime import datetime
@@ -15,14 +16,14 @@ def main():
     print(f"Output will be saved to: {output_file}")
 
     try:
-        with open(output_file, 'w', encoding='utf-8') as f:
+        with open(output_file, "w", encoding="utf-8") as f:
             # Run the test and capture both stdout and stderr
             result = subprocess.run(
                 [sys.executable, "-m", "pytest", "-v", test_file],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
-                encoding='utf-8'
+                encoding="utf-8",
             )
 
             # Write the output to file
@@ -37,7 +38,7 @@ def main():
         # Display the output file location
         print("\nOutput file contents:")
         print("-" * 80)
-        with open(output_file, encoding='utf-8') as f:
+        with open(output_file, encoding="utf-8") as f:
             print(f.read())
 
     except Exception as e:
@@ -45,6 +46,7 @@ def main():
         return 1
 
     return 0
+
 
 if __name__ == "__main__":
     sys.exit(main())

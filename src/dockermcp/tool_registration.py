@@ -23,9 +23,9 @@ def register_all_tools(mcp=None) -> None:
         mcp = get_mcp()
 
     # Leaf imports only — avoid dockermcp.tools package __init__ (discover_tools side effects)
-    import dockermcp.tools.agentic_container_workflow as _aw  # noqa: F401
-    from dockermcp.tools.containers import list_containers as _lc  # noqa: F401
-    from dockermcp.tools.desktop import (  # noqa: F401
+    import dockermcp.tools.agentic_container_workflow as _aw
+    from dockermcp.tools.containers import list_containers as _lc
+    from dockermcp.tools.desktop import (
         docker_daemon_recover,
         docker_daemon_restart,
         docker_desktop_status,
@@ -33,11 +33,11 @@ def register_all_tools(mcp=None) -> None:
     )
     from dockermcp.tools.docker_reconnect import register_tool as register_reconnect_tool
     from dockermcp.tools.docker_status import register_tool as register_status_tool
-    from dockermcp.tools.gpu import gpu_management as _gpu  # noqa: F401
-    from dockermcp.tools.images import image_management as _im  # noqa: F401
-    from dockermcp.tools.networks import network_management as _nm  # noqa: F401
-    from dockermcp.tools.system import system_management as _sm  # noqa: F401
-    from dockermcp.tools.volumes import volume_management as _vm  # noqa: F401
+    from dockermcp.tools.gpu import gpu_management as _gpu
+    from dockermcp.tools.images import image_management as _im
+    from dockermcp.tools.networks import network_management as _nm
+    from dockermcp.tools.system import system_management as _sm
+    from dockermcp.tools.volumes import volume_management as _vm
 
     _ = [
         _aw,
