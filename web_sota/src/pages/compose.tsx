@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { API_BASE } from "@/lib/api";
 import { analyzeComposeFile } from "@/common/api";
-import { Layers, Play, Square, Eye, EyeOff, RefreshCw, Terminal, FileText, Upload, Server, Container, Cpu, Network, ListOrdered, AlertTriangle, Database } from "lucide-react";
+import { Layers, Play, Square, Eye, EyeOff, RefreshCw, Terminal, FileText, Upload, Server, Container, Network, ListOrdered, Database } from "lucide-react";
 
 interface ComposeProject {
   Name?: string;

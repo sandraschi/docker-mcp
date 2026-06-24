@@ -5,7 +5,6 @@ import { Bot, User, Send, StopCircle, Download, Sparkles, Settings2, RefreshCw, 
 
 type Role = "user" | "assistant";
 type Personality = { id: string; name: string; prompt: string };
-interface ToolCallEvent { nl_name: string; tool: string }
 interface ToolResultEvent { tool: string; result: { success: boolean; tool: string; params: Record<string, unknown>; result?: string; error?: string; timing_ms: number } }
 interface Message { role: Role; content: string; timestamp: number; toolCalls?: ToolCallCard[] }
 interface ToolCallCard { nl_name: string; tool: string; result: ToolResultEvent["result"] | null }

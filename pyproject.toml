@@ -4,8 +4,8 @@ build-backend = "hatchling.build"
 
 [project]
 name = "schip-mcp-docker"
-version = "3.4.0"
-description = "FastMCP 3.3 server for comprehensive Docker operations"
+version = "3.5.0"
+description = "FastMCP 3.5 server for comprehensive Docker operations"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
@@ -70,3 +70,10 @@ ignore = ["S101", "B008"]
 [tool.ruff.format]
 quote-style = "double"
 indent-style = "space"
+
+[dependency-groups]
+dev = [
+    "pillow>=12.2.0",
+    "pytesseract>=0.3.13",
+    "pywinauto>=0.6.9",
+]

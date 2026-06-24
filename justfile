@@ -3,6 +3,7 @@ import 'scripts/just/fleet.just'
 name := "docker-mcp"
 desc := "FastMCP 3.5 server for Docker operations"
 ver := "3.5.0"
+REPO := justfile_directory()
 
 # Open the interactive recipe dashboard in the browser
 default:
@@ -18,17 +19,9 @@ build:
 build-webapp:
     cd web_sota && npm install && npm run build
 
-# MCPB bundle (Claude Desktop)
-mcpb-pack:
-    npx @anthropic-ai/mcpb pack . dist/docker-mcp-v{{ver}}.mcpb
-
 # Tauri native installer (Windows release)
 build-native:
     pwsh -NoLogo -File native/build.ps1
-
-# Run CUA smoke test against installed NSIS app
-cua-nsis-test:
-    C:\Windows\py.exe scripts/cua-smoke.py
 
 build-native-debug:
     Set-Location native

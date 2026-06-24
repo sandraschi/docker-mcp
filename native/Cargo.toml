@@ -1,6 +1,6 @@
 [package]
 name = "docker-mcp-native"
-version = "3.3.0"
+version = "3.5.0"
 description = "Tauri 2.0 desktop app for docker-mcp"
 edition = "2021"
 

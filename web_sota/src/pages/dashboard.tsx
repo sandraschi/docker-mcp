@@ -1,7 +1,8 @@
-import { useState, useEffect } from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { API_BASE } from "@/lib/api";
+import { useConnection } from "@/store/connection";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Activity, Box, Cpu, HardDrive, Loader2, AlertCircle } from "lucide-react";
+import { Activity, Box, Cpu, HardDrive, Loader2, AlertCircle, RefreshCw } from "lucide-react";
 import { Link } from "react-router-dom";
 
 interface ContainerItem {
@@ -56,24 +57,39 @@ export function Dashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const connState = useConnection((s) => s.state);
+  const prevConn = useRef(connState);
 
-  useEffect(() => {
-    const fetchDashboard = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/api/dashboard`);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        setData(json);
+  const fetchDashboard = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/dashboard`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setData(json);
+      if (json.containers_status === "error" || json.system_status === "error") {
+        setError(json.containers_message || "Docker daemon not available");
+      } else {
         setError(null);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : "Failed to load dashboard");
-        setData(null);
-      } finally {
-        setLoading(false);
       }
-    };
-    fetchDashboard();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load dashboard");
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Initial fetch on mount
+  useEffect(() => { fetchDashboard(); }, [fetchDashboard]);
+
+  // Re-fetch when backend transitions to connected (e.g. after startup delay)
+  useEffect(() => {
+    if (prevConn.current !== "connected" && connState === "connected") {
+      setLoading(true);
+      fetchDashboard();
+    }
+    prevConn.current = connState;
+  }, [connState, fetchDashboard]);
 
   if (loading) {
     return (
@@ -86,13 +102,19 @@ export function Dashboard() {
   if (error || !data) {
     return (
       <div className="space-y-6">
-        <h2 className="text-2xl font-bold tracking-tight text-white">Docker Dashboard</h2>
+        <div>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Docker Dashboard</h2>
+          <p className="text-slate-400">AI-powered Docker management via natural language</p>
+        </div>
         <Card className="border-red-900/50 bg-red-950/20">
           <CardContent className="flex items-center gap-3 pt-6">
             <AlertCircle className="h-8 w-8 text-red-500 shrink-0" />
-            <p className="text-red-200">
-              {error ?? "No data"} — Is the backend running and Docker available?
-            </p>
+            <div className="flex-1">
+              <p className="text-red-200">
+                {error ?? "No data"} — Is the backend running and Docker available?
+              </p>
+            </div>
+            <RestartDockerButton />
           </CardContent>
         </Card>
       </div>
@@ -115,6 +137,17 @@ export function Dashboard() {
           <h2 className="text-2xl font-bold tracking-tight text-white">Docker Dashboard</h2>
           <p className="text-slate-400">Container overview and engine status</p>
         </div>
+      </div>
+
+      <div className="mb-6 bg-gradient-to-br from-blue-900/20 via-slate-900/50 to-transparent border border-blue-900/30 rounded-xl px-6 py-5">
+        <h3 className="text-lg font-semibold text-white">Docker MCP</h3>
+        <p className="text-sm text-slate-300 mt-1">
+          AI-powered Docker management via natural language.
+          Control containers, images, volumes, and networks through chat or the dashboard.
+        </p>
+        <p className="text-xs text-slate-500 mt-1">
+          Backend port 10807 · MCP endpoint /mcp · Fleet: mcp-central-docs/projects/docker-mcp
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -219,6 +252,30 @@ export function Dashboard() {
           </CardContent>
         </Card>
       </div>
+    </div>
+  );
+}
+
+function RestartDockerButton() {
+  const [restarting, setRestarting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+  const handleRestart = useCallback(async () => {
+    setRestarting(true); setResult(null);
+    try {
+      const r = await fetch(`${API_BASE}/api/docker/recover`, { method: "POST" });
+      const d = await r.json();
+      setResult(d.success ? "Docker restarted" : d.message);
+    } catch { setResult("Failed to trigger restart"); }
+    finally { setRestarting(false); }
+  }, []);
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button type="button" onClick={handleRestart} disabled={restarting}
+        className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white rounded-md transition-colors">
+        <RefreshCw className={`h-4 w-4 ${restarting ? "animate-spin" : ""}`} />
+        {restarting ? "Restarting..." : "Restart Docker"}
+      </button>
+      {result && <span className="text-xs text-slate-400">{result}</span>}
     </div>
   );
 }
