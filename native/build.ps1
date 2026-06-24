@@ -59,13 +59,43 @@ if (Test-Path $specFile) {
     Write-Host "  WARNING: spec file not found at $specFile — using existing backend exe if present" -ForegroundColor DarkYellow
 }
 
-# Step 3: Embed in Tauri resources (+ dev fallback)
+# Step 3: Embed in Tauri resources (+ dev fallback) with size gate + smoke test
 Write-Host "-> [3/4] Embedding backend..." -ForegroundColor Yellow
 $src = "$Root\dist\${RepoName}-backend.exe"
 if (-not (Test-Path $src)) { throw "Backend exe not found at $src — PyInstaller step failed" }
+$sizeMB = (Get-Item $src).Length / 1MB
+if ($sizeMB -lt 5) {
+    throw "Backend exe is only $([math]::Round($sizeMB, 1)) MB at $src — PyInstaller produced an empty/broken binary"
+}
+Write-Host "  Backend exe: $sizeMB MB"
+
+# Bundle .env into installer if it exists (survives reinstall, no manual copy needed)
+$envSrc = "$Root\.env"
+if (Test-Path $envSrc) {
+    Copy-Item $envSrc "$ResourceDir\.env" -Force
+    Write-Host "  Bundled .env ($((Get-Item $envSrc).Length) bytes)" -ForegroundColor Green
+} else {
+    Write-Host "  WARNING: No .env at repo root - create one from .env.example for credentials" -ForegroundColor DarkYellow
+    Set-Content -Path "$ResourceDir\.env" -Value "# Empty - configure via Settings page" -Encoding utf8
+}
+
+Write-Host "  Smoke-testing frozen binary..." -ForegroundColor Yellow
+$testPort = 11999
+$oldPort = $env:MCP_PORT; $oldHost = $env:MCP_HOST
+$env:MCP_PORT = "$testPort"; $env:MCP_HOST = "127.0.0.1"
+$testProc = Start-Process -FilePath $src -NoNewWindow -PassThru -RedirectStandardError "$Root\dist\pyi-crash.log"
+Start-Sleep -Seconds 5
+$env:MCP_PORT = $oldPort; $env:MCP_HOST = $oldHost
+if ($testProc.HasExited) {
+    $crash = Get-Content "$Root\dist\pyi-crash.log" -Raw
+    throw "Frozen binary crashed on launch (exit $($testProc.ExitCode)):`n$crash"
+}
+$testProc.Kill(); $testProc.Dispose()
+Remove-Item "$Root\dist\pyi-crash.log" -Force -ErrorAction SilentlyContinue
+Write-Host "  Frozen binary smoke test PASSED" -ForegroundColor Green
+
 Copy-Item $src "$ResourceDir\${RepoName}-backend.exe" -Force
 Copy-Item $src "$DevDir\${RepoName}-backend-$Triple.exe" -Force
-Write-Host "  Backend exe: $((Get-Item $src).Length / 1MB) MB" -ForegroundColor Green
 
 # Step 4: Single NSIS installer
 Write-Host "-> [4/4] Tauri NSIS bundle..." -ForegroundColor Yellow
@@ -85,3 +115,4 @@ if (Test-Path $strayExe) { Remove-Item $strayExe -Force; Write-Host "  Cleaned s
 
 Write-Host "=== Build complete ===" -ForegroundColor Green
 Write-Host "Ship: $nsisDir\*.exe"
+
