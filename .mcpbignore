@@ -1,34 +1,57 @@
-# Logic/Dev Bloat
+# Python
 .venv/
-node_modules/
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# JavaScript
+node_modules/
+
+# Rust (hundreds of MB)
+target/
+Cargo.lock
+
+# Tests
+tests/
+examples/
 .ruff_cache/
 .pytest_cache/
-tests/
 
-# Discovery & Fleet Metadata
-glama.json
-llms.txt
-llms-full.txt
-.git/
-.github/
-.vscode/
-
-# Build Artifacts
+# Build output
 dist/
 build/
+*.exe
+*.msi
+*.wasm
 *.mcpb
-ruff_output.json
-ruff_stderr.txt
-error.log
-server.log
-test_output.log
 
-# IDE & editor configs
-.windsurf/
-.cursor/
+# Runtime data
+logs/
+cua-reports/
+*.png
+*.ico
+*.bak
 
-# Non-MCP components (webapp, native, scripts)
+# Non-MCP components
 native/
 web_sota/
 scripts/
+mcpb/
+monitoring/
+.snapshots/
+.windsurf/
+.cursor/
+.github/
+.vscode/
+
+# Misc bloat
+ruff_output.json
+ruff_stderr.txt
+print_statements.txt
+remove_description_params.py
+error.log
+server.log
+test_output.log
+tools_backup_log.txt
+logging_analysis.txt
