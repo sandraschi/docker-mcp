@@ -31,6 +31,73 @@ X-API-Key: your-api-key-here
 
 ## Endpoints (REST API)
 
+### Compose Management
+
+#### List Compose Projects
+
+```http
+GET /api/compose/projects?all=true
+```
+
+Returns all Docker Compose projects known to the Docker daemon.
+
+#### Compose PS
+
+```http
+GET /api/compose/ps?project=myapp
+```
+
+List containers for a compose project.
+
+#### Compose Up
+
+```http
+POST /api/compose/up
+Content-Type: application/json
+
+{"project": "myapp", "build": false, "detach": true}
+```
+
+Start compose services.
+
+#### Compose Down
+
+```http
+POST /api/compose/down
+Content-Type: application/json
+
+{"project": "myapp", "volumes": false}
+```
+
+Stop and remove compose services.
+
+#### Compose Logs
+
+```http
+GET /api/compose/logs?project=myapp&tail=50
+```
+
+Fetch logs for a compose project.
+
+#### Compose Config
+
+```http
+GET /api/compose/config?project=myapp
+```
+
+Render and validate compose configuration.
+
+#### Analyze Compose File
+
+```http
+POST /api/compose/analyze
+Content-Type: application/json
+
+{"file_path": "C:/project/docker-compose.yml"}
+```
+
+Parse and analyze a docker-compose YAML file. Returns services, images, volumes, networks, ports, dependencies, build contexts, and healthcheck info.
+
 ### Container Management
 
 #### List Containers

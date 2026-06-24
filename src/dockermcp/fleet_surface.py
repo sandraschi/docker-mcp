@@ -3,29 +3,19 @@
 from __future__ import annotations
 
 import logging
+import os
 from typing import Annotated
 
 from pydantic import Field
 
 logger = logging.getLogger(__name__)
 
-SKILLS_MD = """# Docker-MCP skills (fleet 2026)
-
-## When to use
-- Container lifecycle, images, networks, volumes, compose workflows
-- Docker Desktop hang detection, daemon recovery, graceful restart
-- Multi-step orchestration: prefer `agentic_container_workflow` when the client supports sampling
-
-## Workflows
-1. **Health first**: `docker_desktop_status` or `docker_desktop_status_card`
-2. **Inventory**: `list_containers` or `docker_containers_card`
-3. **Recovery**: `docker_daemon_recover` only when status shows hung/unresponsive daemon
-4. **Agentic**: `agentic_container_workflow` for natural-language multi-step deploy/scale tasks
-
-## Ports (local webapp)
-- Frontend Vite: 10806
-- API bridge: 10807
-"""
+_SKILL_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "skills", "docker-mcp", "SKILL.md")
+try:
+    with open(_SKILL_PATH, encoding="utf-8") as _f:
+        SKILLS_MD = _f.read()
+except (FileNotFoundError, OSError):
+    SKILLS_MD = "# Docker-MCP\nSkill file not found at skills/docker-mcp/SKILL.md"
 
 
 def register_fleet_surface(mcp) -> None:
@@ -85,6 +75,18 @@ def register_fleet_surface(mcp) -> None:
         result = await docker_desktop_status(autofix=autofix)
         payload = result.model_dump() if hasattr(result, "model_dump") else result
         return build_desktop_status_card(payload if isinstance(payload, dict) else {})
+
+    @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
+    async def docker_images_card(
+        limit: Annotated[int, Field(description="Max images in card")] = 12,
+    ):
+        """Image inventory as a Prefab card."""
+        from dockermcp.prefabs import build_images_card
+        from dockermcp.tools.images.image_management import list_images
+
+        result = await list_images()
+        payload = result if isinstance(result, dict) else {}
+        return build_images_card(payload, limit=limit)
 
     @mcp.tool(annotations={"readOnlyHint": True, "destructiveHint": False})
     async def docker_system_info_card():

@@ -138,6 +138,16 @@ class ImageSearchResult(BaseModel):
     pull_count: int = Field(default=0, description="Number of pulls")
 
 
+class ImageCompareResult(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={"example": {"image_a": {...}, "image_b": {...}, "differences": {...}}}
+    )
+
+    image_a: dict[str, Any]
+    image_b: dict[str, Any]
+    differences: dict[str, Any]
+
+
 class ImagePruneResult(BaseModel):
     """Result of an image prune operation."""
 
@@ -507,6 +517,84 @@ async def search_images(
         error_msg = f"Unexpected error searching images: {e!s}"
         logger.error(error_msg, exc_info=True)
         return {"status": "error", "error": error_msg, "term": term}
+
+
+@mcp.tool()
+@check_docker_available
+async def image_compare(
+    image_a: str = Field(..., description="First image ID or name:tag"),
+    image_b: str = Field(..., description="Second image ID or name:tag"),
+) -> dict[str, Any]:
+    """Compare two Docker images and show their differences.
+
+    Diffs layers, environment variables, entrypoint, default command, exposed ports,
+    labels, working directory, and user. Useful before replacing a base image or
+    debugging why a newer build behaves differently.
+
+    ## Return Format
+    {"success": bool, "image_a": {...}, "image_b": {...}, "differences": {"layers": {...}, "env": {...}, "entrypoint": str|None, "cmd": str|None, "ports": {...}, "labels": {...}, "workdir": str|None, "user": str|None}}
+
+    ## Examples
+    image_compare(image_a="nginx:1.25", image_b="nginx:1.26")
+    image_compare(image_a="sha256:abc123", image_b="myapp:latest")
+    """
+    try:
+        client = docker_client
+        img_a = client.images.get(image_a)
+        img_b = client.images.get(image_b)
+        a_attrs = img_a.attrs
+        b_attrs = img_b.attrs
+
+        def _layers(attrs: dict) -> list[str]:
+            return [l.get("createdBy", l.get("CreatedBy", "")) for l in attrs.get("RootFS", {}).get("Layers", attrs.get("rootfs", {}).get("diff_ids", []))]
+
+        def _env_map(attrs: dict) -> dict[str, str]:
+            env = {}
+            for e in (attrs.get("Config", {}) if "Config" in attrs else attrs.get("config", {})).get("Env", []):
+                if "=" in e:
+                    k, v = e.split("=", 1)
+                    env[k] = v
+            return env
+
+        def _config_get(attrs: dict, key: str):
+            return (attrs.get("Config", {}) if "Config" in attrs else attrs.get("config", {})).get(key)
+
+        a_layers = _layers(a_attrs)
+        b_layers = _layers(b_attrs)
+        a_env = _env_map(a_attrs)
+        b_env = _env_map(b_attrs)
+
+        shared_layers = sum(1 for l in a_layers if l in b_layers)
+        diff = {
+            "layers": {
+                "image_a_count": len(a_layers),
+                "image_b_count": len(b_layers),
+                "shared": shared_layers,
+                "added": [l for l in b_layers if l not in a_layers][:10],
+                "removed": [l for l in a_layers if l not in b_layers][:10],
+            },
+            "env": {
+                "shared": {k: v for k, v in a_env.items() if k in b_env and b_env[k] == v},
+                "added": {k: b_env[k] for k in b_env if k not in a_env},
+                "removed": {k: a_env[k] for k in a_env if k not in b_env},
+                "changed": {k: {"from": a_env[k], "to": b_env[k]} for k in a_env if k in b_env and a_env[k] != b_env[k]},
+            },
+            "entrypoint": {"image_a": _config_get(a_attrs, "Entrypoint"), "image_b": _config_get(b_attrs, "Entrypoint")},
+            "cmd": {"image_a": _config_get(a_attrs, "Cmd"), "image_b": _config_get(b_attrs, "Cmd")},
+            "ports": {"image_a": list((_config_get(a_attrs, "ExposedPorts") or {}).keys()), "image_b": list((_config_get(b_attrs, "ExposedPorts") or {}).keys())},
+            "labels": {"image_a": _config_get(a_attrs, "Labels"), "image_b": _config_get(b_attrs, "Labels")},
+            "workdir": {"image_a": _config_get(a_attrs, "WorkingDir"), "image_b": _config_get(b_attrs, "WorkingDir")},
+            "user": {"image_a": _config_get(a_attrs, "User"), "image_b": _config_get(b_attrs, "User")},
+        }
+
+        return {
+            "success": True,
+            "image_a": {"id": img_a.id, "tags": img_a.tags, "size": a_attrs.get("Size", 0)},
+            "image_b": {"id": img_b.id, "tags": img_b.tags, "size": b_attrs.get("Size", 0)},
+            "differences": diff,
+        }
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 @mcp.tool

@@ -8,6 +8,7 @@ import { Tools } from '@/pages/tools';
 import { Help } from '@/pages/help';
 import { Settings } from '@/pages/settings';
 import { LogsPage } from '@/pages/logs';
+import { Compose } from '@/pages/compose';
 
 function App() {
   return (
@@ -21,6 +22,7 @@ function App() {
           <Route path="/tools" element={<Tools />} />
           <Route path="/help" element={<Help />} />
           <Route path="/logs" element={<LogsPage />} />
+          <Route path="/compose" element={<Compose />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

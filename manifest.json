@@ -1,8 +1,8 @@
 {
   "manifest_version": "0.2",
   "name": "docker-mcp",
-  "version": "3.4.0",
-  "description": "FastMCP 3.4 Docker control plane — containers, Desktop health, sampling, prefab UI, agentic workflows",
+  "version": "3.5.0",
+  "description": "FastMCP 3.5 Docker control plane — containers, Desktop health, sampling, prefab UI, agentic workflows, compose config, image compare",
   "long_description": "FastMCP 3.4 MCP server for Docker containers, images, networks, volumes, compose, Docker Desktop recovery, SEP-1577 agentic workflows, prefab cards, and a React web dashboard (10806/10807).",
   "author": {
     "name": "Sandra Schimanovich",

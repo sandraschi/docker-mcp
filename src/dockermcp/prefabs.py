@@ -59,6 +59,34 @@ def build_desktop_status_card(result: dict) -> Card:
     )
 
 
+def build_images_card(result: dict, limit: int = 12) -> Card:
+    """Visual card for image inventory."""
+    images = result.get("images") or result.get("data", {}).get("images") or []
+    if isinstance(result.get("data"), dict):
+        images = result["data"].get("images", images)
+
+    rows = []
+    for item in images[:limit]:
+        tags = item.get("repo_tags") or item.get("RepoTags") or []
+        tag_str = tags[0] if tags else item.get("id", "—")[:19]
+        size = item.get("size", item.get("Size", 0))
+        size_str = f"{size / 1024 / 1024:.0f}MB" if size > 0 else "—"
+        rows.append(
+            Row(
+                children=[
+                    Metric(label="Image", value=str(tag_str)[:48]),
+                    Metric(label="Size", value=size_str),
+                    Metric(label="ID", value=str(item.get("id", "—"))[:19]),
+                ]
+            )
+        )
+    return Card(
+        children=rows or [Metric(label="Images", value="0")],
+        title="Docker Images",
+        badges=[Badge(label=f"{len(images)} total"), Badge(label=f"{sum(1 for i in images if i.get('repo_tags', i.get('RepoTags', [])))} tagged")],
+    )
+
+
 def build_system_info_card(result: dict) -> Card:
     """Visual card for engine system info."""
     info = result.get("system_info") or result.get("data", {}).get("system_info") or result

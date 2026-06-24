@@ -12,6 +12,7 @@ import {
     Container,
     Image as ImageIcon,
     ScrollText,
+    Layers,
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -26,6 +27,7 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         { href: '/', label: 'Overview', icon: LayoutDashboard },
         { href: '/containers', label: 'Containers', icon: Container },
         { href: '/images', label: 'Images', icon: ImageIcon },
+        { href: '/compose', label: 'Compose', icon: Layers },
         { href: '/chat', label: 'AI Command', icon: MessageSquare },
         { href: '/tools', label: 'MCP Tools', icon: Wrench },
         { href: '/logs', label: 'Event logs', icon: ScrollText },

@@ -1,179 +1,127 @@
 # DockerMCP - Product Requirements Document (PRD)
 
+**Version**: 3.5.0
+**Status**: Active
+
 ## 1. Overview
 
-DockerMCP is a FastMCP 2.11.3 compliant server that provides a comprehensive interface for managing Docker containers, images, networks, and volumes. It's designed with Austrian efficiency principles to deliver precise and reliable container management.
+DockerMCP is a FastMCP 3.4+ server that provides a comprehensive interface for managing Docker containers, images, networks, volumes, and Compose. It features a React web dashboard, agentic AI chat with tool execution, Prefab UI cards, container health analysis, image comparison, backup/restore tools, and a Tauri NSIS desktop installer.
 
 ## 2. Objectives
 
-- Provide a standardized interface for Docker operations via FastMCP 2.11.3
-- Ensure high reliability and performance for container management
-- Implement best practices for container orchestration
-- Offer workflow automation capabilities
-- Maintain compatibility with existing Docker tooling
+- Provide a unified MCP tool surface for all Docker operations
+- Deliver a SOTA React web dashboard (Vite + Tailwind + Zustand)
+- Offer AI-assisted chat with natural-language Docker management
+- Support local LLMs (Ollama, LM Studio) for offline operation
+- Ship as a single NSIS installer with embedded Python backend
+- Provide Docker backup/restore for noob-friendly data safety
 
 ## 3. Features
 
-### 3.1 State Management
+### 3.1 Core MCP Tools
 
-DockerMCP utilizes FastMCP 2.11.3's built-in state management system, providing a robust and efficient solution without external dependencies.
+- **Container Management**: Create, start, stop, restart, remove, exec, logs, inspect
+- **Image Management**: List, pull, build, tag, push, prune, search, compare
+- **Network Management**: List, create, connect, disconnect, prune
+- **Volume Management**: List, create, inspect, prune, backup/restore
+- **Compose Management**: List projects, ps, up/down, logs, build, config, debug, analyze YAML
 
-#### Key Aspects of State Management
+### 3.2 Web Dashboard
 
-- **Architecture**: In-memory state management within the FastMCP runtime
-- **Persistence**: State is maintained across requests with configurable TTL
-- **Isolation**: Each client session maintains independent state
-- **Performance**: Optimized for high throughput and low latency
-- **Reliability**: Automatic cleanup of stale data and error recovery
+- **Dashboard**: Container/image counts, daemon health, system info, restart Docker button
+- **Containers**: Live listing with all states
+- **Images**: Listing with tags and sizes
+- **Compose**: Project list, container per-project view, up/down toggles, config, logs, file analysis
+- **AI Chat**: Personality selection (Expert/SRE/Beginner), streaming, tool mode with expandable tool call cards, provider discovery, per-chat model override
+- **MCP Tools**: Dynamic tool list discovery
+- **Event Logs**: Ring-buffer query, filter, export
+- **Settings**: LLM provider glom-on (Ollama/LM Studio), model picker, save
+- **Help**: About, Architecture, Usage, Docker info tabs
 
-#### Benefits
+### 3.3 AI / Agentic Features
 
-- No external dependencies (Redis, etc.)
-- Consistent behavior across all operations
-- Built-in support for concurrent access
-- Resource-efficient implementation
+- **Provider auto-discovery**: Probes Ollama (:11434) and LM Studio (:1234) for available models
+- **Agentic chat mode**: SSE streaming with interleaved tool execution — `tool_call` + `tool_result` events rendered as expandable cards
+- **`agentic_workflow`**: Multi-step workflows — deploy_compose (up + health + rollback suggestion), cleanup (prune images/volumes/networks), diagnose (states + logs + system + suggestions), rollback
 
-### 3.2 Core Features
+### 3.4 Prefab UI Cards
 
-- **Container Management**
-  - Create, start, stop, restart, and remove containers
-  - Monitor container status and resource usage
-  - Execute commands in running containers
+- `docker_containers_card` — Container inventory
+- `docker_images_card` — Image inventory
+- `docker_desktop_status_card` — Daemon health
+- `docker_system_info_card` — Engine info
 
-- **Image Management**
-  - Pull, list, and remove Docker images
-  - Build images from Dockerfiles
-  - Tag and push images to registries
+### 3.5 Docker Backup & Restore
 
-- **Network Management**
-  - Create and manage Docker networks
-  - Connect containers to networks
-  - Inspect network configurations
+- **`save_image`/`load_image`**: Export/import images as .tar
+- **`backup_volume`/`restore_volume`**: Volume data as .tar.gz
+- **`export_compose`**: Full project archive (YAML + container list + images)
 
-- **Volume Management**
-  - Create and manage persistent volumes
-  - Mount volumes to containers
-  - Backup and restore volumes
+### 3.6 Analysis Tools
 
-### 3.2 Monitoring Stack
+- **`image_compare`**: Diff two images (layers, env, entrypoint, cmd, ports, labels, workdir, user)
+- **`container_analyze`**: Restart counts, exit codes, log error patterns, resource limits, recommendations
+- **Compose file analysis**: Parse YAML → services, images, volumes, networks, ports, dependencies
 
-DockerMCP includes a comprehensive monitoring solution built on industry-standard tools:
+### 3.7 Compose File Analysis
 
-#### Components
-- **Prometheus**: Metrics collection and alerting (Port: 9091)
-- **Grafana**: Visualization and dashboards (Port: 3001)
-- **Loki**: Log aggregation (Port: 3101)
-- **Promtail**: Log collection and shipping
-- **cAdvisor**: Container metrics and resource monitoring (Port: 8082)
-- **Node Exporter**: Host-level metrics (Port: 9100)
-- **Redis**: Caching and metrics storage (Port: 6379)
+- Parse `docker-compose.yml` YAML → extract services, images, volumes, networks, ports, dependencies, build contexts, healthchecks
+- Accessible via `POST /api/compose/analyze` and compose frontend
+- Tauri file dialog for file picking (browser fallback via `<input type="file">`)
 
-#### Key Features
-- **Unified Monitoring**: Single pane of glass for all Docker resources
-- **Pre-configured Dashboards**: Out-of-the-box dashboards for containers, hosts, and applications
-- **Log Aggregation**: Centralized logging with powerful querying capabilities
-- **Alerting**: Configurable alerts for system and application metrics
-- **Performance Metrics**: Detailed resource utilization and performance data
-- **Historical Data**: Long-term storage and analysis of metrics and logs
+### 3.8 Docker Desktop Management
 
-### 3.3 Advanced Features
+- `docker_desktop_status` — Health check with hang detection, inventory, disk usage
+- `docker_daemon_recover` — Triple-kill Docker Desktop + backend + vpnkit
+- `docker_daemon_restart` — Graceful daemon restart
+- `docker_desktop_update` — Fix update elevation errors
+- Restart Docker button on dashboard
 
-- **Docker Watchdog**
-  - Automatic monitoring of Docker daemon health
-  - Cross-platform support (Windows/Linux)
-  - Configurable check intervals and retry policies
-  - Automatic recovery of unresponsive Docker daemon
-  - Detailed logging and status reporting
+### 3.9 Monitoring Stack
 
-- **Stack Health Monitoring**
-  - Real-time health checks for Docker stacks
-  - Automated problem detection and reporting
-  - Performance metrics collection
+- Prometheus (metrics), Grafana (dashboards), Loki (logs), Promtail, cAdvisor, Node Exporter
+- Per-container resource usage analytics
 
-- **Workflow Automation**
-  - Predefined workflows for common tasks
-  - Custom workflow creation
-  - Scheduled operations
+## 4. Technical Architecture
 
-- **Security**
-  - Role-based access control
-  - Audit logging
-  - Secure communication channels
+### 4.1 Stack
 
-## 4. Technical Requirements
+| Layer | Technology |
+|-------|-----------|
+| MCP Framework | FastMCP 3.4+ |
+| Python Backend | FastAPI + uvicorn |
+| Frontend | React 19, Vite, Tailwind, Zustand, Lucide |
+| Desktop | Tauri 2.0 + PyInstaller (NSIS installer) |
+| Local LLM | Ollama (:11434), LM Studio (:1234) |
+| Backup | docker save/load, volume tar, compose export |
 
-### 4.1 Compatibility
+### 4.2 Ports
 
-- FastMCP 2.10.1 or higher
-- Python 3.8+
-- Docker Engine 20.10.0+
-- Linux/Windows/macOS (with Docker Desktop)
+| Service | Port |
+|---------|------|
+| Frontend (Vite dev) | 10806 |
+| Backend (FastAPI + MCP HTTP) | 10807 |
+| Tauri WebView | Embedded (tauri://localhost) |
 
-### 4.2 Performance
+### 4.3 Transport
 
-- Support for managing 1000+ containers
-- Sub-second response time for common operations
-- Efficient resource utilization
+- **MCP stdio**: Default for Claude Desktop
+- **MCP HTTP**: `/mcp` endpoint on :10807 for streamable HTTP
+- **REST**: `/api/*` endpoints for the web dashboard
 
-## 5. Future Development Roadmap
+## 5. Future Roadmap
 
-### 5.1 Short-term (Next Release)
-- **Enhanced Alerting System**
-  - Email notifications for critical events
-  - Webhook integration for monitoring systems
-  - Custom alert thresholds
-
-- **Extended Monitoring**
-  - Container resource usage analytics
-  - Historical performance data
-  - Custom dashboard creation
+### 5.1 Short-term
+- Per-conversation model override in chat compose box
+- Auto-refresh compose page via SSE
+- Enhanced container stats with trend charts
 
 ### 5.2 Medium-term
-- **Cluster Support**
-  - Swarm mode integration
-  - Multi-host monitoring
-  - Load balancing and failover
-
-- **Security Enhancements**
-  - Automated security scanning
-  - Vulnerability detection
-  - Compliance reporting
+- Swarm mode support
+- Kubernetes integration
+- Multi-host monitoring
 
 ### 5.3 Long-term
-- **Kubernetes Integration**
-  - Pod monitoring
-  - Helm chart support
-  - Custom resource definitions
-
-- **Self-healing Infrastructure**
-  - Predictive failure analysis
-  - Automated remediation workflows
-  - Machine learning-based optimization
-
-## 6. Non-Functional Requirements
-
-### 6.1 Reliability
-
-- 99.9% uptime
-- Graceful error handling
-- Automatic recovery from failures
-- Watchdog service with configurable health checks
-
-### 5.2 Security
-
-- Encrypted communication
-- Authentication and authorization
-- Regular security updates
-
-### 5.3 Usability
-
-- Intuitive command structure
-- Comprehensive documentation
-- Meaningful error messages
-
-## 6. Future Enhancements
-
-- Integration with Kubernetes
-- Advanced monitoring and alerting
-- Multi-cloud deployment support
-- AI-powered optimization
+- Self-healing infrastructure with predictive failure analysis
+- ML-based resource optimization
+- Automated remediation workflows

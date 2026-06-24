@@ -1,33 +1,21 @@
 # docker-mcp
 
-FastMCP **3.3** server for Docker Desktop and engine operations — containers, images, networks, volumes, daemon recovery, **sampling**, **prefab UI**, **agentic workflows**, and a fleet **web_sota** dashboard.
+[![Python](https://img.shields.io/badge/python-3.12+-blue.svg)](https://python.org)
+[![FastMCP](https://img.shields.io/badge/FastMCP-3.5-purple.svg)](https://github.com/jlowin/fastmcp)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/sandraschi/docker-mcp/pulls)
 
-## Preview
+FastMCP 3.5 control plane for Docker — containers, images, volumes, networks, Compose, daemon recovery, **AI chat**, **backup/restore**, **image comparison**, **container analysis**, and a React web dashboard.
 
-| Dashboard | Event logs |
-|-----------|------------|
-| Web UI at http://127.0.0.1:10806 (dev) | `/logs` — tail, filter, export |
+## Install
 
-Native **Tauri** installer bundles the UI + API bridge (port **10807**). After `just build-native`:
+| Method | Command |
+|--------|---------|
+| **Claude Desktop** | `just mcpb-pack` → drag `.mcpb` onto Claude |
+| **Windows (NSIS)** | `just build-native` → run `*-setup.exe` |
+| **Dev (any OS)** | `uv sync && .\start.ps1` → `localhost:10806` |
 
-- `native\target\release\bundle\nsis\Docker MCP_3.3.0_x64-setup.exe`
-- `native\target\release\bundle\msi\Docker MCP_3.3.0_x64_en-US.msi`
-
-## Features
-
-- Docker Desktop health, hang detection, recovery, and restart tools
-- Full container / image / network / volume / compose tool surface
-- **Prefab cards** for container lists, daemon status, and system info
-- **MCP prompts** and `resource://docker-mcp/skills`
-- **Agentic workflows** via FastMCP 3.3 sampling (Ollama / LM Studio)
-- Web dashboard: dashboard, containers, images, MCP tools, chat, settings (LLM glom-on), event logs
-
-## Quick install
-
-1. Download `docker-mcp-v3.3.0.mcpb` from [Releases](https://github.com/sandraschi/docker-mcp/releases/latest)
-2. Drag the file onto Claude Desktop (or Settings → MCP → Install from file)
-
-## Quick start (developers)
+## Quick Start
 
 ```powershell
 git clone https://github.com/sandraschi/docker-mcp
@@ -36,31 +24,46 @@ uv sync
 .\start.ps1
 ```
 
-Opens the web UI at http://127.0.0.1:10806 (API bridge on **10807**).
+Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 
-## What you can do
+## What You Can Do
 
-- “Check if Docker Desktop is hung and recover the daemon.”
-- “List all running containers and show resource usage.”
-- “Deploy my compose stack and verify every service is healthy.”
+- "List all running containers and show resource usage."
+- "Deploy my compose stack and verify every service is healthy."
+- "Compare nginx:1.25 and nginx:1.26 — what changed?"
+- "Analyze container my-app — why is it restarting?"
+- "Back up my database volume before the upgrade."
+
+## Feature Overview
+
+| Area | Highlights |
+|------|------------|
+| **Containers** | CRUD, logs, stats, exec, inspect, health analysis |
+| **Images** | List, pull, build, tag, push, prune, search, compare |
+| **Compose** | Projects, up/down, logs, config, YAML file analysis |
+| **Backup/Restore** | `save/load image`, `backup/restore volume`, `export compose` |
+| **Docker Desktop** | Status, hang detection, triple-kill recovery, restart |
+| **AI Chat** | SSE streaming, tool execution cards, LLM provider discovery |
+| **Agentic** | Deploy, cleanup, diagnose, rollback workflows |
+| **Prefab Cards** | Containers, images, daemon status, system info |
 
 ## Documentation
 
 | Doc | Contents |
 |-----|----------|
-| [INSTALL.md](INSTALL.md) | All install paths, prerequisites, Tauri installer |
+| [docs/TOOLS.md](docs/TOOLS.md) | Full MCP tool reference |
+| [docs/COMPOSE.md](docs/COMPOSE.md) | Compose management & file analysis |
+| [docs/BACKUP.md](docs/BACKUP.md) | Docker backup & restore guide |
+| [docs/CHAT.md](docs/CHAT.md) | AI chat & agentic workflows |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Stack, transport, REST API |
 | [docs/CONFIGURATION.md](docs/CONFIGURATION.md) | Environment variables |
-| [docs/TOOLS.md](docs/TOOLS.md) | MCP tool reference |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Local dev, just recipes, MCPB, native build |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build, just recipes, testing |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
 
 ## Requirements
 
-- Docker Desktop or Docker Engine
-- **Python 3.12+** and [uv](https://docs.astral.sh/uv/) (dev / manual install)
-- **Node.js 20+** (webapp / MCPB CLI)
-- **Rust + Cargo** (Tauri native build only)
+Python 3.12+, Docker Engine 20.10+, Node.js 20+ (dev). Rust 1.70+ (Tauri build only).
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT
