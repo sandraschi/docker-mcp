@@ -2,10 +2,10 @@
   "$schema": "https://glama.ai/mcp/schemas/server.json",
   "maintainers": ["sandraschi"],
   "name": "docker-mcp",
-  "description": "FastMCP 3.3 Docker control plane with sampling, prefab UI, agentic workflows, web dashboard, and Tauri native installer.",
+  "description": "FastMCP 3.4 Docker control plane with sampling, prefab UI, agentic workflows, web dashboard, and Tauri native installer.",
   "type": "mcp_server",
   "status": "beta",
-  "framework": "FastMCP 3.3",
+  "framework": "FastMCP 3.4",
   "tools": 40,
   "transport": ["stdio", "http"],
   "keywords": [

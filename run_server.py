@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -11,22 +11,17 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 # PyInstaller lazy-import traps (fleet Tauri protocol)
+import _strptime  # noqa: F401
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="docker-mcp HTTP web bridge")
-    parser.add_argument("--http", action="store_true", help="Run HTTP (required for Tauri)")
-    parser.add_argument("--port", type=int, default=10807)
-    args = parser.parse_args()
-
-    if not args.http:
-        parser.error("Tauri sidecar requires --http")
+    port = int(os.environ.get("MCP_PORT", os.environ.get("PORT", "10807")))
+    host = os.environ.get("MCP_HOST", "127.0.0.1")
 
     import uvicorn
-
     from customization.server import app
 
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="info")
+    uvicorn.run(app, host=host, port=port, log_level="info")
 
 
 if __name__ == "__main__":

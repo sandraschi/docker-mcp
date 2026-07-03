@@ -1,10 +1,30 @@
 'use client';
 
 import { APPS_CATALOG } from '@/common/apps-catalog';
+import { useConnection } from '@/store/connection';
 import { LayoutGrid, ExternalLink, HelpCircle } from 'lucide-react';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 
 export function Topbar() {
+    const { state, lastError } = useConnection();
+
+    const colorMap: Record<string, string> = {
+        connected: "bg-emerald-500/10 text-emerald-500 border-emerald-500/20",
+        connecting: "bg-amber-500/10 text-amber-500 border-amber-500/20",
+        offline: "bg-red-500/10 text-red-500 border-red-500/20",
+        error: "bg-red-500/10 text-red-500 border-red-500/20",
+    };
+
+    const labelMap: Record<string, string> = {
+        connected: "System Online",
+        connecting: "Connecting...",
+        offline: `Offline${lastError ? ` (${lastError.slice(0, 60)})` : ""}`,
+        error: `Error${lastError ? ` (${lastError.slice(0, 60)})` : ""}`,
+    };
+
+    const cls = colorMap[state] || colorMap.connecting;
+    const label = labelMap[state] || labelMap.connecting;
+
     return (
         <header className="flex h-14 items-center justify-between border-b border-slate-800 bg-slate-950/50 px-6 backdrop-blur-xl">
             <div className="flex items-center gap-4">
@@ -15,12 +35,14 @@ export function Topbar() {
 
             <div className="flex items-center gap-2">
                 {/* System Status Indicator */}
-                <div className="mr-4 flex items-center gap-2 rounded-full bg-emerald-500/10 px-3 py-1 text-xs text-emerald-500 border border-emerald-500/20">
+                <div data-testid="connection-status" className={`mr-4 flex items-center gap-2 rounded-full px-3 py-1 text-xs border ${cls}`}>
                     <span className="relative flex h-2 w-2">
-                        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500"></span>
+                        {state !== "offline" && state !== "error" && (
+                            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-current opacity-75" />
+                        )}
+                        <span className="relative inline-flex h-2 w-2 rounded-full bg-current" />
                     </span>
-                    System Online
+                    <span data-testid="connection-label">{label}</span>
                 </div>
 
                 {/* Global Apps Navigation */}

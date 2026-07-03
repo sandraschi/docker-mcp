@@ -1,6 +1,6 @@
 # docker-mcp Agent Context
 
-FastMCP **3.3** fleet server. Normative standards: `D:\Dev\repos\mcp-central-docs`.
+FastMCP 3.4 fleet server. Normative standards: `D:\Dev\repos\mcp-central-docs`.
 
 ## Quick ref
 

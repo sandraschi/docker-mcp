@@ -1,15 +1,17 @@
 {
-  "product_name": "Docker MCP Operator",
-  "install_dir": "%LOCALAPPDATA%\\Docker MCP",
-  "operator_exe": "docker-mcp-native.exe",
-  "backend_process_names": ["docker-mcp-operator", "docker-mcp-backend"],
-  "backend_port": 10807,
-  "health_path": "/health",
-  "diagnostics_path": "/api/v1/diagnostics",
-  "feature_smoke_path": "/api/dashboard",
-  "window_title_re": "Docker MCP",
-  "nsis_glob": "native/target/release/bundle/nsis/Docker MCP_*_x64-setup.exe",
-  "bridge_ok_text": "REST bridge reachable",
-  "uninstall_registry_filter": "*Docker MCP*"
+    "product_name": "Docker MCP",
+    "install_dir": "%LOCALAPPDATA%\\Docker MCP",
+    "operator_exe": "docker-mcp-native.exe",
+    "backend_process_names": ["docker-mcp-native", "docker-mcp-native-backend"],
+    "backend_port": 10807,
+    "health_path": "/api/health",
+    "diagnostics_path": "/api/v1/diagnostics",
+    "feature_smoke_path": "/api/v1/diagnostics",
+    "window_title_re": "Docker MCP",
+    "nsis_glob": "native/target/release/bundle/nsis/Docker MCP_*_x64-setup.exe",
+    "uninstall_registry_filter": "*Docker MCP*",
+    "sidebar_click_x": 120,
+    "sidebar_first_y": 130,
+    "sidebar_step_y": 45,
+    "nav_routes": [["Overview", "Docker Dashboard"], ["Containers", "Containers"], ["Images", "Images"], ["Tools", "Tools"]]
 }
-
