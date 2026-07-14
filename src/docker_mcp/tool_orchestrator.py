@@ -3,9 +3,7 @@
 import time
 from typing import Any
 
-from dockermcp.docker_context import docker_available
 from dockermcp.mcp_instance import get_mcp
-
 
 TOOL_PATTERNS: dict[str, list[str]] = {
     "list_containers": ["list container", "running container", "show container", "all container", "what.*container"],
@@ -22,6 +20,7 @@ def _match_query(query: str) -> str | None:
     for tool, patterns in TOOL_PATTERNS.items():
         for pat in patterns:
             import re
+
             if re.search(pat, q):
                 return tool
     return None
@@ -52,10 +51,22 @@ async def execute_tool(tool_name: str, query: str) -> dict[str, Any]:
     try:
         result = await mcp.call_tool(tool_name, params)
         elapsed = time.monotonic() - start
-        return {"success": True, "tool": tool_name, "params": params, "result": str(result), "timing_ms": round(elapsed * 1000)}
+        return {
+            "success": True,
+            "tool": tool_name,
+            "params": params,
+            "result": str(result),
+            "timing_ms": round(elapsed * 1000),
+        }
     except Exception as e:
         elapsed = time.monotonic() - start
-        return {"success": False, "tool": tool_name, "params": params, "error": str(e), "timing_ms": round(elapsed * 1000)}
+        return {
+            "success": False,
+            "tool": tool_name,
+            "params": params,
+            "error": str(e),
+            "timing_ms": round(elapsed * 1000),
+        }
 
 
 def tool_to_nl_name(tool: str) -> str:

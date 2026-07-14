@@ -7,14 +7,16 @@ import os
 import subprocess
 from typing import Annotated, Any
 
-from dockermcp.docker_context import docker_available, docker_error, docker_client
+from dockermcp.docker_context import docker_available, docker_error
 from dockermcp.mcp_instance import mcp
 
 
 async def _run_cmd(cmd: list[str], timeout: int = 300) -> dict[str, Any]:
     try:
         proc = await asyncio.create_subprocess_exec(
-            *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            *cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
         )
         stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         out = stdout.decode("utf-8", errors="replace").strip()
@@ -22,7 +24,7 @@ async def _run_cmd(cmd: list[str], timeout: int = 300) -> dict[str, Any]:
         if proc.returncode != 0:
             return {"success": False, "error": err or f"exit code {proc.returncode}"}
         return {"success": True, "output": out}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"success": False, "error": f"Command timed out ({timeout}s)"}
     except FileNotFoundError:
         return {"success": False, "error": "docker not found on PATH"}
@@ -74,7 +76,9 @@ async def docker_backup(
         return {
             "success": result["success"],
             "operation": operation,
-            "message": f"Saved {image} to {output_path} ({size / 1024 / 1024:.1f} MB)" if result["success"] else result["error"],
+            "message": f"Saved {image} to {output_path} ({size / 1024 / 1024:.1f} MB)"
+            if result["success"]
+            else result["error"],
             "data": {"image": image, "output_path": output_path, "size_bytes": size} if result["success"] else {},
         }
 
@@ -95,17 +99,31 @@ async def docker_backup(
         if not volume or not output_path:
             return {"success": False, "error": "volume and output_path required"}
         os.makedirs(os.path.dirname(output_path) or ".", exist_ok=True)
-        result = await _run_cmd([
-            "docker", "run", "--rm",
-            "-v", f"{volume}:/volume:ro",
-            "-v", f"{os.path.dirname(os.path.abspath(output_path))}:/backup",
-            "alpine", "tar", "czf", f"/backup/{os.path.basename(output_path)}", "-C", "/volume", ".",
-        ])
+        result = await _run_cmd(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{volume}:/volume:ro",
+                "-v",
+                f"{os.path.dirname(os.path.abspath(output_path))}:/backup",
+                "alpine",
+                "tar",
+                "czf",
+                f"/backup/{os.path.basename(output_path)}",
+                "-C",
+                "/volume",
+                ".",
+            ]
+        )
         size = os.path.getsize(output_path) if result["success"] else 0
         return {
             "success": result["success"],
             "operation": operation,
-            "message": f"Backed up volume {volume} to {output_path} ({size / 1024 / 1024:.1f} MB)" if result["success"] else result["error"],
+            "message": f"Backed up volume {volume} to {output_path} ({size / 1024 / 1024:.1f} MB)"
+            if result["success"]
+            else result["error"],
             "data": {"volume": volume, "output_path": output_path, "size_bytes": size} if result["success"] else {},
         }
 
@@ -114,12 +132,23 @@ async def docker_backup(
             return {"success": False, "error": "volume and input_path required"}
         if not os.path.isfile(input_path):
             return {"success": False, "error": f"File not found: {input_path}"}
-        result = await _run_cmd([
-            "docker", "run", "--rm",
-            "-v", f"{volume}:/volume",
-            "-v", f"{os.path.dirname(os.path.abspath(input_path))}:/backup:ro",
-            "alpine", "tar", "xzf", f"/backup/{os.path.basename(input_path)}", "-C", "/volume",
-        ])
+        result = await _run_cmd(
+            [
+                "docker",
+                "run",
+                "--rm",
+                "-v",
+                f"{volume}:/volume",
+                "-v",
+                f"{os.path.dirname(os.path.abspath(input_path))}:/backup:ro",
+                "alpine",
+                "tar",
+                "xzf",
+                f"/backup/{os.path.basename(input_path)}",
+                "-C",
+                "/volume",
+            ]
+        )
         return {
             "success": result["success"],
             "operation": operation,
@@ -148,11 +177,14 @@ async def docker_backup(
         img_result = await _run_cmd(["docker", "compose", "-p", project, "images", "--format", "json"])
         if img_result["success"] and img_result["output"]:
             import json
+
             try:
                 images = [json.loads(l) for l in img_result["output"].split("\n") if l.strip()]
                 for img in images:
                     tag = img.get("Image", img.get("image", "unknown")).replace("/", "_").replace(":", "_")
-                    save_result = await _run_cmd(["docker", "save", "-o", os.path.join(images_path, f"{tag}.tar"), img.get("ID", "")])
+                    save_result = await _run_cmd(
+                        ["docker", "save", "-o", os.path.join(images_path, f"{tag}.tar"), img.get("ID", "")]
+                    )
                     if save_result["success"]:
                         steps.append(f"Saved image {tag}")
             except json.JSONDecodeError:

@@ -83,7 +83,10 @@ def build_images_card(result: dict, limit: int = 12) -> Card:
     return Card(
         children=rows or [Metric(label="Images", value="0")],
         title="Docker Images",
-        badges=[Badge(label=f"{len(images)} total"), Badge(label=f"{sum(1 for i in images if i.get('repo_tags', i.get('RepoTags', [])))} tagged")],
+        badges=[
+            Badge(label=f"{len(images)} total"),
+            Badge(label=f"{sum(1 for i in images if i.get('repo_tags', i.get('RepoTags', [])))} tagged"),
+        ],
     )
 
 

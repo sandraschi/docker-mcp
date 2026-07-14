@@ -1,9 +1,9 @@
 """Docker Compose CRUD operations via `docker compose` CLI — portmanteau tool."""
+
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import subprocess
 from typing import Annotated, Any, Literal
 
@@ -12,7 +12,8 @@ from dockermcp.mcp_instance import get_mcp
 
 
 async def _run_compose(
-    args: list[str], cwd: str | None = None,
+    args: list[str],
+    cwd: str | None = None,
 ) -> dict[str, Any]:
     """Run `docker compose` with args, return parsed output."""
     if not docker_available:
@@ -31,7 +32,7 @@ async def _run_compose(
         if proc.returncode != 0:
             return {"success": False, "error": err or f"exit code {proc.returncode}"}
         return {"success": True, "output": out}
-    except asyncio.TimeoutError:
+    except TimeoutError:
         return {"success": False, "error": "Command timed out after 60s"}
     except FileNotFoundError:
         return {"success": False, "error": "docker not found on PATH"}
@@ -293,7 +294,9 @@ def register_tools(mcp=None) -> None:
 
     @mcp.tool()
     async def compose_operations(
-        operation: Annotated[Literal["list", "ps", "up", "down", "logs", "build", "config", "debug"], "Operation to perform."],
+        operation: Annotated[
+            Literal["list", "ps", "up", "down", "logs", "build", "config", "debug"], "Operation to perform."
+        ],
         project: Annotated[str | None, "Compose project name (required for up/down/logs/build/config/debug)."] = None,
         services: Annotated[str | None, "Comma-separated service names for up/build/logs."] = None,
         detach: Annotated[bool, "Run in background (up only)."] = True,
@@ -321,7 +324,9 @@ def register_tools(mcp=None) -> None:
         elif operation == "ps":
             return await _compose_ps(project=project)
         elif operation == "up":
-            return await _compose_up(project=project, services=svc_list, detach=detach, build=build, project_dir=project_dir)
+            return await _compose_up(
+                project=project, services=svc_list, detach=detach, build=build, project_dir=project_dir
+            )
         elif operation == "down":
             return await _compose_down(project=project, volumes=volumes, project_dir=project_dir)
         elif operation == "logs":

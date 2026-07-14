@@ -1,7 +1,7 @@
 {
   "manifest_version": "0.2",
   "name": "schip-mcp-docker",
-  "version": "3.3.0",
+  "version": "3.5.0",
   "description": "FastMCP 3.3 server for comprehensive Docker operations",
   "author": { "name": "sandraschi" },
   "server": {

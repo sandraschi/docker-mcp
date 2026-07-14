@@ -41,7 +41,11 @@ async def container_analyze(
         log_errors = []
         try:
             logs = container.logs(tail=log_tail, timestamps=True).decode("utf-8", errors="replace")
-            error_lines = [l for l in logs.split("\n") if any(w in l.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"])]
+            error_lines = [
+                l
+                for l in logs.split("\n")
+                if any(w in l.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"])
+            ]
             log_errors = error_lines[:10]
         except Exception:
             logs = ""
@@ -59,7 +63,9 @@ async def container_analyze(
         if restart_count > 3:
             recommendations.append(f"Container restarted {restart_count} times. Check for crash loops. ")
         if exit_code is not None and exit_code != 0 and status == "exited":
-            recommendations.append(f"Container exited with code {exit_code}. Common causes: missing config, port conflict, dependency failure.")
+            recommendations.append(
+                f"Container exited with code {exit_code}. Common causes: missing config, port conflict, dependency failure."
+            )
         if mem_limit == 0:
             recommendations.append("No memory limit set. Set --memory to prevent OOM kills.")
         if restart_policy == "no":

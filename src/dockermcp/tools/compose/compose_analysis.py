@@ -50,7 +50,7 @@ def analyze_compose_file(file_path: str) -> dict[str, Any]:
             elif isinstance(p, dict):
                 ports.append({"host": str(p.get("published", "")), "container": str(p.get("target", ""))})
         volumes = []
-        for v in (svc.get("volumes") or []):
+        for v in svc.get("volumes") or []:
             if isinstance(v, str):
                 volumes.append(v.split(":")[0])
             elif isinstance(v, dict):
@@ -62,21 +62,31 @@ def analyze_compose_file(file_path: str) -> dict[str, Any]:
         if isinstance(env_vars, list):
             env_vars = {e.split("=", 1)[0]: e.split("=", 1)[1] if "=" in e else "" for e in env_vars}
 
-        services.append({
-            "name": name,
-            "image": image,
-            "build": build if isinstance(build, str) else (build.get("context", "") if isinstance(build, dict) else ""),
-            "ports": ports,
-            "volumes": volumes,
-            "depends_on": depends_on,
-            "environment_keys": list(env_vars.keys()),
-            "restart": svc.get("restart", ""),
-            "healthcheck": svc.get("healthcheck") is not None,
-            "container_name": svc.get("container_name", ""),
-        })
+        services.append(
+            {
+                "name": name,
+                "image": image,
+                "build": build
+                if isinstance(build, str)
+                else (build.get("context", "") if isinstance(build, dict) else ""),
+                "ports": ports,
+                "volumes": volumes,
+                "depends_on": depends_on,
+                "environment_keys": list(env_vars.keys()),
+                "restart": svc.get("restart", ""),
+                "healthcheck": svc.get("healthcheck") is not None,
+                "container_name": svc.get("container_name", ""),
+            }
+        )
 
-    volumes_config = [{"name": k, "driver": (v.get("driver", "local") if isinstance(v, dict) else "local")} for k, v in volumes_raw.items()]
-    networks_config = [{"name": k, "driver": (v.get("driver", "bridge") if isinstance(v, dict) else "bridge")} for k, v in networks_raw.items()]
+    volumes_config = [
+        {"name": k, "driver": (v.get("driver", "local") if isinstance(v, dict) else "local")}
+        for k, v in volumes_raw.items()
+    ]
+    networks_config = [
+        {"name": k, "driver": (v.get("driver", "bridge") if isinstance(v, dict) else "bridge")}
+        for k, v in networks_raw.items()
+    ]
 
     all_ports = []
     for svc in services:

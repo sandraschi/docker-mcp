@@ -4,7 +4,6 @@ FastAPI routes for Docker MCP webapp
 
 import logging
 import os
-import time
 
 import docker
 from fastapi import FastAPI, HTTPException
@@ -18,8 +17,6 @@ def create_app() -> FastAPI:
 
     app = FastAPI(title="Docker MCP API", version="0.1.0")
 
-    # Add CORS middleware (tauri-aware)
-    _tauri_desktop = os.environ.get("DOCKER_TAURI", "").lower() in ("1", "true", "yes")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[
@@ -30,7 +27,7 @@ def create_app() -> FastAPI:
             "https://tauri.localhost",
             "tauri://localhost",
         ],
-        allow_origin_regex=r"https?://tauri\.localhost(:\d+)?" if _tauri_desktop else None,
+        allow_origin_regex=r"https?://(?:[a-zA-Z0-9-]+\.ts\.net|.*?\.tail-[a-f0-9]+\.ts\.net|tauri\.localhost|localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|100\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?$|^tauri://localhost$",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -185,6 +182,7 @@ def create_app() -> FastAPI:
     async def diagnostics():
         try:
             import psutil
+
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
             disk = psutil.disk_usage("/").percent

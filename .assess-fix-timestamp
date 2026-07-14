@@ -1,0 +1,11 @@
+assess-fix completed: 2026-07-14T01:52Z
+Repo: docker-mcp
+Version: 3.5.0
+Changes:
+- CORS: unconditional allow_origin_regex in src/server.py and src/dockermcp/api/app.py
+- Created: .env.example (stripped secrets from .env)
+- Created: CLAUDE.md
+- Created: .opencode/skills/docker-mcp/SKILL.md
+- Updated: mcpb/manifest.json version 3.3.0 -> 3.5.0
+- Ruff: auto-fixed lint issues (import sorting, unused imports, f-strings)
+- MCPB: packed dist/docker-mcp-v3.5.0.mcpb

@@ -1,5 +1,6 @@
 import json
-from typing import AsyncGenerator, Literal
+from collections.abc import AsyncGenerator
+from typing import Literal
 
 import httpx
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
@@ -36,6 +37,7 @@ SortParam = Literal["asc", "desc"]
 def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     """Setup standard SOTA web endpoints for Docker-MCP."""
     import time
+
     _start_time = time.time()
 
     ai_router = AIRouter(mcp_app)
@@ -152,41 +154,54 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/compose/projects")
     async def api_compose_projects(all_: bool = Query(False, alias="all")):
         from dockermcp.tools.compose.compose_management import _compose_list
+
         return await _compose_list(all=all_)
 
     @app.get("/api/compose/ps")
     async def api_compose_ps(project: str = Query(...)):
         from dockermcp.tools.compose.compose_management import _compose_ps
+
         return await _compose_ps(project=project)
 
     @app.post("/api/compose/up")
     async def api_compose_up(payload: dict = Body(...)):
         from dockermcp.tools.compose.compose_management import _compose_up
-        return await _compose_up(project=payload["project"], build=payload.get("build", False), detach=payload.get("detach", True))
+
+        return await _compose_up(
+            project=payload["project"], build=payload.get("build", False), detach=payload.get("detach", True)
+        )
 
     @app.post("/api/compose/down")
     async def api_compose_down(payload: dict = Body(...)):
         from dockermcp.tools.compose.compose_management import _compose_down
+
         return await _compose_down(project=payload["project"], volumes=payload.get("volumes", False))
 
     @app.get("/api/compose/logs")
     async def api_compose_logs(project: str = Query(...), tail: int = Query(50)):
         from dockermcp.tools.compose.compose_management import _compose_logs
+
         return await _compose_logs(project=project, tail=tail)
 
     @app.get("/api/compose/config")
     async def api_compose_config(project: str = Query(...)):
         from dockermcp.tools.compose.compose_management import _compose_config
+
         return await _compose_config(project=project)
 
     @app.post("/api/compose/analyze")
     async def api_compose_analyze(payload: dict = Body(...)):
         from dockermcp.tools.compose.compose_analysis import analyze_compose_file
+
         file_path = payload.get("file_path", "")
         if not file_path:
             return {"success": False, "error": "file_path required"}
         result = analyze_compose_file(file_path)
-        log_activity("tool_call", f"compose analyze: {file_path}", meta={"service_count": result.get("service_count", 0) if result.get("success") else 0})
+        log_activity(
+            "tool_call",
+            f"compose analyze: {file_path}",
+            meta={"service_count": result.get("service_count", 0) if result.get("success") else 0},
+        )
         return result
 
     @app.get("/api/dashboard")
@@ -295,6 +310,7 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
 
             if agentic_tools:
                 from .tool_orchestrator import _match_query, execute_tool
+
                 tool_name = _match_query(query)
                 if tool_name:
                     tool_result = await execute_tool(tool_name, query)
@@ -307,13 +323,16 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
 
 class _AgenticEvent:
     """SSE event types for agentic chat."""
+
     TEXT = "text"
     TOOL_CALL = "tool_call"
     TOOL_RESULT = "tool_result"
     DONE = "done"
 
 
-async def _agentic_chat_stream(query: str, provider: str, model: str, endpoint: str, system_prompt: str, history: list) -> AsyncGenerator[str, None]:
+async def _agentic_chat_stream(
+    query: str, provider: str, model: str, endpoint: str, system_prompt: str, history: list
+) -> AsyncGenerator[str, None]:
     """Stream agentic chat with interleaved tool execution."""
     from .tool_orchestrator import _match_query, execute_tool, tool_to_nl_name
 
@@ -335,7 +354,7 @@ async def _agentic_chat_stream(query: str, provider: str, model: str, endpoint: 
             if isinstance(tool_result.get("result"), str):
                 tool_summary = f"\n\nTool result: {tool_result['result'][:1000]}"
             else:
-                tool_summary = f"\n\nTool executed successfully."
+                tool_summary = "\n\nTool executed successfully."
         elif tool_result:
             tool_summary = f"\n\nTool returned: {tool_result.get('error', 'unknown error')}"
 
@@ -355,8 +374,9 @@ async def _agentic_chat_stream(query: str, provider: str, model: str, endpoint: 
 
 
 async def _stream_ollama_raw(client, endpoint, model, messages) -> AsyncGenerator[str, None]:
-    async with client.stream("POST", f"{endpoint}/api/chat",
-        json={"model": model, "messages": messages, "stream": True}, timeout=120) as r:
+    async with client.stream(
+        "POST", f"{endpoint}/api/chat", json={"model": model, "messages": messages, "stream": True}, timeout=120
+    ) as r:
         async for line in r.aiter_lines():
             if line:
                 try:
@@ -367,8 +387,12 @@ async def _stream_ollama_raw(client, endpoint, model, messages) -> AsyncGenerato
 
 
 async def _stream_lmstudio_raw(client, endpoint, model, messages) -> AsyncGenerator[str, None]:
-    async with client.stream("POST", f"{endpoint}/v1/chat/completions",
-        json={"messages": messages, "model": model, "temperature": 0.7, "stream": True}, timeout=120) as r:
+    async with client.stream(
+        "POST",
+        f"{endpoint}/v1/chat/completions",
+        json={"messages": messages, "model": model, "temperature": 0.7, "stream": True},
+        timeout=120,
+    ) as r:
         async for line in r.aiter_lines():
             if line.startswith("data: "):
                 chunk = line[6:]
@@ -380,35 +404,55 @@ async def _stream_lmstudio_raw(client, endpoint, model, messages) -> AsyncGenera
                 except json.JSONDecodeError:
                     pass
 
+
 async def _stream_ollama(client, endpoint, model, messages):
-    async with client.stream("POST", f"{endpoint}/api/chat",
-        json={"model": model, "messages": messages, "stream": True}, timeout=120) as r:
+    async with client.stream(
+        "POST", f"{endpoint}/api/chat", json={"model": model, "messages": messages, "stream": True}, timeout=120
+    ) as r:
         async for line in r.aiter_lines():
             if line:
                 import json as _json
-                try: data = _json.loads(line); yield data.get("message", {}).get("content", "")
-                except: pass
+
+                try:
+                    data = _json.loads(line)
+                    yield data.get("message", {}).get("content", "")
+                except:
+                    pass
+
 
 async def _stream_lmstudio(client, endpoint, model, messages):
-    async with client.stream("POST", f"{endpoint}/v1/chat/completions",
-        json={"messages": messages, "model": model, "temperature": 0.7, "stream": True}, timeout=120) as r:
+    async with client.stream(
+        "POST",
+        f"{endpoint}/v1/chat/completions",
+        json={"messages": messages, "model": model, "temperature": 0.7, "stream": True},
+        timeout=120,
+    ) as r:
         async for line in r.aiter_lines():
             if line.startswith("data: "):
                 chunk = line[6:]
-                if chunk == "[DONE]": break
+                if chunk == "[DONE]":
+                    break
                 import json as _json
-                try: data = _json.loads(chunk); yield data["choices"][0].get("delta", {}).get("content", "")
-                except: pass
+
+                try:
+                    data = _json.loads(chunk)
+                    yield data["choices"][0].get("delta", {}).get("content", "")
+                except:
+                    pass
 
     @app.get("/api/v1/diagnostics")
     async def diagnostics():
-        import time, os
+        import time
+
         try:
             import psutil
+
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
-            try: disk = psutil.disk_usage("/").percent
-            except: disk = 0
+            try:
+                disk = psutil.disk_usage("/").percent
+            except:
+                disk = 0
         except ImportError:
             cpu = mem = disk = 0
         return {
@@ -422,4 +466,5 @@ async def _stream_lmstudio(client, endpoint, model, messages):
     @app.post("/api/docker/recover")
     async def recover_docker():
         from dockermcp.docker_context import triple_kill_docker
+
         return triple_kill_docker()

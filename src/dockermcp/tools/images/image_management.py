@@ -139,9 +139,7 @@ class ImageSearchResult(BaseModel):
 
 
 class ImageCompareResult(BaseModel):
-    model_config = ConfigDict(
-        json_schema_extra={"example": {"image_a": {...}, "image_b": {...}, "differences": {...}}}
-    )
+    model_config = ConfigDict(json_schema_extra={"example": {"image_a": {...}, "image_b": {...}, "differences": {...}}})
 
     image_a: dict[str, Any]
     image_b: dict[str, Any]
@@ -546,7 +544,10 @@ async def image_compare(
         b_attrs = img_b.attrs
 
         def _layers(attrs: dict) -> list[str]:
-            return [l.get("createdBy", l.get("CreatedBy", "")) for l in attrs.get("RootFS", {}).get("Layers", attrs.get("rootfs", {}).get("diff_ids", []))]
+            return [
+                l.get("createdBy", l.get("CreatedBy", ""))
+                for l in attrs.get("RootFS", {}).get("Layers", attrs.get("rootfs", {}).get("diff_ids", []))
+            ]
 
         def _env_map(attrs: dict) -> dict[str, str]:
             env = {}
@@ -577,11 +578,19 @@ async def image_compare(
                 "shared": {k: v for k, v in a_env.items() if k in b_env and b_env[k] == v},
                 "added": {k: b_env[k] for k in b_env if k not in a_env},
                 "removed": {k: a_env[k] for k in a_env if k not in b_env},
-                "changed": {k: {"from": a_env[k], "to": b_env[k]} for k in a_env if k in b_env and a_env[k] != b_env[k]},
+                "changed": {
+                    k: {"from": a_env[k], "to": b_env[k]} for k in a_env if k in b_env and a_env[k] != b_env[k]
+                },
             },
-            "entrypoint": {"image_a": _config_get(a_attrs, "Entrypoint"), "image_b": _config_get(b_attrs, "Entrypoint")},
+            "entrypoint": {
+                "image_a": _config_get(a_attrs, "Entrypoint"),
+                "image_b": _config_get(b_attrs, "Entrypoint"),
+            },
             "cmd": {"image_a": _config_get(a_attrs, "Cmd"), "image_b": _config_get(b_attrs, "Cmd")},
-            "ports": {"image_a": list((_config_get(a_attrs, "ExposedPorts") or {}).keys()), "image_b": list((_config_get(b_attrs, "ExposedPorts") or {}).keys())},
+            "ports": {
+                "image_a": list((_config_get(a_attrs, "ExposedPorts") or {}).keys()),
+                "image_b": list((_config_get(b_attrs, "ExposedPorts") or {}).keys()),
+            },
             "labels": {"image_a": _config_get(a_attrs, "Labels"), "image_b": _config_get(b_attrs, "Labels")},
             "workdir": {"image_a": _config_get(a_attrs, "WorkingDir"), "image_b": _config_get(b_attrs, "WorkingDir")},
             "user": {"image_a": _config_get(a_attrs, "User"), "image_b": _config_get(b_attrs, "User")},

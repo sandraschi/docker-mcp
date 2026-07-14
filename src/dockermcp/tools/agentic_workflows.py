@@ -20,7 +20,9 @@ def _health_check(containers: list[dict[str, Any]]) -> dict[str, Any]:
         if state == "running" and "unhealthy" not in status:
             healthy.append(name)
         else:
-            unhealthy.append({"name": name, "reason": f"state={state}" if state != "running" else "health check failing"})
+            unhealthy.append(
+                {"name": name, "reason": f"state={state}" if state != "running" else "health check failing"}
+            )
     return {"healthy": healthy, "unhealthy": unhealthy, "total": len(containers), "healthy_count": len(healthy)}
 
 
@@ -52,17 +54,37 @@ async def agentic_workflow(
 
     if operation == "deploy_compose":
         if not project:
-            return {"success": False, "operation": operation, "summary": "Missing project name", "steps": [], "data": {}}
+            return {
+                "success": False,
+                "operation": operation,
+                "summary": "Missing project name",
+                "steps": [],
+                "data": {},
+            }
         steps.append({"name": "deploy", "status": "running", "detail": ""})
         deploy_result = await _compose_up(project=project, build=build)
-        steps[-1] = {"name": "deploy", "status": "ok" if deploy_result.get("success") else "fail", "detail": deploy_result.get("message", deploy_result.get("error", ""))}
+        steps[-1] = {
+            "name": "deploy",
+            "status": "ok" if deploy_result.get("success") else "fail",
+            "detail": deploy_result.get("message", deploy_result.get("error", "")),
+        }
         if not deploy_result.get("success"):
-            return {"success": False, "operation": operation, "summary": f"Deploy failed: {deploy_result.get('error')}", "steps": steps, "data": {}}
+            return {
+                "success": False,
+                "operation": operation,
+                "summary": f"Deploy failed: {deploy_result.get('error')}",
+                "steps": steps,
+                "data": {},
+            }
         steps.append({"name": "health_check", "status": "pending", "detail": ""})
         await asyncio.sleep(3)
         containers = await _compose_ps(project)
         health = _health_check(containers)
-        steps[-1] = {"name": "health_check", "status": "ok" if health["healthy_count"] == health["total"] else "degraded", "detail": f"{health['healthy_count']}/{health['total']} healthy"}
+        steps[-1] = {
+            "name": "health_check",
+            "status": "ok" if health["healthy_count"] == health["total"] else "degraded",
+            "detail": f"{health['healthy_count']}/{health['total']} healthy",
+        }
         suggestion = ""
         if health["unhealthy"]:
             suggestion = f"Rollback recommended: {len(health['unhealthy'])} unhealthy services"
@@ -83,7 +105,11 @@ async def agentic_workflow(
                 img_result = client.images.prune(filters={"dangling": True})
                 reclaimed = img_result.get("SpaceReclaimed", 0)
                 count = len(img_result.get("ImagesDeleted", []))
-                steps[-1] = {"name": "prune_images", "status": "ok", "detail": f"Removed {count} images ({reclaimed / 1024 / 1024:.1f} MB)"}
+                steps[-1] = {
+                    "name": "prune_images",
+                    "status": "ok",
+                    "detail": f"Removed {count} images ({reclaimed / 1024 / 1024:.1f} MB)",
+                }
                 results["images"] = {"count": count, "reclaimed_bytes": reclaimed}
             except Exception as e:
                 steps[-1] = {"name": "prune_images", "status": "fail", "detail": str(e)}
@@ -107,23 +133,40 @@ async def agentic_workflow(
                 results["networks"] = {"count": count}
             except Exception as e:
                 steps[-1] = {"name": "prune_networks", "status": "fail", "detail": str(e)}
-        return {"success": True, "operation": operation, "summary": "Cleanup completed", "steps": steps, "data": results}
+        return {
+            "success": True,
+            "operation": operation,
+            "summary": "Cleanup completed",
+            "steps": steps,
+            "data": results,
+        }
 
     elif operation == "diagnose":
         if not project:
-            return {"success": False, "operation": operation, "summary": "Missing project name", "steps": [], "data": {}}
+            return {
+                "success": False,
+                "operation": operation,
+                "summary": "Missing project name",
+                "steps": [],
+                "data": {},
+            }
         steps.append({"name": "list_containers", "status": "running", "detail": ""})
         containers = await _compose_ps(project)
         steps[-1] = {"name": "list_containers", "status": "ok", "detail": f"Found {len(containers)} containers"}
         steps.append({"name": "health_check", "status": "running", "detail": ""})
         health = _health_check(containers)
-        steps[-1] = {"name": "health_check", "status": "ok", "detail": f"{health['healthy_count']}/{health['total']} healthy"}
+        steps[-1] = {
+            "name": "health_check",
+            "status": "ok",
+            "detail": f"{health['healthy_count']}/{health['total']} healthy",
+        }
         steps.append({"name": "logs", "status": "running", "detail": ""})
         logs = await _compose_logs(project, tail=30)
         steps[-1] = {"name": "logs", "status": "ok", "detail": f"Collected {len(logs)} chars of logs"}
         steps.append({"name": "system_resources", "status": "running", "detail": ""})
         try:
             import psutil
+
             cpu = psutil.cpu_percent()
             mem = psutil.virtual_memory().percent
             disk = psutil.disk_usage("/").percent
@@ -142,15 +185,31 @@ async def agentic_workflow(
             "operation": operation,
             "summary": f"Diagnosis for {project}: {len(issues)} issue(s)",
             "steps": steps,
-            "data": {"project": project, "health": health, "issues": issues, "logs_preview": logs[:2000], "suggestions": suggestions},
+            "data": {
+                "project": project,
+                "health": health,
+                "issues": issues,
+                "logs_preview": logs[:2000],
+                "suggestions": suggestions,
+            },
         }
 
     elif operation == "rollback":
         if not project:
-            return {"success": False, "operation": operation, "summary": "Missing project name", "steps": [], "data": {}}
+            return {
+                "success": False,
+                "operation": operation,
+                "summary": "Missing project name",
+                "steps": [],
+                "data": {},
+            }
         steps.append({"name": "down", "status": "running", "detail": ""})
         result = await _compose_down(project=project, volumes=True)
-        steps[-1] = {"name": "down", "status": "ok" if result.get("success") else "fail", "detail": result.get("message", result.get("error", ""))}
+        steps[-1] = {
+            "name": "down",
+            "status": "ok" if result.get("success") else "fail",
+            "detail": result.get("message", result.get("error", "")),
+        }
         return {
             "success": result.get("success", False),
             "operation": operation,
@@ -159,4 +218,10 @@ async def agentic_workflow(
             "data": {"project": project},
         }
 
-    return {"success": False, "operation": operation, "summary": f"Unknown operation: {operation}", "steps": steps, "data": {}}
+    return {
+        "success": False,
+        "operation": operation,
+        "summary": f"Unknown operation: {operation}",
+        "steps": steps,
+        "data": {},
+    }

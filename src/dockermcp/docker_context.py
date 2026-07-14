@@ -93,13 +93,15 @@ def triple_kill_docker() -> dict:
         try:
             r = subprocess.run(
                 ["taskkill", "/F", "/IM", f"{name}.exe", "/T"],
-                capture_output=True, timeout=10,
+                capture_output=True,
+                timeout=10,
             )
             if r.returncode == 0:
                 killed.append(name)
         except Exception:
             pass
     import time
+
     time.sleep(5)
     # Restart Docker Desktop
     dd = os.path.expandvars(r"%ProgramFiles%\Docker\Docker\Docker Desktop.exe")

@@ -25,8 +25,8 @@ def register_all_tools(mcp=None) -> None:
     # Leaf imports only — avoid dockermcp.tools package __init__ (discover_tools side effects)
     import dockermcp.tools.agentic_container_workflow as _aw
     import dockermcp.tools.agentic_workflows as _awf
-    import dockermcp.tools.docker_backup as _db
     import dockermcp.tools.container_analysis as _ca
+    import dockermcp.tools.docker_backup as _db
     from dockermcp.tools.containers import list_containers as _lc
     from dockermcp.tools.desktop import (
         docker_daemon_recover,
@@ -41,7 +41,6 @@ def register_all_tools(mcp=None) -> None:
     from dockermcp.tools.networks import network_management as _nm
     from dockermcp.tools.system import system_management as _sm
     from dockermcp.tools.volumes import volume_management as _vm
-    from dockermcp.tools.compose import compose_management as _cm
 
     _ = [
         _aw,

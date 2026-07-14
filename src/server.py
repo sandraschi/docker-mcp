@@ -7,7 +7,6 @@ Main entry point for the Docker MCP server using FastMCP 2.12 tool registration.
 
 import asyncio
 import logging
-import os
 import sys
 import warnings
 from contextlib import asynccontextmanager
@@ -57,8 +56,6 @@ async def _web_lifespan(_app: FastAPI):
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
 web_app = FastAPI(title="Docker Management Web Bridge", lifespan=_web_lifespan)
 
-_tauri_desktop = os.environ.get("DOCKER_TAURI", "").lower() in ("1", "true", "yes")
-
 web_app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -68,7 +65,7 @@ web_app.add_middleware(
         "https://tauri.localhost",
         "tauri://localhost",
     ],
-    allow_origin_regex=r"https?://tauri\.localhost(:\d+)?" if _tauri_desktop else None,
+    allow_origin_regex=r"https?://(?:[a-zA-Z0-9-]+\.ts\.net|.*?\.tail-[a-f0-9]+\.ts\.net|tauri\.localhost|localhost|127\.0\.0\.1|192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|100\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?$|^tauri://localhost$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

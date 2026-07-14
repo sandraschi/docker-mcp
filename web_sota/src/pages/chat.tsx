@@ -187,12 +187,12 @@ export function Chat() {
   const suggested = ["List all running containers", "Show me container logs for nginx", "Check Docker daemon health", "Clean up unused images and volumes"];
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] flex-col space-y-3">
+    <div className="flex h-[calc(100vh-8rem)] flex-col space-y-3" data-testid="chat-page">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <h2 className="text-2xl font-bold tracking-tight text-white">AI Command</h2>
-          <div className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800">
-            {PERSONALITIES.map((p) => (
+            <div className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800" data-testid="personality-select">
+              {PERSONALITIES.map((p) => (
               <button key={p.id} type="button" onClick={() => { setPersonality(p.id); localStorage.setItem("docker-chat-persona", p.id); }}
                 className={`px-3 py-1 text-xs rounded-md transition-colors ${personality === p.id ? "bg-blue-600 text-white" : "text-slate-400 hover:text-white"}`}>{p.name}</button>
             ))}
@@ -205,8 +205,8 @@ export function Chat() {
             <Cpu className="h-4 w-4" />
           </button>
           <button type="button" onClick={() => setShowSettings(!showSettings)} className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800" title="Settings"><Settings2 className="h-4 w-4" /></button>
-          <button type="button" onClick={() => exportChat("md")} className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800" title="Export MD"><Download className="h-4 w-4" /></button>
-          <button type="button" onClick={() => { setMessages([]); localStorage.removeItem("docker-chat"); }} className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-md hover:bg-slate-800">Clear</button>
+          <button type="button" data-testid="chat-export" onClick={() => exportChat("md")} className="p-1.5 rounded-md text-slate-400 hover:text-white hover:bg-slate-800" title="Export MD"><Download className="h-4 w-4" /></button>
+          <button type="button" data-testid="chat-clear" onClick={() => { setMessages([]); localStorage.removeItem("docker-chat"); }} className="text-xs text-slate-400 hover:text-white px-2 py-1 rounded-md hover:bg-slate-800">Clear</button>
         </div>
       </div>
 
@@ -320,12 +320,12 @@ export function Chat() {
       <div className="flex gap-2 items-end bg-slate-900/80 border border-slate-800 rounded-xl p-2">
         <textarea value={input} onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); } }}
-          placeholder="Ask about Docker..." rows={1}
+          placeholder="Ask about Docker..." rows={1} data-testid="chat-input"
           className="flex-1 bg-transparent border-0 outline-none text-sm text-slate-200 placeholder-slate-500 resize-none max-h-32 py-1.5 px-2" />
         {streaming ? (
           <button type="button" onClick={stop} className="p-2 rounded-lg bg-red-600/20 hover:bg-red-600/40 text-red-400"><StopCircle className="h-5 w-5" /></button>
         ) : (
-          <button type="button" onClick={send} disabled={!input.trim()} className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white"><Send className="h-5 w-5" /></button>
+          <button type="button" data-testid="chat-send" onClick={send} disabled={!input.trim()} className="p-2 rounded-lg bg-blue-600 hover:bg-blue-500 disabled:opacity-30 text-white"><Send className="h-5 w-5" /></button>
         )}
       </div>
     </div>
