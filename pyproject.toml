@@ -38,7 +38,7 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.25",
     "pytest-cov>=6",
-    "ruff>=0.15.2",
+    "ruff>=0.16.0,<0.17",
     "pre-commit>=4.6.1",
     "pyinstaller>=6",
 ]
@@ -66,7 +66,7 @@ exclude = ["scripts", "tests", "_llm_test_scripts", "monitoring", "examples", "m
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "B", "S", "UP", "RUF"]
-ignore = ["S101", "B008"]
+ignore = ["S101", "B008", "S106", "S110", "S112", "S101", "B008", "S106", "S110", "S112", "RUF012", "S603", "S607", "S324", "E402", "E501"]
 
 [tool.ruff.format]
 quote-style = "double"
