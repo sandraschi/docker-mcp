@@ -1,3 +1,5 @@
+set windows-shell := ["powershell.exe", "-NoProfile", "-Command"]
+
 import 'scripts/just/fleet.just'
 
 name := "docker-mcp"
@@ -8,6 +10,13 @@ REPO := justfile_directory()
 # Open the interactive recipe dashboard in the browser
 default:
     @just --list
+
+# Synchronize deps, pre-commit hooks, and web SOTA frontend
+bootstrap:
+    uv sync --extra dev --group dev
+    uv run pre-commit install
+    Set-Location web_sota; npm ci; if ($LASTEXITCODE -ne 0) { npm install }
+    Write-Host "Pre-commit hooks installed." -ForegroundColor Green
 
 # ── Build ─
 
@@ -21,7 +30,7 @@ build-webapp:
 
 # Tauri native installer (Windows release)
 build-native:
-    pwsh -NoLogo -File native/build.ps1
+    powershell.exe -NoProfile -File native/build.ps1
 
 build-native-debug:
     Set-Location native
@@ -95,8 +104,4 @@ e2e:
 	npx playwright test
 
 # ── Native CUA ─────────────────────────────────────────────────────────────
-
-# Run the CUA smoke test against the installed NSIS app
-cua-nsis-test:
-	C:\Windows\py.exe scripts/cua-smoke.py
 
