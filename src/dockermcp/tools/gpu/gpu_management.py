@@ -149,7 +149,7 @@ class GPUManager:
             logger.info("nvidia-smi not found. GPU monitoring will be disabled.")
             return False
         try:
-            subprocess.run(  # noqa: S603
+            subprocess.run(
                 [self._nvidia_smi_bin, "--query-gpu=name", "--format=csv,noheader"],
                 check=True,
                 capture_output=True,
@@ -167,7 +167,7 @@ class GPUManager:
 
         try:
             # Get basic GPU info
-            result = subprocess.run(  # noqa: S603
+            result = subprocess.run(
                 [
                     self._nvidia_smi_bin,
                     "--query-gpu=index,name,memory.total,memory.used,memory.free,"

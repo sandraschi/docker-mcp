@@ -172,7 +172,7 @@ async def _attempt_daemon_recovery() -> bool:
                     stdout=asyncio.subprocess.DEVNULL,
                     stderr=asyncio.subprocess.DEVNULL,
                 )
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
 
         await asyncio.sleep(3)
@@ -206,14 +206,14 @@ async def _attempt_daemon_recovery() -> bool:
                     except TimeoutError:
                         process.kill()
 
-                except Exception:  # noqa: S110
+                except Exception:
                     pass
 
                 await asyncio.sleep(2)
 
             return False
 
-    except Exception:  # noqa: S110
+    except Exception:
         pass
 
     return False

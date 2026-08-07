@@ -18,10 +18,10 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="pydantic"
 warnings.filterwarnings("ignore", category=UserWarning, module="pydantic")
 
 # Import local modules
-from dockermcp.logging_config import configure_logging, logger  # noqa: E402
-from dockermcp.mcp_instance import get_mcp  # noqa: E402
-from dockermcp.tools.assorted_crap import SafeJSONEncoder, warn_with_log  # noqa: E402
-from dockermcp.transport import run_server  # noqa: E402
+from dockermcp.logging_config import configure_logging, logger
+from dockermcp.mcp_instance import get_mcp
+from dockermcp.tools.assorted_crap import SafeJSONEncoder, warn_with_log
+from dockermcp.transport import run_server
 
 # Configure logging with JSON format and proper stream handling
 # Disable JSON for RPC logs to prevent parsing issues

@@ -27,7 +27,7 @@ class NetworkManager:
         """
         try:
             result = subprocess.run(
-                ["docker", "network", "ls", "--format", "{{json .}}"],  # noqa: S607
+                ["docker", "network", "ls", "--format", "{{json .}}"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -60,8 +60,8 @@ class NetworkManager:
             Dict containing creation result or error details
         """
         try:
-            result = subprocess.run(  # noqa: S603
-                ["docker", "network", "create", "--driver", driver, name],  # noqa: S607
+            result = subprocess.run(
+                ["docker", "network", "create", "--driver", driver, name],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -84,8 +84,8 @@ class NetworkManager:
             Dict containing removal result or error details
         """
         try:
-            subprocess.run(  # noqa: S603
-                ["docker", "network", "rm", network_id],  # noqa: S607
+            subprocess.run(
+                ["docker", "network", "rm", network_id],
                 capture_output=True,
                 text=True,
                 check=True,

@@ -94,12 +94,7 @@ Create and start a GPU-accelerated Docker container.
 
 **Example:**
 ```python
-result = await create_gpu_container(
-    image="nvidia/cuda:11.0-base",
-    command="nvidia-smi",
-    gpu_ids=[0],
-    name="gpu-test"
-)
+result = await create_gpu_container(image="nvidia/cuda:11.0-base", command="nvidia-smi", gpu_ids=[0], name="gpu-test")
 print(json.dumps(result, indent=2))
 ```
 
@@ -124,8 +119,10 @@ print(json.dumps(result, indent=2))
 # List all available GPUs
 gpus = await list_gpus()
 print(f"Available GPUs: {gpus['total_gpus']}")
-for gpu in gpus['gpus']:
-    print(f"- {gpu['name']} (ID: {gpu['id']}): {gpu['memory_used']/1024**3:.1f}GB / {gpu['memory_total']/1024**3:.1f}GB used")
+for gpu in gpus["gpus"]:
+    print(
+        f"- {gpu['name']} (ID: {gpu['id']}): {gpu['memory_used'] / 1024**3:.1f}GB / {gpu['memory_total'] / 1024**3:.1f}GB used"
+    )
 ```
 
 ### 2. Run a GPU-accelerated container
@@ -137,9 +134,9 @@ result = await create_gpu_container(
     command="nvidia-smi",
     gpu_ids=[0],  # Use first GPU
     name="cuda-test",
-    detach=False  # Wait for command to complete
+    detach=False,  # Wait for command to complete
 )
-print(result['output'])  # Prints nvidia-smi output
+print(result["output"])  # Prints nvidia-smi output
 ```
 
 ### 3. Monitor GPU usage
@@ -147,9 +144,11 @@ print(result['output'])  # Prints nvidia-smi output
 ```python
 # Monitor GPU usage for 30 seconds
 result = await monitor_gpu_usage(interval=1.0, duration=30.0)
-for sample in result['samples']:
-    print(f"{sample['timestamp']} - GPU Util: {sample['gpus'][0]['utilization_gpu']}%, "
-          f"Mem Used: {sample['gpus'][0]['memory_used']/1024**3:.1f}GB")
+for sample in result["samples"]:
+    print(
+        f"{sample['timestamp']} - GPU Util: {sample['gpus'][0]['utilization_gpu']}%, "
+        f"Mem Used: {sample['gpus'][0]['memory_used'] / 1024**3:.1f}GB"
+    )
 ```
 
 ## Error Handling

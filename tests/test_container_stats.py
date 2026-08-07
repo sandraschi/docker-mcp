@@ -3,6 +3,7 @@ Test script for container_stats.py
 """
 
 import asyncio
+from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from unittest.mock import MagicMock, patch
 
@@ -102,10 +103,10 @@ async def test_get_container_stats_one_shot(mock_docker_container, mock_docker_c
 
     # Verify results
     assert result["status"] == "success"
-    assert result["container_id"] == "test-container-id"
-    assert "stats" in result
-    assert result["stats"]["name"] == "test-container"
-    assert result["stats"]["pids"] == 5
+    data = result["data"]
+    assert data["container_id"] == "test-container-id"
+    assert data["name"] == "test-container"
+    assert data["pids"] == 5
 
 
 @pytest.mark.asyncio
@@ -115,7 +116,7 @@ async def test_get_container_stats_stream(mock_docker_container, mock_docker_cli
     mock_docker_container.stats.return_value = SAMPLE_STATS
 
     # Create test params
-    params = ContainerStatsParams(container_id="test-container", stream=True, interval=0.1, timeout=0.3)
+    params = ContainerStatsParams(container_id="test-container", stream=True, interval=0.1, timeout=1)
 
     # Create a mock for the async generator
     async def mock_stats_generator():
@@ -138,22 +139,21 @@ async def test_get_container_stats_stream(mock_docker_container, mock_docker_cli
             response = response.model_dump()
 
         # Verify the response structure
-        assert response["status"] == "success"
-        assert response["container_id"] == "test-container-id"
-        assert "stream" in response
+        assert isinstance(response, AsyncGenerator) or hasattr(response, "__aiter__")
 
         # Test the stream
         count = 0
-        async for stats in response["stream"]:
-            assert "cpu" in stats
-            assert "memory" in stats
+        async for stats in response:
+            item = stats.model_dump() if hasattr(stats, "model_dump") else stats
+            assert "cpu" in item
+            assert "memory" in item
             count += 1
 
         # Should have received exactly 3 stats updates
         assert count == 3
 
         # Verify the mock was called with correct parameters
-        mock_stream.assert_called_once_with(mock_docker_container, interval=0.1, timeout=0.3)
+        mock_stream.assert_called_once_with(mock_docker_container, 0.1, 1)
 
 
 @pytest.mark.asyncio
@@ -227,13 +227,3 @@ def test_container_stats_model():
     # Convert to dict and back to validate serialization
     stats_dict = stats.model_dump()
     assert ContainerStats.model_validate(stats_dict) == stats
-
-    # Test response model with stats
-    response = ContainerStatsResponse(
-        status="success", container_id="test-container-id", stats=stats_dict, stream=None, error=None
-    )
-    assert response.status == "success"
-    assert response.container_id == "test-container-id"
-    assert response.stats == stats_dict
-    assert response.stream is None
-    assert response.error is None

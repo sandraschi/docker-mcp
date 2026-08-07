@@ -77,7 +77,7 @@ def test_server_creation():
     try:
         from dockermcp.server import create_server
 
-        server = create_server()
+        create_server()
         print("  ✓ Server created successfully")
         return True
 

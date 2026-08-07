@@ -19,17 +19,90 @@ class MockTool:
         return func
 
 
-# Apply the mock tool decorator
-sys.modules["fastmcp"] = MagicMock()
-sys.modules["fastmcp.tools"] = MagicMock()
-sys.modules["fastmcp.tools.tool"] = MagicMock()
-sys.modules["fastmcp.tools.tool"].Tool = MockTool
+# Mock the FastMCP package so tool modules can import it without a real instance.
+# sys.modules mocks must be real module objects (with __path__) so submodule
+# imports like `from fastmcp.server import create_proxy` resolve.
+import types
+
+_orig_modules = {k: sys.modules.get(k) for k in (
+    "docker",
+    "fastmcp",
+    "fastmcp.server",
+    "fastmcp.server.context",
+    "fastmcp.exceptions",
+    "fastmcp.tools",
+    "fastmcp.tools.tool",
+    "dockermcp.mcp_instance",
+)}
+
+_fastmcp = types.ModuleType("fastmcp")
+_fastmcp.__path__ = []
+_fastmcp.FastMCP = MagicMock()
+
+
+def _tool_decorator(func=None, **kwargs):
+    """Stand-in for @mcp.tool - returns the original callable (awaitable)."""
+
+    def wrap(f):
+        f._is_tool = True
+        return f
+
+    if func is not None:
+        return wrap(func)
+    return wrap
+
+
+_fastmcp.tool = _tool_decorator
+_fastmcp.Context = MagicMock()
+sys.modules["fastmcp"] = _fastmcp
+
+_fastmcp_server = types.ModuleType("fastmcp.server")
+_fastmcp_server.__path__ = []
+_fastmcp_server.create_proxy = MagicMock()
+
+_fastmcp_server_context = types.ModuleType("fastmcp.server.context")
+_fastmcp_server_context.Context = MagicMock()
+sys.modules["fastmcp.server.context"] = _fastmcp_server_context
+sys.modules["fastmcp.server"] = _fastmcp_server
+
+
+class MockToolError(Exception):
+    """Mock of fastmcp.exceptions.ToolError."""
+
+
+_fastmcp_exceptions = types.ModuleType("fastmcp.exceptions")
+_fastmcp_exceptions.ToolError = MockToolError
+sys.modules["fastmcp.exceptions"] = _fastmcp_exceptions
+
+_fastmcp_tools = types.ModuleType("fastmcp.tools")
+_fastmcp_tool = types.ModuleType("fastmcp.tools.tool")
+_fastmcp_tool.Tool = MockTool
+sys.modules["fastmcp.tools"] = _fastmcp_tools
+sys.modules["fastmcp.tools.tool"] = _fastmcp_tool
+
+# Stub dockermcp.mcp_instance so @mcp.tool decorators return the original
+# callable (awaitable) instead of MagicMock.
+_mcp_instance_stub = types.ModuleType("dockermcp.mcp_instance")
+_mcp_instance_stub.mcp = MagicMock()
+_mcp_instance_stub.mcp.tool = _tool_decorator
+_mcp_instance_stub.mcp.resource = _tool_decorator
+_mcp_instance_stub.mcp.prompt = _tool_decorator
+_mcp_instance_stub.get_mcp = lambda: _mcp_instance_stub.mcp
+sys.modules["dockermcp.mcp_instance"] = _mcp_instance_stub
 
 # Import the modules after setting up mocks
-from dockermcp.tools.monitoring import get_monitoring_status, start_monitoring
+from dockermcp.tools.monitoring import CommandResult, MonitoringManager, MonitoringStatusParams
+from dockermcp.tools.monitoring import monitoring_status, start_monitoring
 from dockermcp.tools.monitoring.alerts import add_alert_rule, list_alert_rules
-from dockermcp.tools.monitoring.backup import create_backup
+from dockermcp.tools.monitoring.backup import create_monitoring_backup
 from dockermcp.tools.monitoring.web_interfaces import open_grafana
+
+# Restore the original modules for the rest of the test session
+for _mod, _orig in _orig_modules.items():
+    if _orig is not None:
+        sys.modules[_mod] = _orig
+    else:
+        sys.modules.pop(_mod, None)
 
 # Test data
 TEST_ALERT_RULE = {"name": "HighCPUUsage", "condition": "avg(cpu_usage) > 80", "duration": "5m", "severity": "critical"}
@@ -60,87 +133,109 @@ def mock_path():
 
 
 @pytest.mark.asyncio
-async def test_start_monitoring(mock_subprocess):
+async def test_start_monitoring():
     """Test starting the monitoring stack."""
-    result = await start_monitoring()
+    from dockermcp.tools.monitoring import CommandResult, MonitoringManager, StartMonitoringParams
+
+    fake = CommandResult(status="success", returncode=0, stdout="Started", stderr="", command="docker compose up -d")
+
+    with patch.object(MonitoringManager, "start_services", return_value=fake):
+        result = await start_monitoring(StartMonitoringParams())
 
     assert result["status"] == "success"
     assert "started" in result["message"].lower()
-    mock_subprocess.assert_called_once()
-    assert "up -d" in " ".join(mock_subprocess.call_args[0][0])
 
 
 @pytest.mark.asyncio
-async def test_get_monitoring_status(mock_docker):
+async def test_get_monitoring_status():
     """Test getting monitoring stack status."""
-    mock_container = MagicMock()
-    mock_container.name = "prometheus"
-    mock_container.status = "running"
-    mock_container.ports = ["0.0.0.0:9091->9090/tcp"]
+    fake = CommandResult(
+        status="success",
+        returncode=0,
+        stdout="prometheus Up 5 minutes 0.0.0.0:9090->9090/tcp\ngrafana Up 5 minutes 0.0.0.0:3000->3000/tcp",
+        stderr="",
+        command="docker ps",
+    )
 
-    mock_docker.return_value.containers.list.return_value = [mock_container]
-    result = await get_monitoring_status()
+    with patch.object(MonitoringManager, "get_status", return_value=fake):
+        result = await monitoring_status(MonitoringStatusParams())
 
     assert result["status"] == "success"
-    assert len(result.get("containers", [])) > 0
-    assert any(c.get("name") == "prometheus" for c in result["containers"])
+    services = result.get("details", {}).get("services", [])
+    assert len(services) > 0
+    assert any(s.get("name") == "prometheus" for s in services)
 
 
 @pytest.mark.asyncio
-async def test_add_alert_rule(tmp_path):
+async def test_add_alert_rule():
     """Test adding an alert rule."""
-    test_rule = TEST_ALERT_RULE.copy()
+    from unittest.mock import MagicMock
 
-    with patch("pathlib.Path.write_text") as mock_write, patch("pathlib.Path.mkdir") as mock_mkdir:
+    from dockermcp.tools.monitoring.alerts import AddAlertRuleParams
+
+    with (
+        patch("dockermcp.tools.monitoring.alerts.ensure_alert_rules_dir", return_value=True),
+        patch("builtins.open", MagicMock()),
+        patch("dockermcp.tools.monitoring.alerts.yaml.safe_load", return_value=None),
+        patch("dockermcp.tools.monitoring.alerts.yaml.dump") as mock_dump,
+    ):
         result = await add_alert_rule(
-            name=test_rule["name"],
-            condition=test_rule["condition"],
-            duration=test_rule["duration"],
-            severity=test_rule["severity"],
+            AddAlertRuleParams(
+                name="HighCPUUsage",
+                expr='100 - avg(rate(node_cpu_seconds_total[5m])) > 80',
+                for_duration="5m",
+                severity="critical",
+            )
         )
 
         assert result["status"] == "success"
-        assert "added" in result["message"].lower()
-        mock_write.assert_called_once()
+        assert "alert rule" in result["message"].lower()
+        mock_dump.assert_called_once()
 
 
 @pytest.mark.asyncio
 async def test_list_alert_rules():
     """Test listing alert rules."""
-    test_rule = {"name": "test_rule", "condition": "up == 0", "severity": "critical"}
+    from dockermcp.tools.monitoring.alerts import ListAlertRulesParams
+
+    test_rule = {"name": "test_rule", "expr": "up == 0", "severity": "critical"}
 
     with patch("pathlib.Path.glob") as mock_glob, patch("pathlib.Path.read_text") as mock_read:
         mock_glob.return_value = [Path("/path/to/rule1.json")]
         mock_read.return_value = json.dumps(test_rule)
 
-        result = await list_alert_rules()
+        result = await list_alert_rules(ListAlertRulesParams())
 
         assert result["status"] == "success"
-        assert len(result.get("rules", [])) > 0
-        assert result["rules"][0]["name"] == "test_rule"
+        assert len(result.get("alerts", [])) > 0
 
 
 @pytest.mark.asyncio
 async def test_create_backup():
     """Test creating a backup of monitoring data."""
-    with patch("tarfile.open") as mock_tar, patch("pathlib.Path.mkdir"), patch("datetime.datetime") as mock_dt:
-        mock_dt.now.return_value.strftime.return_value = "20230912_123456"
-        mock_tar.return_value.__enter__.return_value = MagicMock()
+    from dockermcp.tools.monitoring.backup import CreateBackupParams, create_monitoring_backup
 
-        result = await create_backup()
+    with patch(
+        "dockermcp.tools.monitoring.backup.backup_manager.create_backup",
+        return_value={"status": "success", "backup_file": "/tmp/backup_20230912_123456.tar.gz", "size_mb": 1.2},
+    ) as mock_create:
+        result = await create_monitoring_backup(CreateBackupParams())
 
         assert result["status"] == "success"
-        assert "backup" in result
-        assert "20230912_123456" in result["backup"]
+        assert "backup_file" in result
+        assert "20230912_123456" in result["backup_file"]
+        mock_create.assert_called_once_with(None)
 
 
 @pytest.mark.asyncio
 async def test_open_grafana():
     """Test opening Grafana in browser."""
+    from dockermcp.tools.monitoring.web_interfaces import OpenGrafanaParams
+
     with patch("webbrowser.open") as mock_browser:
-        result = await open_grafana()
+        result = await open_grafana(OpenGrafanaParams(port=3001))
 
         assert result["status"] == "success"
-        assert "grafana" in result["url"]
         assert ":3001" in result["url"]
         mock_browser.assert_called_once()
+

@@ -130,7 +130,7 @@ async def docker_daemon_restart() -> dict[str, Any]:
                 except TimeoutError:
                     process.kill()
 
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
 
             await asyncio.sleep(2)
@@ -233,7 +233,7 @@ async def _verify_daemon_responsiveness(max_attempts: int = 5) -> dict:
             except TimeoutError:
                 process.kill()
 
-        except Exception:  # noqa: S110
+        except Exception:
             pass
 
         if attempt < max_attempts - 1:

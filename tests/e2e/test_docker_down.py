@@ -14,11 +14,11 @@ from pathlib import Path
 # Add the project root to the Python path
 sys.path.append(str(Path(__file__).parent.parent))
 
-from dockermcp.tools.containers.container_tools import list_containers
+from dockermcp.tools.containers.list_containers import ListContainersParams, list_containers
 
 from dockermcp import get_docker_status
-from dockermcp.tools.docker_reconnect import docker_reconnect
-from dockermcp.tools.docker_status import docker_status
+from dockermcp.tools.docker_reconnect import ReconnectDockerParams, reconnect_docker
+from dockermcp.tools.docker_status import get_docker_status_tool as docker_status
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
@@ -45,19 +45,18 @@ async def test_docker_status():
 async def test_list_containers():
     """Test list_containers when Docker is down."""
     logger.info("Testing list_containers tool...")
-    from dockermcp.tools.containers.container_models import ListContainersRequest
 
     # Create a simple request
-    request = ListContainersRequest(all=True)
+    request = ListContainersParams(all=True)
     result = await list_containers(request)
 
     print("\n=== list_containers output ===")
     print(json.dumps(result, indent=2))
     print("=" * 30 + "\n")
 
-    # Should return empty list when Docker is down
-    assert isinstance(result, list), "list_containers should return a list"
-    assert len(result) == 0, "Should return empty list when Docker is down"
+    # Should return an error dict when Docker is down
+    assert isinstance(result, dict), "list_containers should return a dictionary"
+    assert result.get("status") == "error", "Should report an error when Docker is down"
 
     logger.info("✅ list_containers test passed")
 
@@ -71,18 +70,18 @@ async def test_docker_reconnect():
     assert not initial_status["docker_available"], "Docker should not be available initially"
 
     # Try to reconnect
-    result = await docker_reconnect()
+    result = await reconnect_docker(ReconnectDockerParams())
 
     print("\n=== docker_reconnect output ===")
-    print(json.dumps(result, indent=2))
+    print(json.dumps(result.model_dump(), indent=2))
     print("=" * 30 + "\n")
 
     # Should indicate reconnection failed
-    assert isinstance(result, dict), "docker_reconnect should return a dictionary"
-    assert "success" in result, "Result should include success flag"
+    assert isinstance(result, dict) or hasattr(result, "success"), "docker_reconnect should return a response"
+    success = result.get("success") if isinstance(result, dict) else result.success
 
     # Reconnection should fail since we haven't started Docker
-    assert not result.get("success"), "Reconnection should fail when Docker is not running"
+    assert not success, "Reconnection should fail when Docker is not running"
 
     logger.info("✅ docker_reconnect test passed")
 

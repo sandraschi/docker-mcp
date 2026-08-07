@@ -43,24 +43,18 @@ class ExecUser(StrEnum):
 async def execute_in_container(
     container_id: Annotated[str, Field(description="ID or name of the container")],
     command: Annotated[str | list[str], Field(description="Command to execute (string or list of arguments)")],
-    user: Annotated[
-        str, Field(description="User to run the command as (empty for container default, 'root' for root)", default="")
-    ],
-    workdir: Annotated[str | None, Field(description="Working directory inside the container", default=None)],
-    environment: Annotated[dict[str, str], Field(description="Environment variables for the command", default={})],
-    privileged: Annotated[bool, Field(description="Run with extended privileges (use with caution)", default=False)],
-    tty: Annotated[bool, Field(description="Allocate a pseudo-TTY (required for interactive commands)", default=False)],
-    stream: Annotated[bool, Field(description="Stream command output in real-time", default=False)],
-    stream_type: Annotated[
-        str, Field(description="Which streams to capture (stdout, stderr, or both)", default="both")
-    ],
-    detach: Annotated[bool, Field(description="Run command in background (returns immediately)", default=False)],
-    stdin: Annotated[
-        bool, Field(description="Open stdin for the command (required for interactive input)", default=False)
-    ],
+    user: Annotated[str, Field(description="User to run the command as (empty for container default, 'root' for root)")] = "",
+    workdir: Annotated[str | None, Field(description="Working directory inside the container")] = None,
+    environment: Annotated[dict[str, str], Field(description="Environment variables for the command")] = {},
+    privileged: Annotated[bool, Field(description="Run with extended privileges (use with caution)")] = False,
+    tty: Annotated[bool, Field(description="Allocate a pseudo-TTY (required for interactive commands)")] = False,
+    stream: Annotated[bool, Field(description="Stream command output in real-time")] = False,
+    stream_type: Annotated[str, Field(description="Which streams to capture (stdout, stderr, or both)")] = "both",
+    detach: Annotated[bool, Field(description="Run command in background (returns immediately)")] = False,
+    stdin: Annotated[bool, Field(description="Open stdin for the command (required for interactive input)")] = False,
     timeout: Annotated[
-        int, Field(description="Timeout in seconds for command execution (1-3600)", default=60, ge=1, le=3600)
-    ],
+        int, Field(description="Timeout in seconds for command execution (1-3600)", ge=1, le=3600)
+    ] = 60,
 ) -> ContainerExecResponse:
     """
     Execute a command in a running Docker container.
@@ -276,7 +270,7 @@ async def _stream_exec_output(
             # Clean up the socket
             try:
                 socket.close()
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
 
     except Exception as e:

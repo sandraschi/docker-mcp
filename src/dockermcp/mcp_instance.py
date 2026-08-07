@@ -153,9 +153,6 @@ class FastMCPSingleton:
 # Set during _initialize; tools import this symbol for @mcp.tool decorators
 mcp: FastMCP | None = None
 
-# Create the singleton instance
-_singleton: FastMCPSingleton = FastMCPSingleton()
-
 
 def get_mcp() -> FastMCP:
     """
@@ -171,3 +168,8 @@ def get_mcp() -> FastMCP:
     if not _singleton._initialized:
         raise RuntimeError("FastMCP instance failed to initialize")
     return _singleton.mcp
+
+
+# Create the singleton instance (after get_mcp is defined so tool modules
+# imported during _initialize can resolve it - circular-import guard)
+_singleton: FastMCPSingleton = FastMCPSingleton()

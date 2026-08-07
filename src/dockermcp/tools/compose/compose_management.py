@@ -18,7 +18,7 @@ async def _run_compose(
     """Run `docker compose` with args, return parsed output."""
     if not docker_available:
         return {"success": False, "error": f"Docker not available: {docker_error}"}
-    cmd = ["docker", "compose"] + args
+    cmd = ["docker", "compose", *args]
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,
@@ -242,7 +242,7 @@ async def _compose_debug(
         {"success": bool, "project": str, "services": [...], "issues": [...]}
     """
     # Get ps output in verbose format
-    ps_result = await compose_ps(project)
+    ps_result = await _compose_ps(project)
     if not ps_result["success"]:
         return ps_result
 
@@ -271,7 +271,7 @@ async def _compose_debug(
         services.append(svc)
 
     # Check project logs for ERROR
-    log_result = await compose_logs(project, tail=20)
+    log_result = await _compose_logs(project=project, tail=20)
     if log_result.get("output"):
         for line in log_result["output"].split("\n"):
             if "error" in line.lower() or "fatal" in line.lower() or "traceback" in line.lower():

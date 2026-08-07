@@ -554,31 +554,31 @@ async def _inspect_container_impl(request: ContainerInspectRequest) -> BaseRespo
     except NotFound:
         error_msg = f"Container not found: {request.container_id}"
         logger.error(error_msg)
-        return BaseResponse[ContainerInspectResponse].error(
-            error="container_not_found", message=error_msg, data={"container_id": request.container_id}
+        return BaseResponse[ContainerInspectResponse].error_response(
+            error="container_not_found", message=error_msg, data=None
         )
 
     except APIError as e:
         error_msg = f"Docker API error: {e!s}"
         logger.error(error_msg)
-        return BaseResponse[ContainerInspectResponse].error(
-            error="docker_api_error", message=error_msg, data={"container_id": request.container_id}
+        return BaseResponse[ContainerInspectResponse].error_response(
+            error="docker_api_error", message=error_msg, data=None
         )
 
     except DockerException as e:
         error_msg = f"Docker error: {e!s}"
         logger.error(error_msg)
-        return BaseResponse[ContainerInspectResponse].error(
+        return BaseResponse[ContainerInspectResponse].error_response(
             error="docker_error",
             message="Docker daemon not available or not running",
-            data={"container_id": request.container_id},
+            data=None,
         )
 
     except Exception as e:
         error_msg = f"Error inspecting container {request.container_id}: {e!s}"
         logger.error(error_msg, exc_info=True)
-        return BaseResponse[ContainerInspectResponse].error(
-            error="unexpected_error", message=error_msg, data={"container_id": request.container_id}
+        return BaseResponse[ContainerInspectResponse].error_response(
+            error="unexpected_error", message=error_msg, data=None
         )
 
 

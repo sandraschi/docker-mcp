@@ -65,7 +65,7 @@ These repos have compose files with `build:` sections, last modified weeks/month
 
 These compose files contain only `image:` references (no `build:` section). No source rebuild needed — just `docker compose pull` if versions are pinned:
 
-`arr-mcp`, `mcp-central-docs/monitoring/`, `mcp-server-template`, `myconf/redis`, `mywienerlinien` (partial), `telephony-mcp`, `qbt-mcp`, `veogen` (partial), `external/*` repos
+`arr-mcp`, `mcp-central-docs/monitoring/`, `mcp-server-template`, `myconf/redis`, `mywienerlinien` (partial), `telephony-mcp`, `rtorrent-mcp`, `veogen` (partial), `external/*` repos
 
 ## Rebuild Strategy
 

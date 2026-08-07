@@ -110,7 +110,7 @@ def triple_kill_docker() -> dict:
     if path:
         subprocess.Popen([path], cwd=os.path.dirname(path))
         # Wait for daemon to become available
-        for i in range(45):
+        for _i in range(45):
             time.sleep(2)
             try:
                 dc = docker.from_env()
@@ -133,7 +133,7 @@ def check_docker_service_windows() -> str:
     """Check Docker service status on Windows."""
     try:
         result = subprocess.run(
-            ["sc", "query", "Docker Desktop Service"],  # noqa: S607
+            ["sc", "query", "Docker Desktop Service"],
             capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW,

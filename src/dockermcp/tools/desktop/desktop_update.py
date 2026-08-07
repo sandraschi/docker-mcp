@@ -187,7 +187,7 @@ async def _verify_daemon_startup() -> dict:
             except TimeoutError:
                 process.kill()
 
-        except Exception:  # noqa: S110
+        except Exception:
             pass
 
         if attempt < 9:

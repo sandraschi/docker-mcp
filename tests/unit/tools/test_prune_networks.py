@@ -1,145 +1,70 @@
 """
-Tests for the prune_networks function.
-
-This module contains tests specifically for the prune_networks function.
+Test suite for Docker network tools (prune, list, create).
 """
 
-import os
-import sys
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-# Add the project root to the Python path
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
+from dockermcp.tools.networks.network_tools import create_network, list_networks, prune_networks
 
 
-# Mock the Tool decorator
-def Tool(name: str, description: str, parameters: dict[str, Any], returns: dict[str, Any], **kwargs):
-    """Mock Tool decorator for testing."""
+@pytest.fixture
+def mcp_docker_stub():
+    """Stub dockermcp.mcp_instance.mcp with a docker_client mock."""
+    from dockermcp.mcp_instance import mcp
 
-    def decorator(func):
-        func.tool_metadata = {
-            "name": name,
-            "description": description,
-            "parameters": parameters,
-            "returns": returns,
-            **kwargs,
-        }
-        return func
-
-    return decorator
-
-
-# Mock the FastMCP components
-sys.modules["fastmcp"] = MagicMock()
-sys.modules["fastmcp.exceptions"] = MagicMock()
-sys.modules["fastmcp.exceptions"].ToolError = Exception
-sys.modules["fastmcp.tools"] = MagicMock()
-sys.modules["fastmcp.tools"].Tool = Tool
-
-# Mock the network tools module
-with patch("fastmcp.tools.Tool", Tool):
-    from dockermcp.tools.networks.network_tools import prune_networks
-
-# Test data
-TEST_NETWORK_ID = "7d86d31b1478e7cc9a2c8b8c4b982a5eafc70b5349d0d5a5875a855d0f2d2b3d"
+    client = MagicMock()
+    old = getattr(mcp, "docker_client", None)
+    mcp.docker_client = client
+    try:
+        yield client
+    finally:
+        if old is None:
+            try:
+                del mcp.docker_client
+            except AttributeError:
+                pass
+        else:
+            mcp.docker_client = old
 
 
-# Mock function for run_docker_command
-def mock_run_docker_command(*args, **kwargs):
-    """Mock function for run_docker_command."""
-    if "network" in args[1] and "prune" in args[1]:
-        return {"NetworksDeleted": ["network1", "network2"], "SpaceReclaimed": 1024}
-    return None
+def test_prune_networks_success(mcp_docker_stub):
+    """Prune returns deleted networks + reclaimed space."""
+    client = mcp_docker_stub
+    client.networks.prune.return_value = {"NetworksDeleted": ["net1", "net2"], "SpaceReclaimed": 1024}
+
+    response = prune_networks()
+
+    assert response.status == "success"
+    assert response.data["networks_deleted"] == ["net1", "net2"]
+    assert response.data["space_reclaimed"] == 1024
+    assert "2" in response.message
 
 
-# Test class for prune_networks
-class TestPruneNetworks:
-    """Tests for the prune_networks function."""
+def test_prune_networks_no_networks(mcp_docker_stub):
+    """Prune with nothing to delete."""
+    client = mcp_docker_stub
+    client.networks.prune.return_value = {"NetworksDeleted": [], "SpaceReclaimed": 0}
 
-    @pytest.mark.asyncio
-    @patch("dockermcp.tools.networks.network_tools.run_docker_command", side_effect=mock_run_docker_command)
-    async def test_prune_networks_success(self, mock_run_docker):
-        """Test successful network pruning."""
-        # Call the function
-        result = await prune_networks(filters={"until": "24h"}, force=True, timeout=30)
+    response = prune_networks()
 
-        # Verify the result
-        assert result["success"] is True
-        assert len(result["networks_deleted"]) == 2
-        assert result["space_reclaimed"] == 1024
-        assert "Successfully pruned 2 networks" in result["message"]
-
-        # Verify the Docker command was called correctly
-        mock_run_docker.assert_called_once()
-        args, kwargs = mock_run_docker.call_args
-        assert "network" in args[1]
-        assert "prune" in args[1]
-        assert "--force" in args[1]
-        assert "--filter" in args[1]
-        assert "until=24h" in args[1]
-
-    @pytest.mark.asyncio
-    @patch(
-        "dockermcp.tools.networks.network_tools.run_docker_command",
-        return_value={"NetworksDeleted": None, "SpaceReclaimed": 0},
-    )
-    async def test_prune_networks_no_networks(self, mock_run_docker):
-        """Test pruning when no networks are found."""
-        # Call the function
-        result = await prune_networks()
-
-        # Verify the result
-        assert result["success"] is True
-        assert len(result["networks_deleted"]) == 0
-        assert result["space_reclaimed"] == 0
-        assert "No networks were pruned" in result["message"]
-
-    @pytest.mark.asyncio
-    @patch("dockermcp.tools.networks.network_tools.run_docker_command", side_effect=TimeoutError("Operation timed out"))
-    async def test_prune_networks_timeout(self, mock_run_docker):
-        """Test network pruning with a timeout."""
-        # Call the function and expect an exception
-        with pytest.raises(Exception) as exc_info:
-            await prune_networks(timeout=5)
-
-        # Verify the error message
-        assert "timed out" in str(exc_info.value)
-
-    @pytest.mark.parametrize("invalid_timeout", [-1, 0, 301])
-    @pytest.mark.asyncio
-    async def test_prune_networks_invalid_timeout(self, invalid_timeout):
-        """Test network pruning with invalid timeout values."""
-        with pytest.raises(ValueError):
-            await prune_networks(timeout=invalid_timeout)
-
-    @pytest.mark.asyncio
-    async def test_prune_networks_invalid_timeout_type(self):
-        """Test network pruning with invalid timeout type."""
-        with pytest.raises(TypeError):
-            await prune_networks(timeout="not_an_int")
-
-    @pytest.mark.asyncio
-    async def test_prune_networks_invalid_filters_type(self):
-        """Test network pruning with invalid filters type."""
-        with pytest.raises(TypeError):
-            await prune_networks(filters="not_a_dict")
-
-    @pytest.mark.asyncio
-    async def test_prune_networks_invalid_filter_values(self):
-        """Test network pruning with invalid filter values."""
-        with pytest.raises(ValueError):
-            await prune_networks(filters={"invalid_filter": 123})
+    assert response.status == "success"
+    assert response.data["networks_deleted"] == []
 
 
-# Ensure test output directory exists
-test_output_dir = os.path.join(os.path.dirname(__file__), "test_output")
-os.makedirs(test_output_dir, exist_ok=True)
+def test_list_networks(mcp_docker_stub):
+    """List returns network summaries."""
+    client = mcp_docker_stub
+    net = MagicMock()
+    net.name = "bridge"
+    net.id = "net-1"
+    net.attrs = {"Name": "bridge", "Id": "net-1"}
+    client.networks.list.return_value = [net]
 
-# Run the tests
-if __name__ == "__main__":
-    output_file = os.path.join(test_output_dir, "test_prune_networks.log")
-    print(f"Running tests. Output will be saved to: {os.path.abspath(output_file)}")
-    pytest.main(["-v", __file__, f"--log-file={output_file}", "--log-file-level=INFO"])
+    response = list_networks()
+
+    assert response.status == "success"
+    assert len(response.data) == 1
+
+

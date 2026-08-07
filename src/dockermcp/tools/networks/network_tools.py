@@ -39,7 +39,7 @@ def prune_networks() -> NetworkOperationResponse:
         deleted_count = len(result.get("NetworksDeleted", []))
         space_reclaimed = result.get("SpaceReclaimed", 0)
 
-        logger.info("Successfully pruned networks", networks_deleted=deleted_count, space_reclaimed=space_reclaimed)
+        logger.info(f"Successfully pruned {deleted_count} networks")
 
         return NetworkOperationResponse(
             status="success",
@@ -67,7 +67,7 @@ def list_networks() -> NetworkListResponse:
 
         network_summaries = [NetworkSummary.from_docker_network(net) for net in networks]
 
-        logger.info("Listed networks", network_count=len(network_summaries))
+        logger.info(f"Listed {len(network_summaries)} networks")
 
         return NetworkListResponse.success(data=network_summaries, message=f"Found {len(network_summaries)} networks")
 
@@ -133,7 +133,7 @@ def remove_network(network_id: str) -> NetworkOperationResponse:
         network_name = network.name
         network.remove()
 
-        logger.info("Removed network", network_id=network_id, network_name=network_name)
+        logger.info(f"Removed network {network_id} ({network_name})")
 
         return NetworkOperationResponse.success(
             network_id=network_id, message=f"Successfully removed network '{network_name}'", data={"name": network_name}

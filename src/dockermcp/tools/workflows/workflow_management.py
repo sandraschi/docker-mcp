@@ -24,7 +24,7 @@ from dockermcp.logging_config import logger
 mcp = FastMCP("Workflow Management Tools")
 
 # Import models from models.py to avoid circular imports
-from .models import (  # noqa: E402
+from .models import (
     CreateWorkflowRequest,
     CreateWorkflowResponse,
     ListWorkflowsRequest,

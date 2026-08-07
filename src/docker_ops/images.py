@@ -40,9 +40,7 @@ class ImageManager:
         """
         try:
             cmd = self.docker_cmd + args
-            result = subprocess.run(  # noqa: S603
-                cmd, capture_output=True, text=True, timeout=timeout
-            )
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
 
             return {
                 "success": result.returncode == 0,

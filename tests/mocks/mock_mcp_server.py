@@ -19,10 +19,18 @@ logger = logging.getLogger("MockMCPServer")
 class MockMCPRequestHandler(BaseHTTPRequestHandler):
     """Request handler for the mock MCP server."""
 
+    # Class-level storage so mock state persists across requests
+    containers: dict[str, Any] = {}
+    images: list[dict[str, Any]] = [
+        {"Id": "sha256:abc123", "RepoTags": ["alpine:latest"], "Size": 12345678},
+        {"Id": "sha256:def456", "RepoTags": ["ubuntu:20.04"], "Size": 98765432},
+    ]
+
     def __init__(self, *args, **kwargs):
         self.routes = {
             "GET": {
                 "/health": self.handle_health_check,
+                "/containers/.*": self.handle_get_container,
                 "/containers": self.handle_list_containers,
                 "/containers/.*/logs": self.handle_container_logs,
                 "/images": self.handle_list_images,
@@ -38,12 +46,6 @@ class MockMCPRequestHandler(BaseHTTPRequestHandler):
                 "/images/.*": self.handle_remove_image,
             },
         }
-        # In-memory storage for mock data
-        self.containers = {}
-        self.images = [
-            {"Id": "sha256:abc123", "RepoTags": ["alpine:latest"], "Size": 12345678},
-            {"Id": "sha256:def456", "RepoTags": ["ubuntu:20.04"], "Size": 98765432},
-        ]
         super().__init__(*args, **kwargs)
 
     def log_message(self, format, *args):
@@ -118,6 +120,15 @@ class MockMCPRequestHandler(BaseHTTPRequestHandler):
     def handle_health_check(self):
         """Handle health check endpoint."""
         self._send_json_response(200, {"status": "ok", "version": "1.0.0"})
+
+    def handle_get_container(self):
+        """Handle getting a single container."""
+        container_id = self._get_path_param("/containers/.*", self.path)
+        container = self.containers.get(container_id)
+        if not container:
+            self._send_json_response(404, {"message": f"No such container: {container_id}", "error": "Not Found"})
+            return
+        self._send_json_response(200, container)
 
     def handle_list_containers(self):
         """Handle listing containers."""
@@ -238,6 +249,14 @@ class MockMCPServer:
 
         self.thread = threading.Thread(target=run, daemon=True)
         self.thread.start()
+
+        # Wait for the server to bind before returning (race guard)
+        import time
+
+        for _ in range(100):
+            if self.server:
+                break
+            time.sleep(0.02)
 
     def stop(self):
         """Stop the mock server."""

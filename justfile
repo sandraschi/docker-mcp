@@ -18,7 +18,7 @@ bootstrap:
     Set-Location web_sota; npm ci; if ($LASTEXITCODE -ne 0) { npm install }
     Write-Host "Pre-commit hooks installed." -ForegroundColor Green
 
-# ── Build ─
+# --- Build ---
 
 # Sync Python dependencies
 build:
@@ -37,7 +37,7 @@ build-native-debug:
     $env:Path = "$env:USERPROFILE\.cargo\bin;$env:Path"
     npx @tauri-apps/cli build --debug
 
-# ── Test ─
+# --- Test ---
 
 # Run test suite
 test:
@@ -47,7 +47,7 @@ test:
 test-cov:
     uv run pytest tests/ --cov=src --cov-report=html
 
-# ── Lint ─
+# --- Lint ---
 
 # Run ruff (Python) + biome (webapp)
 check:
@@ -60,7 +60,7 @@ fix:
     uv run ruff format .
     cd web_sota && npx @biomejs/biome check --write .
 
-# ── Docker ─
+# --- Docker ---
 
 # Start the server
 run:
@@ -82,7 +82,7 @@ up:
 down:
     docker compose down
 
-# ── Housekeeping ─
+# --- Housekeeping ---
 
 # Clean build artifacts
 clean:
@@ -91,7 +91,7 @@ clean:
 # View server logs
 logs:
     Get-Content logs/dockermcp.log -Tail 50 -Wait
-# ── Playwright E2E ─────────────────────────────────────────────────────
+# --- Playwright E2E ---
 
 # Install Playwright browsers (one-time)
 e2e-install:
@@ -103,5 +103,7 @@ e2e:
 	cd {{REPO}}\web_sota
 	npx playwright test
 
-# ── Native CUA ─────────────────────────────────────────────────────────────
+# --- Native CUA ---
 
+
+# Bootstrap: install dev deps + pre-commit hook

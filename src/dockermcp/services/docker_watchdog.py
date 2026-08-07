@@ -73,11 +73,11 @@ class DockerWatchdog:
         try:
             if self.is_windows:
                 # Windows service restart
-                subprocess.run(["net", "stop", "docker"], check=True, capture_output=True, text=True)  # noqa: S607
-                subprocess.run(["net", "start", "docker"], check=True, capture_output=True, text=True)  # noqa: S607
+                subprocess.run(["net", "stop", "docker"], check=True, capture_output=True, text=True)
+                subprocess.run(["net", "start", "docker"], check=True, capture_output=True, text=True)
             else:
                 # Linux/Unix service restart
-                subprocess.run(["sudo", "systemctl", "restart", "docker"], check=True, capture_output=True, text=True)  # noqa: S607  # noqa: S603 S607
+                subprocess.run(["sudo", "systemctl", "restart", "docker"], check=True, capture_output=True, text=True)
 
             # Give Docker some time to start up
             await asyncio.sleep(5)

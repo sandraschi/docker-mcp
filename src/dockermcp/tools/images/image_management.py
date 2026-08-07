@@ -545,8 +545,8 @@ async def image_compare(
 
         def _layers(attrs: dict) -> list[str]:
             return [
-                l.get("createdBy", l.get("CreatedBy", ""))
-                for l in attrs.get("RootFS", {}).get("Layers", attrs.get("rootfs", {}).get("diff_ids", []))
+                layer.get("createdBy", layer.get("CreatedBy", ""))
+                for layer in attrs.get("RootFS", {}).get("Layers", attrs.get("rootfs", {}).get("diff_ids", []))
             ]
 
         def _env_map(attrs: dict) -> dict[str, str]:
@@ -565,14 +565,14 @@ async def image_compare(
         a_env = _env_map(a_attrs)
         b_env = _env_map(b_attrs)
 
-        shared_layers = sum(1 for l in a_layers if l in b_layers)
+        shared_layers = sum(1 for layer in a_layers if layer in b_layers)
         diff = {
             "layers": {
                 "image_a_count": len(a_layers),
                 "image_b_count": len(b_layers),
                 "shared": shared_layers,
-                "added": [l for l in b_layers if l not in a_layers][:10],
-                "removed": [l for l in a_layers if l not in b_layers][:10],
+                "added": [layer for layer in b_layers if layer not in a_layers][:10],
+                "removed": [layer for layer in a_layers if layer not in b_layers][:10],
             },
             "env": {
                 "shared": {k: v for k, v in a_env.items() if k in b_env and b_env[k] == v},

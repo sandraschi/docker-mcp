@@ -320,6 +320,8 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
             log_activity("server", f"chat error: {exc}", level="ERROR")
             return {"response": f"AI Bridge Error: {exc}", "status": "error"}
 
+    _setup_diagnostics_routes(app, _start_time)
+
 
 class _AgenticEvent:
     """SSE event types for agentic chat."""
@@ -416,7 +418,7 @@ async def _stream_ollama(client, endpoint, model, messages):
                 try:
                     data = _json.loads(line)
                     yield data.get("message", {}).get("content", "")
-                except:
+                except Exception:
                     pass
 
 
@@ -437,9 +439,11 @@ async def _stream_lmstudio(client, endpoint, model, messages):
                 try:
                     data = _json.loads(chunk)
                     yield data["choices"][0].get("delta", {}).get("content", "")
-                except:
+                except Exception:
                     pass
 
+
+def _setup_diagnostics_routes(app: FastAPI, start_time: float):
     @app.get("/api/v1/diagnostics")
     async def diagnostics():
         import time
@@ -451,13 +455,13 @@ async def _stream_lmstudio(client, endpoint, model, messages):
             mem = psutil.virtual_memory().percent
             try:
                 disk = psutil.disk_usage("/").percent
-            except:
+            except Exception:
                 disk = 0
         except ImportError:
             cpu = mem = disk = 0
         return {
             "success": True,
-            "backend": {"port": 10807, "status": "running", "uptime": time.time() - _start_time},
+            "backend": {"port": 10807, "status": "running", "uptime": time.time() - start_time},
             "system": {"cpu_percent": cpu, "memory_percent": mem, "disk_percent": disk},
             "tools": {"total": 0},
             "cua_status": {"tesseract_available": False, "window_found": False},

@@ -179,7 +179,7 @@ async def docker_backup(
             import json
 
             try:
-                images = [json.loads(l) for l in img_result["output"].split("\n") if l.strip()]
+                images = [json.loads(line) for line in img_result["output"].split("\n") if line.strip()]
                 for img in images:
                     tag = img.get("Image", img.get("image", "unknown")).replace("/", "_").replace(":", "_")
                     save_result = await _run_cmd(

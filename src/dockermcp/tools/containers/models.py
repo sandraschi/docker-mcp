@@ -272,12 +272,14 @@ class ContainerLogsResponse(BaseModel):
     status: Literal["success", "error"] = Field(..., description="Status of the operation")
     message: str = Field(..., description="Human-readable message about the result")
     container_id: str = Field(..., description="ID of the container")
-    logs: list[str] = Field(default_factory=list, description="List of log lines")
+    logs: list[dict[str, Any]] = Field(
+        default_factory=list, description="List of log entries (timestamp/stream/line or timestamp/message)"
+    )
     error: str | None = Field(None, description="Error message if operation failed")
 
     @classmethod
     def success(
-        cls, container_id: str, logs: list[str], message: str = "Successfully retrieved logs"
+        cls, container_id: str, logs: list[dict[str, Any]], message: str = "Successfully retrieved logs"
     ) -> ContainerLogsResponse:
         """Create a success response."""
         return cls(status="success", message=message, container_id=container_id, logs=logs)

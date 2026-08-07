@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 # Import only what we need for testing
 
 # Import the tool we want to test
-from dockermcp.tools.containers.container_inspect_v2 import inspect_container
+from dockermcp.tools.containers.container_inspect import inspect_container
 
 
 async def test_inspect_container(container_id: str):

@@ -183,9 +183,17 @@ async def manage_container(
             ContainerAction.UNPAUSE,
             ContainerAction.REMOVE,
         ]:
-            from .container_lifecycle import manage_container_lifecycle
+            from .container_lifecycle import ContainerLifecycleParams, manage_container_lifecycle
 
-            return await manage_container_lifecycle(params)
+            return await manage_container_lifecycle(
+                ContainerLifecycleParams(
+                    container_id=container_id or "",
+                    action=action.value,
+                    force=bool(params.params.get("force", False)),
+                    timeout=int(params.params.get("timeout", 10)),
+                    remove_volumes=bool(params.params.get("remove_volumes", False)),
+                )
+            )
 
         elif action == ContainerAction.INSPECT:
             from .container_inspect import inspect_container

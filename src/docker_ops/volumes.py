@@ -27,7 +27,7 @@ class VolumeManager:
         """
         try:
             result = subprocess.run(
-                ["docker", "volume", "ls", "--format", "{{json .}}"],  # noqa: S607
+                ["docker", "volume", "ls", "--format", "{{json .}}"],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -60,8 +60,8 @@ class VolumeManager:
             Dict containing creation result or error details
         """
         try:
-            result = subprocess.run(  # noqa: S603
-                ["docker", "volume", "create", "--driver", driver, name],  # noqa: S607
+            result = subprocess.run(
+                ["docker", "volume", "create", "--driver", driver, name],
                 capture_output=True,
                 text=True,
                 check=True,
@@ -95,9 +95,7 @@ class VolumeManager:
         cmd.append(volume_name)
 
         try:
-            subprocess.run(  # noqa: S603
-                cmd, capture_output=True, text=True, check=True
-            )
+            subprocess.run(cmd, capture_output=True, text=True, check=True)
 
             return {
                 "success": True,

@@ -42,9 +42,9 @@ async def container_analyze(
         try:
             logs = container.logs(tail=log_tail, timestamps=True).decode("utf-8", errors="replace")
             error_lines = [
-                l
-                for l in logs.split("\n")
-                if any(w in l.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"])
+                line
+                for line in logs.split("\n")
+                if any(w in line.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"])
             ]
             log_errors = error_lines[:10]
         except Exception:

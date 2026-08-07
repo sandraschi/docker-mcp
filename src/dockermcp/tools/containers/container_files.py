@@ -778,7 +778,7 @@ async def write_container_file(params: WriteFileParams) -> dict[str, Any]:
             # Clean up the temporary file
             try:
                 os.unlink(tmp_file_path)
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
 
     except APIError as e:
