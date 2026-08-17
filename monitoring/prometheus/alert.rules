@@ -1,0 +1,9 @@
+groups:
+- name: docker-mcp
+  rules:
+  - alert: HighCPUUsage
+    annotations: {}
+    expr: 100 - avg(rate(node_cpu_seconds_total[5m])) > 80
+    for: 5m
+    labels:
+      severity: critical
