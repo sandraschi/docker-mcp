@@ -208,6 +208,18 @@ async def list_images(
         }
     """
     try:
+        # If called directly as a Python function (not via FastMCP reflection), Field defaults may be FieldInfo objects
+        if hasattr(name, "default"):
+            name = None
+        if hasattr(all, "default"):
+            all = False
+        if hasattr(filters, "default"):
+            filters = {}
+        else:
+            filters = dict(filters) if filters else {}
+        if hasattr(digests, "default"):
+            digests = False
+
         # Use shared client
         client = docker_client
 
@@ -224,17 +236,29 @@ async def list_images(
         for image in images:
             # Get detailed information for each image
             try:
+                tags = image.tags if hasattr(image, "tags") else []
+                attrs = image.attrs or {}
+                labels = attrs.get("Labels") or {}
+                if not isinstance(labels, dict):
+                    labels = {}
                 image_info = {
                     "id": image.id,
-                    "repo_tags": image.tags if hasattr(image, "tags") else [],
-                    "repo_digests": image.attrs.get("RepoDigests", []),
-                    "created": datetime.fromtimestamp(image.attrs["Created"], tz=UTC).isoformat(),
-                    "size": image.attrs["Size"],
-                    "virtual_size": image.attrs.get("VirtualSize", image.attrs["Size"]),
-                    "labels": image.labels,
-                    "os": image.attrs.get("Os"),
-                    "architecture": image.attrs.get("Architecture"),
-                    "docker_version": image.attrs.get("DockerVersion"),
+                    "repo_tags": tags,
+                    "repo_digests": attrs.get("RepoDigests", []),
+                    "created": (
+                        datetime.fromtimestamp(attrs["Created"], tz=UTC).isoformat()
+                        if isinstance(attrs.get("Created"), (int, float))
+                        else str(attrs.get("Created", ""))
+                    ),
+                    "size": attrs.get("Size", 0),
+                    "shared_size": attrs.get("SharedSize", 0),
+                    "virtual_size": attrs.get("VirtualSize", attrs.get("Size", 0)),
+                    "labels": labels,
+                    "os": attrs.get("Os"),
+                    "architecture": attrs.get("Architecture"),
+                    "docker_version": attrs.get("DockerVersion"),
+                    "dangling": not tags,
+                    "containers": attrs.get("Containers", -1),
                 }
 
                 # Only include digests if requested

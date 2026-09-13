@@ -28,3 +28,4 @@
 
 - Verify Docker Desktop is running: `docker ps` in a terminal.
 - On Windows, socket default: `//./pipe/docker_engine`.
+- Dashboard **Recover Docker** (Overview quick actions) calls `POST /api/docker/recover` (triple-kill Desktop + backend + vpnkit).

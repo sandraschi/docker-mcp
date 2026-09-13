@@ -26,21 +26,61 @@ docker_error: str | None = None
 F = TypeVar("F", bound=Callable[..., Any])
 
 
+def _sync_dependent_modules() -> None:
+    """Propagate the active docker_client to all dockermcp modules."""
+    global container_mgr, image_mgr, network_mgr, volume_mgr, system_mgr
+    if docker_available and docker_client:
+        container_mgr = ContainerManager(docker_client)
+        image_mgr = ImageManager(docker_client)
+        network_mgr = NetworkManager(docker_client)
+        volume_mgr = VolumeManager(docker_client)
+        system_mgr = SystemManager(docker_client)
+    else:
+        container_mgr = None
+        image_mgr = None
+        network_mgr = None
+        volume_mgr = None
+        system_mgr = None
+
+    # Sync imported attributes in sys.modules so consumers get the live client
+    for mod_name, mod in list(sys.modules.items()):
+        if mod and (mod_name.startswith("dockermcp") or mod_name.startswith("docker_mcp")):
+            if hasattr(mod, "docker_client"):
+                mod.docker_client = docker_client
+            if hasattr(mod, "docker_available"):
+                mod.docker_available = docker_available
+            if hasattr(mod, "docker_error"):
+                mod.docker_error = docker_error
+            if hasattr(mod, "container_mgr"):
+                mod.container_mgr = container_mgr
+            if hasattr(mod, "image_mgr"):
+                mod.image_mgr = image_mgr
+            if hasattr(mod, "network_mgr"):
+                mod.network_mgr = network_mgr
+            if hasattr(mod, "volume_mgr"):
+                mod.volume_mgr = volume_mgr
+            if hasattr(mod, "system_mgr"):
+                mod.system_mgr = system_mgr
+
+
 def check_docker_available[F: Callable[..., Any]](func: F) -> F:
-    """Decorator to check Docker availability before tool execution."""
+    """Decorator to check Docker availability before tool execution, attempting reconnect if needed."""
 
     @wraps(func)
     async def wrapper(*args: Any, **kwargs: Any) -> Any:
+        global docker_available, docker_error
         if not docker_available:
-            return {
-                "status": "error",
-                "message": f"Docker daemon not available: {docker_error}",
-                "troubleshooting": [
-                    "Start Docker Desktop",
-                    "Run 'docker version' to test",
-                    "Use docker_status tool for diagnostics",
-                ],
-            }
+            # Attempt on-the-fly reconnection in case daemon started after backend
+            if not initialize_docker_connection():
+                return {
+                    "status": "error",
+                    "message": f"Docker daemon not available: {docker_error}",
+                    "troubleshooting": [
+                        "Start Docker Desktop",
+                        "Run 'docker version' to test",
+                        "Use docker_status tool for diagnostics",
+                    ],
+                }
         try:
             if asyncio.iscoroutinefunction(func):
                 return await func(*args, **kwargs)
@@ -56,27 +96,47 @@ def check_docker_available[F: Callable[..., Any]](func: F) -> F:
 
 
 def initialize_docker_connection() -> bool:
-    """Initialize Docker connection with graceful error handling."""
+    """Initialize Docker connection with graceful error handling and module state sync."""
     global docker_client, docker_available, docker_error
 
     try:
         logger.info("Attempting to connect to Docker daemon...")
-        docker_client = docker.from_env()
-        docker_client.ping()
+        client = None
+        # On Windows, try standard from_env first, then explicitly try desktop-linux pipe if needed
+        candidate_urls = [None]
+        if sys.platform == "win32":
+            candidate_urls.extend(["npipe:////./pipe/dockerDesktopLinuxEngine", "npipe:////./pipe/docker_engine"])
+
+        last_exc = None
+        for base_url in candidate_urls:
+            try:
+                c = docker.DockerClient(base_url=base_url) if base_url else docker.from_env()
+                c.ping()
+                client = c
+                break
+            except Exception as exc:
+                last_exc = exc
+        if not client:
+            raise last_exc or docker.errors.DockerException("Unable to connect to any Docker pipe")
+
+        docker_client = client
         docker_available = True
         docker_error = None
+        _sync_dependent_modules()
         logger.info("Successfully connected to Docker daemon")
         return True
     except docker.errors.DockerException as e:
         docker_client = None
         docker_available = False
         docker_error = str(e)
+        _sync_dependent_modules()
         logger.warning(f"Docker not available: {docker_error}")
         return False
     except Exception as e:
         docker_client = None
         docker_available = False
         docker_error = f"Unexpected error: {e!s}"
+        _sync_dependent_modules()
         logger.error(f"Docker connection error: {docker_error}")
         return False
 
@@ -85,8 +145,14 @@ def triple_kill_docker() -> dict:
     """Triple Kill: kill hung Docker processes, restart daemon.
 
     See DOCKER_WINDOWS_RESILIENCE.md Level 3 for the standard.
+    First checks if the daemon is already responsive.
     """
     global docker_client, docker_available, docker_error
+
+    # Quick pre-check: if daemon is already reachable, don't kill anything
+    if initialize_docker_connection():
+        return {"success": True, "message": "Docker daemon is already reachable and healthy", "killed": []}
+
     targets = ["Docker Desktop", "com.docker.backend", "com.docker.build", "vpnkit"]
     killed = []
     for name in targets:
@@ -112,20 +178,14 @@ def triple_kill_docker() -> dict:
         # Wait for daemon to become available
         for _i in range(45):
             time.sleep(2)
-            try:
-                dc = docker.from_env()
-                dc.ping()
-                docker_client = dc
-                docker_available = True
-                docker_error = None
+            if initialize_docker_connection():
                 logger.info("Docker recovered after triple kill")
                 return {"success": True, "message": "Docker recovered", "killed": killed}
-            except Exception:
-                pass
         docker_error = "Docker did not recover after triple kill"
     else:
         docker_error = "Docker Desktop not found at expected path"
     docker_available = False
+    _sync_dependent_modules()
     return {"success": False, "message": docker_error, "killed": killed}
 
 
@@ -150,6 +210,10 @@ def check_docker_service_windows() -> str:
 
 def get_docker_status() -> dict[str, Any]:
     """Get comprehensive Docker connection status."""
+    global docker_available, docker_client, docker_error
+    if not docker_available:
+        initialize_docker_connection()
+
     status: dict[str, Any] = {
         "docker_available": docker_available,
         "error": docker_error if not docker_available else None,

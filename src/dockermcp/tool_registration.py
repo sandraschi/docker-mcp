@@ -22,7 +22,7 @@ def register_all_tools(mcp=None) -> None:
 
         mcp = get_mcp()
 
-    # Leaf imports only — avoid dockermcp.tools package __init__ (discover_tools side effects)
+    # Leaf imports only - avoid dockermcp.tools package __init__ (discover_tools side effects)
     import dockermcp.tools.agentic_container_workflow as _aw
     import dockermcp.tools.agentic_workflows as _awf
     import dockermcp.tools.container_analysis as _ca

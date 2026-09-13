@@ -1,23 +1,14 @@
+import asyncio
 import json
 from collections.abc import AsyncGenerator
 from typing import Literal
+from urllib.parse import unquote
 
 import httpx
+from docker.errors import APIError, ImageNotFound, NotFound
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from fastmcp import FastMCP
-
-from dockermcp.tools.containers.list_containers import (
-    ListContainersParams,
-    list_containers,
-)
-from dockermcp.tools.images.image_management import list_images
-from dockermcp.tools.system.system_management import (
-    DiskUsageRequest,
-    SystemInfoRequest,
-    get_disk_usage,
-    get_system_info,
-)
 
 from .activity_log import (
     SortOrder,
@@ -30,8 +21,95 @@ from .activity_log import (
 from .ai import AIRouter
 from .auth import authenticate
 from .llm.manager import get_llm_manager
+from .web_queries import (
+    DockerUnavailable,
+    container_action_sync,
+    container_logs_sync,
+    dashboard_sync,
+    disk_usage_sync,
+    image_history_sync,
+    inspect_container_sync,
+    inspect_image_sync,
+    inspect_network_sync,
+    inspect_volume_sync,
+    list_containers_sync,
+    list_images_sync,
+    list_networks_sync,
+    list_volumes_sync,
+    system_info_sync,
+)
 
 SortParam = Literal["asc", "desc"]
+
+_DESTRUCTIVE_NAME_MARKERS = ("remove_", "prune_", "delete_", "recover", "update")
+
+
+def _tool_annotations(tool) -> dict | None:
+    ann = getattr(tool, "annotations", None)
+    if ann is None:
+        return None
+    if hasattr(ann, "model_dump"):
+        return ann.model_dump()
+    if isinstance(ann, dict):
+        return ann
+    return None
+
+
+def _tool_needs_confirm(name: str, annotations: dict | None) -> bool:
+    if annotations and annotations.get("destructiveHint") is True:
+        return True
+    lowered = name.lower()
+    return any(marker in lowered for marker in _DESTRUCTIVE_NAME_MARKERS)
+
+
+def _tool_row(tool) -> dict:
+    params = (
+        tool.parameters if isinstance(getattr(tool, "parameters", None), dict) else {"type": "object", "properties": {}}
+    )
+    annotations = _tool_annotations(tool)
+    tags = getattr(tool, "tags", None) or []
+    return {
+        "name": tool.name,
+        "title": getattr(tool, "title", None),
+        "description": (getattr(tool, "description", None) or "").strip(),
+        "parameters": params,
+        "annotations": annotations,
+        "tags": sorted(tags) if tags else [],
+        "needs_confirm": _tool_needs_confirm(tool.name, annotations),
+    }
+
+
+def _serialize_tool_result(result):
+    structured = getattr(result, "structured_content", None)
+    if structured is not None:
+        return structured
+    blocks = getattr(result, "content", None) or []
+    texts = []
+    for block in blocks:
+        text = getattr(block, "text", None)
+        texts.append(text if text is not None else str(block))
+    if len(texts) == 1:
+        try:
+            return json.loads(texts[0])
+        except (TypeError, json.JSONDecodeError):
+            return {"text": texts[0]}
+    return {"text": "\n".join(str(item) for item in texts)}
+
+
+async def _in_thread(fn, *args, **kwargs):
+    """Run blocking docker-py work off the event loop."""
+    try:
+        return await asyncio.to_thread(fn, *args, **kwargs)
+    except DockerUnavailable as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except APIError as exc:
+        detail = getattr(exc, "explanation", None) or str(exc)
+        raise HTTPException(status_code=409, detail=detail) from exc
+    except (NotFound, ImageNotFound) as exc:
+        detail = getattr(exc, "explanation", None) or str(exc)
+        raise HTTPException(status_code=404, detail=detail) from exc
 
 
 def setup_webapp(app: FastAPI, mcp_app: FastMCP):
@@ -43,8 +121,15 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     ai_router = AIRouter(mcp_app)
 
     @app.get("/api/health")
+    @app.get("/health")
     async def health():
         return {"status": "healthy", "service": "docker-mcp"}
+
+    @app.get("/api/docker/status")
+    async def api_docker_status():
+        from dockermcp.docker_context import get_docker_status
+
+        return get_docker_status()
 
     @app.get("/api/capabilities")
     async def capabilities():
@@ -55,6 +140,9 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
                 "dashboard": True,
                 "containers": True,
                 "images": True,
+                "volumes": True,
+                "networks": True,
+                "compose": True,
                 "tools": True,
                 "logs": True,
                 "settings": True,
@@ -67,7 +155,43 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/tools")
     async def list_tools():
         tools = await mcp_app.list_tools()
-        return {"tools": [t.name for t in tools]}
+        rows = [_tool_row(tool) for tool in tools]
+        rows.sort(key=lambda item: item["name"])
+        return {"tools": rows, "count": len(rows)}
+
+    @app.get("/api/tools/{tool_name}")
+    async def get_tool(tool_name: str):
+        wanted = unquote(tool_name)
+        tools = await mcp_app.list_tools()
+        tool = next((item for item in tools if item.name == wanted), None)
+        if tool is None:
+            raise HTTPException(status_code=404, detail=f"Unknown tool: {wanted}")
+        return {"tool": _tool_row(tool)}
+
+    @app.post("/api/tools/{tool_name}")
+    async def invoke_tool(tool_name: str, payload: dict = Body(default_factory=dict)):
+        wanted = unquote(tool_name)
+        tools = await mcp_app.list_tools()
+        tool = next((item for item in tools if item.name == wanted), None)
+        if tool is None:
+            raise HTTPException(status_code=404, detail=f"Unknown tool: {wanted}")
+        row = _tool_row(tool)
+        arguments = payload.get("arguments")
+        if arguments is None:
+            arguments = {k: v for k, v in payload.items() if k not in ("confirm", "arguments")}
+        if not isinstance(arguments, dict):
+            raise HTTPException(status_code=400, detail="arguments must be an object")
+        if row["needs_confirm"] and not payload.get("confirm"):
+            raise HTTPException(status_code=400, detail="Set confirm=true to run this tool")
+        try:
+            result = await tool.run(arguments)
+            log_activity("tool_call", f"web invoke {wanted}", meta={"args": list(arguments.keys())})
+            return {"success": True, "tool": wanted, "result": _serialize_tool_result(result)}
+        except HTTPException:
+            raise
+        except Exception as exc:
+            log_activity("tool_call", f"web invoke {wanted} failed: {exc}", level="ERROR")
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     @app.get("/api/llm/providers")
     async def llm_providers(refresh: bool = Query(False)):
@@ -133,23 +257,86 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
         return {"success": True}
 
     @app.get("/api/containers")
-    async def api_containers():
-        result = await list_containers(ListContainersParams(all_states=True))
+    async def api_containers(all_states: bool = Query(True, alias="all")):
+        result = await _in_thread(list_containers_sync, all_states)
         log_activity("tool_call", "list_containers (web API)")
+        return result
+
+    @app.get("/api/containers/{container_id}")
+    async def api_container_inspect(container_id: str):
+        result = await _in_thread(inspect_container_sync, unquote(container_id))
+        log_activity("tool_call", f"inspect_container {container_id[:12]}")
+        return result
+
+    @app.get("/api/containers/{container_id}/logs")
+    async def api_container_logs(container_id: str, tail: int = Query(200, ge=1, le=2000)):
+        result = await _in_thread(container_logs_sync, unquote(container_id), tail)
+        return result
+
+    @app.post("/api/containers/{container_id}/start")
+    async def api_container_start(container_id: str):
+        result = await _in_thread(container_action_sync, unquote(container_id), "start")
+        log_activity("tool_call", f"start_container {container_id[:12]}")
+        return result
+
+    @app.post("/api/containers/{container_id}/stop")
+    async def api_container_stop(container_id: str):
+        result = await _in_thread(container_action_sync, unquote(container_id), "stop")
+        log_activity("tool_call", f"stop_container {container_id[:12]}")
+        return result
+
+    @app.post("/api/containers/{container_id}/restart")
+    async def api_container_restart(container_id: str):
+        result = await _in_thread(container_action_sync, unquote(container_id), "restart")
+        log_activity("tool_call", f"restart_container {container_id[:12]}")
         return result
 
     @app.get("/api/system")
     async def api_system():
-        sys_resp = await get_system_info(SystemInfoRequest(include_disk_usage=True, include_swarm_info=False))
-        disk_resp = await get_disk_usage(DiskUsageRequest(detailed=True))
-        return {
-            "system": sys_resp.model_dump() if hasattr(sys_resp, "model_dump") else sys_resp,
-            "disk": disk_resp.model_dump() if hasattr(disk_resp, "model_dump") else disk_resp,
-        }
+        return await _in_thread(system_info_sync)
+
+    @app.get("/api/disk")
+    async def api_disk():
+        """Slow docker system df. Dashboard must not wait on this."""
+        return await _in_thread(disk_usage_sync)
 
     @app.get("/api/images")
     async def api_images():
-        return await list_images()
+        return await _in_thread(list_images_sync)
+
+    @app.get("/api/images/inspect")
+    async def api_image_inspect(ref: str = Query(..., min_length=1)):
+        result = await _in_thread(inspect_image_sync, unquote(ref))
+        log_activity("tool_call", f"inspect_image {ref[:48]}")
+        return result
+
+    @app.get("/api/images/history")
+    async def api_image_history(ref: str = Query(..., min_length=1)):
+        return await _in_thread(image_history_sync, unquote(ref))
+
+    @app.get("/api/volumes")
+    async def api_volumes():
+        result = await _in_thread(list_volumes_sync)
+        log_activity("tool_call", "list_volumes (web API)")
+        return result
+
+    @app.get("/api/volumes/{volume_name}")
+    async def api_volume_inspect(volume_name: str):
+        result = await _in_thread(inspect_volume_sync, unquote(volume_name))
+        log_activity("tool_call", f"inspect_volume {volume_name[:48]}")
+        return result
+
+    @app.get("/api/networks")
+    async def api_networks():
+        result = await _in_thread(list_networks_sync)
+        log_activity("tool_call", "list_networks (web API)")
+        return result
+
+    @app.get("/api/networks/{network_id}")
+    async def api_network_inspect(network_id: str):
+        result = await _in_thread(inspect_network_sync, unquote(network_id))
+        log_activity("tool_call", f"inspect_network {network_id[:12]}")
+        return result
 
     @app.get("/api/compose/projects")
     async def api_compose_projects(all_: bool = Query(False, alias="all")):
@@ -191,12 +378,16 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
 
     @app.post("/api/compose/analyze")
     async def api_compose_analyze(payload: dict = Body(...)):
-        from dockermcp.tools.compose.compose_analysis import analyze_compose_file
+        from dockermcp.tools.compose.compose_analysis import analyze_compose_file, analyze_compose_text
 
         file_path = payload.get("file_path", "")
-        if not file_path:
-            return {"success": False, "error": "file_path required"}
-        result = analyze_compose_file(file_path)
+        content = payload.get("content")
+        if content:
+            result = analyze_compose_text(str(content), file_path=str(file_path or "upload"))
+        elif file_path:
+            result = analyze_compose_file(file_path)
+        else:
+            return {"success": False, "error": "file_path or content required"}
         log_activity(
             "tool_call",
             f"compose analyze: {file_path}",
@@ -207,41 +398,11 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/dashboard")
     async def api_dashboard():
         try:
-            containers_result = await list_containers(ListContainersParams(all_states=True))
-            system_result = await get_system_info(SystemInfoRequest(include_disk_usage=True, include_swarm_info=False))
-            disk_result = await get_disk_usage(DiskUsageRequest(detailed=False))
-            images_result = await list_images()
-
-            containers_dict = containers_result if isinstance(containers_result, dict) else {}
-            images_dict = images_result if isinstance(images_result, dict) else {}
-
-            sys_info = (
-                system_result.system_info
-                if hasattr(system_result, "system_info")
-                else system_result.get("system_info")
-                if isinstance(system_result, dict)
-                else None
-            )
-            disk_data = (
-                disk_result.disk_usage if hasattr(disk_result, "disk_usage") and disk_result.disk_usage else None
-            )
-            disk_summary = disk_data.get("summary", {}) if isinstance(disk_data, dict) else None
+            payload = await _in_thread(dashboard_sync)
             log_activity("tool_call", "dashboard aggregate")
-            return {
-                "containers": containers_dict.get("containers", []),
-                "containers_status": containers_dict.get("status"),
-                "containers_message": containers_dict.get("message"),
-                "system_info": sys_info,
-                "system_status": getattr(
-                    system_result,
-                    "status",
-                    system_result.get("status") if isinstance(system_result, dict) else None,
-                ),
-                "disk_summary": disk_summary,
-                "images": images_dict.get("images", []),
-                "images_count": images_dict.get("count", 0),
-                "images_status": images_dict.get("status"),
-            }
+            return payload
+        except HTTPException:
+            raise
         except Exception as exc:
             log_activity("server", f"dashboard error: {exc}", level="ERROR")
             raise HTTPException(status_code=500, detail=str(exc)) from exc
@@ -320,7 +481,7 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
             log_activity("server", f"chat error: {exc}", level="ERROR")
             return {"response": f"AI Bridge Error: {exc}", "status": "error"}
 
-    _setup_diagnostics_routes(app, _start_time)
+    _setup_diagnostics_routes(app, _start_time, mcp_app)
 
 
 class _AgenticEvent:
@@ -443,7 +604,7 @@ async def _stream_lmstudio(client, endpoint, model, messages):
                     pass
 
 
-def _setup_diagnostics_routes(app: FastAPI, start_time: float):
+def _setup_diagnostics_routes(app: FastAPI, start_time: float, mcp_app: FastMCP):
     @app.get("/api/v1/diagnostics")
     async def diagnostics():
         import time
@@ -459,11 +620,15 @@ def _setup_diagnostics_routes(app: FastAPI, start_time: float):
                 disk = 0
         except ImportError:
             cpu = mem = disk = 0
+        from dockermcp.docker_context import get_docker_status
+
+        tools = await mcp_app.list_tools()
         return {
             "success": True,
             "backend": {"port": 10807, "status": "running", "uptime": time.time() - start_time},
             "system": {"cpu_percent": cpu, "memory_percent": mem, "disk_percent": disk},
-            "tools": {"total": 0},
+            "tools": {"total": len(tools)},
+            "docker": get_docker_status(),
             "cua_status": {"tesseract_available": False, "window_found": False},
         }
 

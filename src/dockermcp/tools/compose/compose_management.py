@@ -1,4 +1,4 @@
-"""Docker Compose CRUD operations via `docker compose` CLI — portmanteau tool."""
+"""Docker Compose CRUD operations via `docker compose` CLI - portmanteau tool."""
 
 from __future__ import annotations
 
@@ -126,7 +126,7 @@ async def _compose_up(
         args.append("--build")
     if services:
         args.extend(services)
-    # Suppress noisy docker compose up output — only return on error
+    # Suppress noisy docker compose up output - only return on error
     result = await _run_compose(args, cwd=project_dir)
     if not result["success"]:
         return result
@@ -220,7 +220,7 @@ async def _compose_config(
         project_dir: Working directory (optional).
 
     Returns:
-        {"success": bool, "config": str} — rendered YAML
+        {"success": bool, "config": str} - rendered YAML
     """
     args = ["-p", project, "config"]
     result = await _run_compose(args, cwd=project_dir)
@@ -310,7 +310,7 @@ def register_tools(mcp=None) -> None:
         """Docker Compose CRUD and debug operations.
 
         ## Return Format
-        {"success": bool, ...} — varies by operation
+        {"success": bool, ...} - varies by operation
 
         ## Examples
         compose_operations(operation="list", all_projects=True)

@@ -16,9 +16,9 @@ def build_containers_card(result: dict) -> Card:
         rows.append(
             Row(
                 children=[
-                    Metric(label="Name", value=str(item.get("name", "—"))[:40]),
-                    Metric(label="State", value=str(item.get("state", item.get("status", "—")))),
-                    Metric(label="Image", value=str(item.get("image", "—"))[:36]),
+                    Metric(label="Name", value=str(item.get("name", "-"))[:40]),
+                    Metric(label="State", value=str(item.get("state", item.get("status", "-")))),
+                    Metric(label="Image", value=str(item.get("image", "-"))[:36]),
                 ]
             )
         )
@@ -68,15 +68,15 @@ def build_images_card(result: dict, limit: int = 12) -> Card:
     rows = []
     for item in images[:limit]:
         tags = item.get("repo_tags") or item.get("RepoTags") or []
-        tag_str = tags[0] if tags else item.get("id", "—")[:19]
+        tag_str = tags[0] if tags else item.get("id", "-")[:19]
         size = item.get("size", item.get("Size", 0))
-        size_str = f"{size / 1024 / 1024:.0f}MB" if size > 0 else "—"
+        size_str = f"{size / 1024 / 1024:.0f}MB" if size > 0 else "-"
         rows.append(
             Row(
                 children=[
                     Metric(label="Image", value=str(tag_str)[:48]),
                     Metric(label="Size", value=size_str),
-                    Metric(label="ID", value=str(item.get("id", "—"))[:19]),
+                    Metric(label="ID", value=str(item.get("id", "-"))[:19]),
                 ]
             )
         )
@@ -98,11 +98,11 @@ def build_system_info_card(result: dict) -> Card:
     rows = [
         Row(
             children=[
-                Metric(label="Docker", value=str(info.get("docker_version", "—"))),
-                Metric(label="CPUs", value=str(cpu.get("cores", info.get("NCPU", "—")))),
+                Metric(label="Docker", value=str(info.get("docker_version", "-"))),
+                Metric(label="CPUs", value=str(cpu.get("cores", info.get("NCPU", "-")))),
                 Metric(
                     label="Memory",
-                    value=str(mem.get("total_formatted", mem.get("total", "—"))),
+                    value=str(mem.get("total_formatted", mem.get("total", "-"))),
                 ),
             ]
         )

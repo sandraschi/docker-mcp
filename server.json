@@ -1,0 +1,20 @@
+{
+    "$schema":  "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+    "name":  "io.github.sandraschi/docker-mcp",
+    "description":  "FastMCP 3.5 server for comprehensive Docker operations",
+    "version":  "3.5.0",
+    "repository":  {
+                       "url":  "https://github.com/sandraschi/dockermcp",
+                       "source":  "github"
+                   },
+    "packages":  [
+                     {
+                         "registryType":  "mcpb",
+                         "identifier":  "https://github.com/sandraschi/dockermcp/releases/download/v3.5.0/docker-mcp-v3.5.0.mcpb",
+                         "fileSha256":  "d3aac1df262f9aa1f3741ddf9aeb333c5bc6e51702d1d9f69cc2442d52439f67",
+                         "transport":  {
+                                           "type":  "stdio"
+                                       }
+                     }
+                 ]
+}

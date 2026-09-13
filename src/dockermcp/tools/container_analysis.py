@@ -1,4 +1,4 @@
-"""Container resource analysis — trends, restart counts, log patterns, recommendations."""
+"""Container resource analysis - trends, restart counts, log patterns, recommendations."""
 
 from __future__ import annotations
 
@@ -44,7 +44,9 @@ async def container_analyze(
             error_lines = [
                 line
                 for line in logs.split("\n")
-                if any(w in line.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"])
+                if any(
+                    w in line.lower() for w in ["error", "fatal", "traceback", "exception", "panic", "killed", "oom"]
+                )
             ]
             log_errors = error_lines[:10]
         except Exception:

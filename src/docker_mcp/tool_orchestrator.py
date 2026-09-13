@@ -1,4 +1,4 @@
-"""Tool orchestrator for agentic chat — matches NL queries to Docker tools and executes them."""
+"""Tool orchestrator for agentic chat - matches NL queries to Docker tools and executes them."""
 
 import time
 from typing import Any

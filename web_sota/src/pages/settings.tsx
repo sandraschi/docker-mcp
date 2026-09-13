@@ -1,13 +1,15 @@
-import { Cpu, RefreshCw, Save } from "lucide-react";
+import { Cpu, RefreshCw, Save, Server } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button } from "@/components/ui/button";
+import { Link } from "react-router-dom";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  getHealth,
+  getLlmProviders,
+  getLlmSettings,
+  type LlmProvider,
+  setLlmSettings,
+} from "@/common/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -17,13 +19,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  getHealth,
-  getLlmProviders,
-  getLlmSettings,
-  setLlmSettings,
-  type LlmProvider,
-} from "@/common/api";
+import { API_BASE } from "@/lib/api";
 
 const DEFAULT_ENDPOINTS: Record<string, string> = {
   ollama: "http://127.0.0.1:11434",
@@ -37,6 +33,9 @@ export function Settings() {
   const [providers, setProviders] = useState<LlmProvider[]>([]);
   const [apiStatus, setApiStatus] = useState<string | null>(null);
   const [loadingModels, setLoadingModels] = useState(false);
+  const [dockerStatus, setDockerStatus] = useState<Record<string, unknown> | null>(null);
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [engineError, setEngineError] = useState<string | null>(null);
 
   const activeProvider = useMemo(
     () => providers.find((p) => p.type === provider),
@@ -72,9 +71,7 @@ export function Settings() {
           return;
         }
         const saved = getLlmSettings();
-        const current =
-          list.find((p) => p.type === (force ? provider : saved.provider)) ??
-          list[0];
+        const current = list.find((p) => p.type === (force ? provider : saved.provider)) ?? list[0];
         applyProvider(current.type, list);
         setApiStatus(
           `Discovered: ${list.map((p) => `${p.type} (${p.models.length} models)`).join(", ")}`,
@@ -96,8 +93,7 @@ export function Settings() {
         setProviders(list);
         if (list.length > 0) {
           const saved = getLlmSettings();
-          const current =
-            list.find((p) => p.type === saved.provider) ?? list[0];
+          const current = list.find((p) => p.type === saved.provider) ?? list[0];
           applyProvider(current.type, list);
           if (saved.model) setModel(saved.model);
         }
@@ -108,6 +104,21 @@ export function Settings() {
       }
     })();
   }, [applyProvider]);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const [statusRes, diagRes] = await Promise.all([
+          fetch(`${API_BASE}/api/docker/status`),
+          fetch(`${API_BASE}/api/v1/diagnostics`),
+        ]);
+        if (statusRes.ok) setDockerStatus(await statusRes.json());
+        if (diagRes.ok) setDiagnostics(await diagRes.json());
+      } catch (e) {
+        setEngineError(e instanceof Error ? e.message : "Failed to load engine status");
+      }
+    })();
+  }, []);
 
   const onProviderChange = (next: string) => {
     applyProvider(next, providers);
@@ -189,11 +200,7 @@ export function Settings() {
                 disabled={modelOptions.length === 0}
               >
                 <SelectTrigger className="bg-slate-900 border-slate-800 text-slate-100">
-                  <SelectValue
-                    placeholder={
-                      loadingModels ? "Loading models…" : "Select a model"
-                    }
-                  />
+                  <SelectValue placeholder={loadingModels ? "Loading models…" : "Select a model"} />
                 </SelectTrigger>
                 <SelectContent className="bg-slate-900 border-slate-800 text-slate-100 max-h-64">
                   {modelOptions.map((m) => (
@@ -222,9 +229,7 @@ export function Settings() {
               disabled={loadingModels}
               onClick={() => void refreshGlom(true)}
             >
-              <RefreshCw
-                className={`mr-2 h-4 w-4 ${loadingModels ? "animate-spin" : ""}`}
-              />
+              <RefreshCw className={`mr-2 h-4 w-4 ${loadingModels ? "animate-spin" : ""}`} />
               Refresh models
             </Button>
             <Button
@@ -241,12 +246,93 @@ export function Settings() {
 
       <Card className="border-slate-800 bg-slate-950/50">
         <CardHeader>
+          <div className="flex items-center gap-2">
+            <Server className="h-5 w-5 text-emerald-500" />
+            <CardTitle className="text-white">Docker engine</CardTitle>
+          </div>
+          <CardDescription className="text-slate-400">
+            Live status from GET /api/docker/status and GET /api/v1/diagnostics
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="text-sm text-slate-300 space-y-2">
+          {engineError && <p className="text-red-400">{engineError}</p>}
+          {dockerStatus ? (
+            <ul className="space-y-1">
+              <li>Daemon: {dockerStatus.docker_available ? "available" : "unavailable"}</li>
+              <li>Version: {String(dockerStatus.version ?? "—")}</li>
+              <li>API: {String(dockerStatus.api_version ?? "—")}</li>
+              <li>OS: {String(dockerStatus.platform ?? "—")}</li>
+              <li>
+                Containers: {String(dockerStatus.containers_running ?? "—")} running /{" "}
+                {String(dockerStatus.containers_total ?? "—")} total
+              </li>
+              <li>Images: {String(dockerStatus.images_count ?? "—")}</li>
+              {dockerStatus.error ? (
+                <li className="text-red-400">{String(dockerStatus.error)}</li>
+              ) : null}
+            </ul>
+          ) : (
+            <p className="text-slate-500">Loading Docker status…</p>
+          )}
+          {diagnostics ? (
+            <p className="text-slate-400 pt-2">
+              Tools: {String((diagnostics.tools as { total?: number } | undefined)?.total ?? "—")} ·
+              Uptime:{" "}
+              {Math.round(
+                Number((diagnostics.backend as { uptime?: number } | undefined)?.uptime ?? 0),
+              )}
+              s
+            </p>
+          ) : null}
+          <div className="flex flex-wrap gap-2 pt-3">
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/docker_desktop_status"
+            >
+              Desktop status
+            </Link>
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/reconnect_docker"
+            >
+              Reconnect
+            </Link>
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/docker_daemon_restart"
+            >
+              Restart daemon
+            </Link>
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/docker_daemon_recover"
+            >
+              Recover
+            </Link>
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/list_gpus"
+            >
+              GPUs
+            </Link>
+            <Link
+              className="rounded-md bg-slate-800 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700"
+              to="/tools/docker_backup"
+            >
+              Backup
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-800 bg-slate-950/50">
+        <CardHeader>
           <CardTitle className="text-white">App information</CardTitle>
         </CardHeader>
         <CardContent className="text-sm text-slate-400 space-y-1">
           <p>Docker MCP webapp (SOTA)</p>
           <p>Frontend: 10806 · Backend: 10807</p>
-          <p>Event logs: /logs · Fleet glom-on via GET /api/llm/providers</p>
+          <p>Event logs: /logs · Volumes: /volumes · Networks: /networks · Tools: /tools</p>
         </CardContent>
       </Card>
     </div>

@@ -31,6 +31,7 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 - "List all running containers and show resource usage."
 - "Deploy my compose stack and verify every service is healthy."
 - "Compare nginx:1.25 and nginx:1.26 — what changed?"
+- Dashboard → **Run MCP tools** → pick a tool → fill the form → Run.
 - "Analyze container my-app — why is it restarting?"
 - "Back up my database volume before the upgrade."
 
@@ -46,6 +47,7 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 | **AI Chat** | SSE streaming, tool execution cards, LLM provider discovery |
 | **Agentic** | Deploy, cleanup, diagnose, rollback workflows |
 | **Prefab Cards** | Containers, images, daemon status, system info |
+| **Web dashboard** | Overview quick actions (Run MCP tools, Diagnose, Backup, Recover Docker), `/tools` runner, volumes, networks, compose, AI chat |
 
 ## Documentation
 

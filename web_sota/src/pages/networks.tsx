@@ -1,89 +1,77 @@
-import { AlertCircle, ArrowDown, ArrowUp, Image as ImageIcon, Loader2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { AlertCircle, ArrowDown, ArrowUp, Loader2, Network } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { API_BASE } from "@/lib/api";
-import { formatBytes, formatDate, imageRef, resourceHref, shortId } from "@/lib/format";
+import { formatDate, resourceHref, shortId } from "@/lib/format";
 import { PAGE_SIZES, type SortDir, useClientTable } from "@/lib/useClientTable";
 
-interface ImageItem {
+interface NetworkItem {
   id: string;
-  repo_tags?: string[];
-  size?: number;
-  shared_size?: number;
+  name: string;
+  driver?: string;
+  scope?: string;
   created?: string;
-  dangling?: boolean;
-  architecture?: string;
-  os?: string;
+  internal?: boolean;
+  enable_ipv6?: boolean;
+  container_count?: number;
+  subnet?: string | null;
 }
 
-const matchImage = (img: ImageItem, q: string) => {
-  const hay = [img.id, ...(img.repo_tags || []), img.architecture, img.os]
-    .filter(Boolean)
-    .join(" ")
-    .toLowerCase();
+const matchNetwork = (n: NetworkItem, q: string) => {
+  const hay = [n.name, n.id, n.driver, n.scope, n.subnet].filter(Boolean).join(" ").toLowerCase();
   return hay.includes(q);
 };
 
-const sortValue = (img: ImageItem, key: string): string | number => {
+const sortValue = (n: NetworkItem, key: string): string | number => {
   switch (key) {
-    case "tag":
-      return imageRef(img);
-    case "size":
-      return img.size || 0;
+    case "driver":
+      return n.driver || "";
+    case "scope":
+      return n.scope || "";
+    case "containers":
+      return n.container_count ?? 0;
     case "created":
-      return img.created || "";
-    case "id":
-      return img.id || "";
+      return n.created || "";
     default:
-      return img.size || 0;
+      return n.name || "";
   }
 };
 
-export function Images() {
-  const [images, setImages] = useState<ImageItem[]>([]);
+export function Networks() {
+  const [networks, setNetworks] = useState<NetworkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [tagFilter, setTagFilter] = useState("all");
-  const [sortKey, setSortKey] = useState("size");
-  const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const [sortKey, setSortKey] = useState("name");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
 
-  const fetchImages = async () => {
+  const fetchNetworks = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/api/images`);
+      const res = await fetch(`${API_BASE}/api/networks`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `HTTP ${res.status}`);
-      setImages(data.images ?? []);
+      setNetworks(data.networks ?? []);
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load images");
-      setImages([]);
+      setError(e instanceof Error ? e.message : "Failed to load networks");
+      setNetworks([]);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchImages();
+    fetchNetworks();
   }, []);
 
-  const filteredByTag = useMemo(() => {
-    if (tagFilter === "dangling")
-      return images.filter((img) => img.dangling || !img.repo_tags?.length);
-    if (tagFilter === "tagged")
-      return images.filter((img) => img.repo_tags && img.repo_tags.length > 0);
-    return images;
-  }, [images, tagFilter]);
-
-  const match = useCallback(matchImage, []);
+  const match = useCallback(matchNetwork, []);
   const getSort = useCallback(sortValue, []);
-
-  const table = useClientTable(filteredByTag, {
+  const table = useClientTable(networks, {
     search,
     match,
     sortKey,
@@ -95,19 +83,17 @@ export function Images() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, tagFilter, pageSize]);
+  }, [search, pageSize]);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     else {
       setSortKey(key);
-      setSortDir(key === "tag" ? "asc" : "desc");
+      setSortDir(key === "created" || key === "containers" ? "desc" : "asc");
     }
   };
 
-  const totalSize = images.reduce((sum, img) => sum + (img.size || 0), 0);
-
-  if (loading && images.length === 0) {
+  if (loading && networks.length === 0) {
     return (
       <div className="flex items-center justify-center min-h-[320px]">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
@@ -119,31 +105,25 @@ export function Images() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Images</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white">Networks</h2>
           <p className="text-slate-400">
-            {table.filteredCount} of {images.length} images · {formatBytes(totalSize)} listed
+            {table.filteredCount} of {networks.length} networks
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={fetchImages}
+            onClick={fetchNetworks}
             disabled={loading}
             className="rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
           >
             {loading ? "Refreshing…" : "Refresh"}
           </button>
           <Link
-            to="/tools/search_images"
+            to="/tools/create_network"
             className="rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
           >
-            Search Hub
-          </Link>
-          <Link
-            to="/tools/prune_images"
-            className="rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700"
-          >
-            Prune
+            Create
           </Link>
         </div>
       </div>
@@ -159,23 +139,14 @@ export function Images() {
 
       <Card className="border-slate-800 bg-slate-950/50">
         <CardHeader className="space-y-4">
-          <CardTitle className="text-white">All images</CardTitle>
+          <CardTitle className="text-white">Docker networks</CardTitle>
           <div className="flex flex-wrap gap-3">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Filter tag, id, arch…"
+              placeholder="Filter name, driver, subnet, id…"
               className="max-w-sm bg-slate-900 border-slate-700 text-slate-100"
             />
-            <select
-              value={tagFilter}
-              onChange={(e) => setTagFilter(e.target.value)}
-              className="h-10 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200"
-            >
-              <option value="all">All images</option>
-              <option value="tagged">Tagged</option>
-              <option value="dangling">Dangling</option>
-            </select>
             <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
@@ -191,7 +162,7 @@ export function Images() {
         </CardHeader>
         <CardContent>
           {table.rows.length === 0 && !error ? (
-            <p className="text-slate-500 py-8 text-center">No images match.</p>
+            <p className="text-slate-500 py-8 text-center">No networks match.</p>
           ) : (
             <>
               <div className="overflow-x-auto">
@@ -199,27 +170,35 @@ export function Images() {
                   <thead>
                     <tr className="border-b border-slate-800 text-left text-slate-400">
                       <SortTh
-                        label="Tag"
-                        k="tag"
+                        label="Name"
+                        k="name"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onClick={toggleSort}
+                      />
+                      <th className="pb-2 pr-4 font-medium">ID</th>
+                      <SortTh
+                        label="Driver"
+                        k="driver"
                         sortKey={sortKey}
                         sortDir={sortDir}
                         onClick={toggleSort}
                       />
                       <SortTh
-                        label="ID"
-                        k="id"
+                        label="Scope"
+                        k="scope"
                         sortKey={sortKey}
                         sortDir={sortDir}
                         onClick={toggleSort}
                       />
+                      <th className="pb-2 pr-4 font-medium">Subnet</th>
                       <SortTh
-                        label="Size"
-                        k="size"
+                        label="Containers"
+                        k="containers"
                         sortKey={sortKey}
                         sortDir={sortDir}
                         onClick={toggleSort}
                       />
-                      <th className="pb-2 pr-4 font-medium">OS / Arch</th>
                       <SortTh
                         label="Created"
                         k="created"
@@ -230,38 +209,33 @@ export function Images() {
                     </tr>
                   </thead>
                   <tbody>
-                    {table.rows.map((img) => {
-                      const ref = imageRef(img);
-                      return (
-                        <tr
-                          key={img.id}
-                          className="border-b border-slate-800/80 text-slate-200 hover:bg-slate-800/40"
-                        >
-                          <td className="py-3 pr-4">
-                            <Link
-                              to={resourceHref("images", ref)}
-                              className="flex items-center gap-2 text-blue-400 hover:underline"
-                            >
-                              <ImageIcon className="h-4 w-4 text-blue-500 shrink-0" />
-                              <span className="font-mono text-xs">{ref || "<none>"}</span>
-                            </Link>
-                            {img.repo_tags && img.repo_tags.length > 1 && (
-                              <p className="text-xs text-slate-500 mt-1 pl-6">
-                                +{img.repo_tags.length - 1} tags
-                              </p>
-                            )}
-                          </td>
-                          <td className="py-3 pr-4 font-mono text-slate-400">{shortId(img.id)}</td>
-                          <td className="py-3 pr-4 whitespace-nowrap">{formatBytes(img.size)}</td>
-                          <td className="py-3 pr-4 text-slate-400">
-                            {[img.os, img.architecture].filter(Boolean).join("/") || "—"}
-                          </td>
-                          <td className="py-3 text-slate-400 whitespace-nowrap">
-                            {formatDate(img.created)}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                    {table.rows.map((n) => (
+                      <tr
+                        key={n.id}
+                        className="border-b border-slate-800/80 text-slate-200 hover:bg-slate-800/40"
+                      >
+                        <td className="py-3 pr-4">
+                          <Link
+                            to={resourceHref("networks", n.id)}
+                            className="flex items-center gap-2 text-blue-400 hover:underline"
+                          >
+                            <Network className="h-4 w-4 text-blue-500 shrink-0" />
+                            {n.name}
+                          </Link>
+                          {n.internal ? (
+                            <span className="ml-2 text-xs text-slate-500">internal</span>
+                          ) : null}
+                        </td>
+                        <td className="py-3 pr-4 font-mono text-slate-400">{shortId(n.id)}</td>
+                        <td className="py-3 pr-4">{n.driver || "—"}</td>
+                        <td className="py-3 pr-4">{n.scope || "—"}</td>
+                        <td className="py-3 pr-4 font-mono text-xs">{n.subnet || "—"}</td>
+                        <td className="py-3 pr-4">{n.container_count ?? 0}</td>
+                        <td className="py-3 text-slate-400 whitespace-nowrap">
+                          {formatDate(n.created)}
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>

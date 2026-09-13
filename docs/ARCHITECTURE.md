@@ -39,11 +39,25 @@ Base: `http://127.0.0.1:10807/api`
 
 | Endpoint | Method | Purpose |
 |----------|--------|---------|
-| `/health` | GET | Server health |
+| `/health` | GET | Server health (access-log silenced) |
+| `/docker/status` | GET | Daemon version (access-log silenced) |
+| `/tools` | GET | MCP tool catalog + JSON Schema |
+| `/tools/{name}` | GET | One tool schema |
+| `/tools/{name}` | POST | Invoke tool (`arguments`, `confirm`) |
 | `/dashboard` | GET | Aggregate: containers + images + system |
 | `/containers` | GET | All container states |
+| `/containers/{id}` | GET | Inspect |
+| `/containers/{id}/start` | POST | Start |
+| `/containers/{id}/stop` | POST | Stop |
+| `/containers/{id}/restart` | POST | Restart |
 | `/images` | GET | All images |
-| `/system` | GET | System info + disk |
+| `/images/inspect` | GET | Image inspect (`?ref=`) |
+| `/volumes` | GET | Named volumes |
+| `/volumes/{name}` | GET | Volume inspect |
+| `/networks` | GET | Networks |
+| `/networks/{id}` | GET | Network inspect |
+| `/system` | GET | Engine info (no `df()`) |
+| `/disk` | GET | `docker system df` (slow; dashboard loads in background) |
 | `/compose/projects` | GET | Compose projects |
 | `/compose/ps` | GET | Compose container states |
 | `/compose/up` | POST | Start services |

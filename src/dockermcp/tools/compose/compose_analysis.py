@@ -1,4 +1,4 @@
-"""Compose file analysis — parse, validate, and summarize docker-compose YAML."""
+"""Compose file analysis - parse, validate, and summarize docker-compose YAML."""
 
 from __future__ import annotations
 
@@ -12,17 +12,28 @@ def analyze_compose_file(file_path: str) -> dict[str, Any]:
         return {"success": False, "error": f"File not found: {file_path}"}
 
     try:
+        with open(file_path, encoding="utf-8") as f:
+            raw = f.read()
+    except Exception as e:
+        return {"success": False, "error": f"Read error: {e}"}
+
+    result = analyze_compose_text(raw, file_path=file_path)
+    if result.get("success"):
+        result["file_size"] = os.path.getsize(file_path)
+    return result
+
+
+def analyze_compose_text(content: str, file_path: str = "upload") -> dict[str, Any]:
+    """Parse compose YAML from a string (browser upload or pasted file)."""
+    try:
         import yaml
     except ImportError:
         return {"success": False, "error": "PyYAML not installed. Run: uv add pyyaml"}
 
     try:
-        with open(file_path, encoding="utf-8") as f:
-            config = yaml.safe_load(f)
+        config = yaml.safe_load(content)
     except yaml.YAMLError as e:
         return {"success": False, "error": f"YAML parse error: {e}"}
-    except Exception as e:
-        return {"success": False, "error": f"Read error: {e}"}
 
     if not isinstance(config, dict):
         return {"success": False, "error": "Compose file is empty or not a mapping"}
@@ -101,7 +112,7 @@ def analyze_compose_file(file_path: str) -> dict[str, Any]:
     return {
         "success": True,
         "file_path": file_path,
-        "file_size": os.path.getsize(file_path),
+        "file_size": len(content.encode("utf-8")),
         "compose_version": version,
         "service_count": len(services),
         "volume_count": len(volumes_config),

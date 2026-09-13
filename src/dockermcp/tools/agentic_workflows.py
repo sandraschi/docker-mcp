@@ -1,4 +1,4 @@
-"""Agentic Docker workflows — compose deploy, cleanup, diagnose, and rollback."""
+"""Agentic Docker workflows - compose deploy, cleanup, diagnose, and rollback."""
 
 from __future__ import annotations
 

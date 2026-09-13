@@ -4,6 +4,7 @@ FastAPI routes for Docker MCP webapp
 
 import logging
 import os
+import sys
 
 import docker
 from fastapi import FastAPI, HTTPException
@@ -33,40 +34,63 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Initialize Docker client
-    try:
-        client = docker.from_env()
-    except Exception as e:
-        logger.error(f"Failed to connect to Docker: {e}")
+    client: docker.DockerClient | None = None
+
+    # Dynamic Docker client resolver
+    def get_client() -> docker.DockerClient | None:
+        nonlocal client
+        if client:
+            try:
+                client.ping()
+                return client
+            except Exception:
+                client = None
+        candidate_urls = [None]
+        if sys.platform == "win32":
+            candidate_urls.extend(["npipe:////./pipe/dockerDesktopLinuxEngine", "npipe:////./pipe/docker_engine"])
+        for base_url in candidate_urls:
+            try:
+                c = docker.DockerClient(base_url=base_url) if base_url else docker.from_env()
+                c.ping()
+                client = c
+                return client
+            except Exception as e:
+                logger.debug(f"Docker client ping/connect failed for {base_url}: {e}")
         client = None
+        return None
 
     # Health check
     @app.get("/health")
+    @app.get("/api/health")
     async def health():
-        return {"status": "ok"}
+        return {"status": "healthy", "service": "docker-mcp"}
+
+    # Docker daemon status endpoint
+    @app.get("/api/docker/status")
+    async def docker_status():
+        from dockermcp.docker_context import get_docker_status
+
+        return get_docker_status()
 
     # Dashboard endpoint
     @app.get("/api/dashboard")
     async def get_dashboard():
         """Get dashboard overview with system info and container status"""
-        if not client:
+        active_client = get_client()
+        if not active_client:
             raise HTTPException(status_code=503, detail="Docker not available")
 
         try:
             # Get system info
-            info = client.info()
-            version = client.version()
+            info = active_client.info()
+            version = active_client.version()
 
             # Get containers
-            containers = client.containers.list(all=True)
+            containers = active_client.containers.list(all=True)
             running = len([c for c in containers if c.status == "running"])
 
             # Get images
-            images = client.images.list()
-
-            # Calculate disk usage
-            disk_info = client.df()
-            total_size = sum(i.get("Size", 0) for i in disk_info.get("Images", []))
+            images = active_client.images.list()
 
             return {
                 "system_info": {
@@ -93,27 +117,20 @@ def create_app() -> FastAPI:
                         "id": c.id[:12],
                         "name": c.name,
                         "status": c.status,
-                        "image": c.image.tags[0] if c.image.tags else c.image.id[:12],
+                        "image": (c.attrs or {}).get("Image") or "",
                         "state": "running" if c.status == "running" else "stopped",
                     }
                     for c in containers[:10]
                 ],
                 "containers_status": "success",
                 "containers_message": f"Total: {len(containers)} containers",
-                "disk_summary": {
-                    "total_containers_size": sum(c.get("SizeRw", 0) for c in disk_info.get("Containers", [])),
-                    "total_images_size": sum(i.get("Size", 0) for i in disk_info.get("Images", [])),
-                    "total_volumes_size": sum(
-                        v.get("UsageData", {}).get("Size", 0) for v in disk_info.get("Volumes", [])
-                    ),
-                    "total_size": total_size,
-                },
+                "disk_summary": None,
                 "images": [
                     {
-                        "id": img.id[:12],
+                        "id": img.id[:12] if img.id else "",
                         "repo_tags": img.tags or ["<none>"],
-                        "size": img.attrs.get("Size", 0),
-                        "created": img.attrs.get("Created"),
+                        "size": (img.attrs or {}).get("Size", 0),
+                        "created": (img.attrs or {}).get("Created"),
                     }
                     for img in images[:10]
                 ],
@@ -129,18 +146,19 @@ def create_app() -> FastAPI:
     @app.get("/api/containers")
     async def get_containers():
         """Get list of all containers"""
-        if not client:
+        active_client = get_client()
+        if not active_client:
             raise HTTPException(status_code=503, detail="Docker not available")
 
         try:
-            containers = client.containers.list(all=True)
+            containers = active_client.containers.list(all=True)
             return {
                 "containers": [
                     {
                         "id": c.id,
                         "name": c.name,
                         "status": c.status,
-                        "image": c.image.tags[0] if c.image.tags else c.image.id[:12],
+                        "image": (c.attrs or {}).get("Image") or "",
                         "state": "running" if c.status == "running" else "stopped",
                         "created": c.attrs.get("Created"),
                     }
@@ -150,6 +168,32 @@ def create_app() -> FastAPI:
             }
         except Exception as e:
             logger.error(f"Error getting containers: {e}")
+            raise HTTPException(status_code=500, detail=str(e)) from e
+
+    @app.get("/api/images")
+    async def get_images():
+        """Get list of images without per-image inspect or system df."""
+        active_client = get_client()
+        if not active_client:
+            raise HTTPException(status_code=503, detail="Docker not available")
+        try:
+            images = active_client.images.list()
+            return {
+                "status": "success",
+                "count": len(images),
+                "images": [
+                    {
+                        "id": img.id,
+                        "repo_tags": img.tags or [],
+                        "size": (img.attrs or {}).get("Size", 0),
+                        "created": (img.attrs or {}).get("Created"),
+                        "dangling": not bool(img.tags),
+                    }
+                    for img in images
+                ],
+            }
+        except Exception as e:
+            logger.error(f"Error getting images: {e}")
             raise HTTPException(status_code=500, detail=str(e)) from e
 
     # Tools endpoint

@@ -1,14 +1,21 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import { AppLayout } from '@/components/layout/app-layout';
-import { Dashboard } from '@/pages/dashboard';
-import { Containers } from '@/pages/containers';
-import { Images } from '@/pages/images';
-import { Chat } from '@/pages/chat';
-import { Tools } from '@/pages/tools';
-import { Help } from '@/pages/help';
-import { Settings } from '@/pages/settings';
-import { LogsPage } from '@/pages/logs';
-import { Compose } from '@/pages/compose';
+import { Navigate, Route, BrowserRouter as Router, Routes } from "react-router-dom";
+import { AppLayout } from "@/components/layout/app-layout";
+import { Chat } from "@/pages/chat";
+import { Compose } from "@/pages/compose";
+import { ContainerDetail } from "@/pages/container-detail";
+import { Containers } from "@/pages/containers";
+import { Dashboard } from "@/pages/dashboard";
+import { Help } from "@/pages/help";
+import { ImageDetail } from "@/pages/image-detail";
+import { Images } from "@/pages/images";
+import { LogsPage } from "@/pages/logs";
+import { NetworkDetail } from "@/pages/network-detail";
+import { Networks } from "@/pages/networks";
+import { Settings } from "@/pages/settings";
+import { ToolRunner } from "@/pages/tool-runner";
+import { Tools } from "@/pages/tools";
+import { VolumeDetail } from "@/pages/volume-detail";
+import { Volumes } from "@/pages/volumes";
 
 function App() {
   return (
@@ -16,9 +23,16 @@ function App() {
       <AppLayout>
         <Routes>
           <Route path="/" element={<Dashboard />} />
+          <Route path="/containers/:id" element={<ContainerDetail />} />
           <Route path="/containers" element={<Containers />} />
+          <Route path="/images/:id" element={<ImageDetail />} />
           <Route path="/images" element={<Images />} />
+          <Route path="/volumes/:id" element={<VolumeDetail />} />
+          <Route path="/volumes" element={<Volumes />} />
+          <Route path="/networks/:id" element={<NetworkDetail />} />
+          <Route path="/networks" element={<Networks />} />
           <Route path="/chat" element={<Chat />} />
+          <Route path="/tools/:name" element={<ToolRunner />} />
           <Route path="/tools" element={<Tools />} />
           <Route path="/help" element={<Help />} />
           <Route path="/logs" element={<LogsPage />} />

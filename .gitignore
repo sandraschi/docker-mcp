@@ -83,6 +83,7 @@ coverage.xml
 
 # Backup files
 *.bak
+*.bak.*
 *.new
 *.old
 *.orig
@@ -180,3 +181,6 @@ Thumbs.db
 target/
 
 _dashboard/
+
+# MCPB pack staging (fresh-copied each pack — never commit)
+mcpb/src/

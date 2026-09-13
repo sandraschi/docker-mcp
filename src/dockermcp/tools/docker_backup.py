@@ -42,10 +42,10 @@ async def docker_backup(
     """Backup and restore Docker resources.
 
     ## How Docker data works
-    Docker data is NOT one big blob — it's split into:
-    - **Images** (read-only templates) — export/import with `docker save` / `docker load`
-    - **Volumes** (persistent data like DBs, configs) — backup via tar archive
-    - **Compose projects** (YAML + volumes + metadata) — export all of the above
+    Docker data is NOT one big blob - it's split into:
+    - **Images** (read-only templates) - export/import with `docker save` / `docker load`
+    - **Volumes** (persistent data like DBs, configs) - backup via tar archive
+    - **Compose projects** (YAML + volumes + metadata) - export all of the above
 
     ## Operations
     - **save_image**: Export one or more images to a .tar file via `docker save`.

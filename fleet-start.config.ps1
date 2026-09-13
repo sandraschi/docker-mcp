@@ -5,10 +5,10 @@
     BackendPort  = 10807
     FrontendPort = 10806
     HealthPath   = '/api/health'
-    WebRoot      = 'D:\Dev\repos\docker-mcp\web_sota'
+    WebRoot      = 'web_sota'
     Backend = @{
-        Kind          = 'uvicorn-web-app'
-        UvicornTarget = 'server:web_app'
+        Kind          = 'uvicorn'
+        UvicornTarget = 'customization.server:app'
         SyncExtras    = @('dev')
         Env           = @{ WEB_PORT = '10807' }
     }

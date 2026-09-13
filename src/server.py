@@ -32,6 +32,25 @@ logging.basicConfig(level=logging.CRITICAL, force=True, handlers=[logging.NullHa
 for logger_name in ["fastmcp", "mcp", "uvicorn", "httpx", "httpcore", "h11", "asyncio"]:
     logging.getLogger(logger_name).setLevel(logging.CRITICAL)
 
+
+class _QuietProbeAccessFilter(logging.Filter):
+    """Drop uvicorn access lines for liveness probes."""
+
+    _skip = ("GET /api/health", "GET /health ", "GET /api/docker/status")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        msg = record.getMessage()
+        return not any(fragment in msg for fragment in self._skip)
+
+
+def quiet_probe_access_logs() -> None:
+    access = logging.getLogger("uvicorn.access")
+    if not any(isinstance(item, _QuietProbeAccessFilter) for item in access.filters):
+        access.addFilter(_QuietProbeAccessFilter())
+
+
+quiet_probe_access_logs()
+
 # Configure our specific logging
 configure_logging(
     enable_console=True,
@@ -47,6 +66,7 @@ async def _web_lifespan(_app: FastAPI):
     from docker_mcp.llm.manager import get_llm_manager
 
     install_log_handler()
+    quiet_probe_access_logs()
     log_activity("system", "Docker MCP web bridge starting")
     await get_llm_manager().glom_local_providers_if_up()
     log_activity("system", "Docker MCP web bridge ready")

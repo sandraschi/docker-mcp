@@ -1,3 +1,23 @@
+# Changelog
+
+## [Unreleased]
+
+### Added
+- **Dashboard quick actions**: Overview hero CTA **Run MCP tools** plus a button row for MCP Tools, AI Command, Containers, Images, Volumes, Networks, Compose, Event logs, Diagnose, Backup, Prune unused, Daemon status, and Recover Docker.
+- **MCP tool runner UI**: `GET/POST /api/tools` and `GET/POST /api/tools/{name}` with JSON Schema forms. Catalog at `/tools`; runner at `/tools/:name`. Destructive tools require confirm.
+- **Resource pages**: volumes and networks list + inspect; container start/stop/restart; image inspect/history; compose analyze from uploaded YAML.
+- **REST coverage**: `/api/volumes`, `/api/networks`, `/api/containers/{id}` lifecycle, `/api/images/inspect`, `/api/disk` (background `df()`), `/api/v1/diagnostics`.
+
+### Changed
+- Dashboard no longer blocks on `docker system df`. Health poll is 15s; docker status at most 30s.
+- Tools catalog button label: **Run tool** (was Open UI).
+- **Tool harness copy**: Tools page and dashboard explain why MCP tools use one schema-driven UI (parity with agents, no drift) vs browse pages for tables/inspect.
+- **Fleet pattern**: `mcp-central-docs/patterns/MCP_TOOL_HARNESS_WEBAPP.md` (pilots: database-operations-mcp, virtualization-mcp).
+
+### Fixed
+- Nested diagnostics routes never registered (`/api/v1/diagnostics` 404).
+- Uvicorn access log spam from `/api/health` and `/api/docker/status` (probe filter + poller cleanup).
+- Fast container/image lists no longer call `container.image` (that path was ~10s+ on Docker Desktop Windows).
 
 ## [3.5.0] - 2026-06-24 (Session 2)
 
@@ -59,8 +79,6 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
 ## [3.3.0] - 2026-06-02
 
 ### Added
@@ -114,5 +132,3 @@ Implementation: `src/dockermcp/tools/desktop/` (status, recovery, update modules
 ### Added
 
 - Initial Docker MCP server and container management tools.
-
-
