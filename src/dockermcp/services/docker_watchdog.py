@@ -72,12 +72,22 @@ class DockerWatchdog:
         """Attempt to restart the Docker service."""
         try:
             if self.is_windows:
-                # Windows service restart
-                subprocess.run(["net", "stop", "docker"], check=True, capture_output=True, text=True)
-                subprocess.run(["net", "start", "docker"], check=True, capture_output=True, text=True)
+                # Windows service restart (each leg blocks seconds+ — off the loop)
+                await asyncio.to_thread(
+                    subprocess.run, ["net", "stop", "docker"], check=True, capture_output=True, text=True
+                )
+                await asyncio.to_thread(
+                    subprocess.run, ["net", "start", "docker"], check=True, capture_output=True, text=True
+                )
             else:
                 # Linux/Unix service restart
-                subprocess.run(["sudo", "systemctl", "restart", "docker"], check=True, capture_output=True, text=True)
+                await asyncio.to_thread(
+                    subprocess.run,
+                    ["sudo", "systemctl", "restart", "docker"],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
 
             # Give Docker some time to start up
             await asyncio.sleep(5)
