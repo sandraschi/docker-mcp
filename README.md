@@ -62,6 +62,14 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | Build, just recipes, testing |
 | [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md) | Common issues |
 
+## Troubleshooting
+
+- **"Virtualization support not detected"**: a crash can reset the BIOS to
+  defaults and switch off SVM/VT-x. Check
+  `Get-CimInstance Win32_Processor | Select-Object VirtualizationFirmwareEnabled`,
+  re-enable SVM Mode in firmware, then restart Docker Desktop.
+  Full walkthrough: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md).
+
 ## Requirements
 
 Python 3.12+, Docker Engine 20.10+, Node.js 20+ (dev). Rust 1.70+ (Tauri build only).

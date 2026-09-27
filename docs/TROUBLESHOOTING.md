@@ -29,3 +29,36 @@
 - Verify Docker Desktop is running: `docker ps` in a terminal.
 - On Windows, socket default: `//./pipe/docker_engine`.
 - Dashboard **Recover Docker** (Overview quick actions) calls `POST /api/docker/recover` (triple-kill Desktop + backend + vpnkit).
+
+## Virtualization support not detected (Windows)
+
+Docker Desktop needs CPU virtualization from firmware. The classic trigger is a
+crash or failed boot that resets the BIOS to defaults (seen 2026-09-27 on
+Goliath: GSOD with no dump, then Docker, fTPM, and Secure Boot all broken at
+once - full story in mcp-central-docs
+`troubleshooting/2026-09-27_goliath-gsod-postmortem.md`).
+
+Check from Windows (no reboot needed):
+
+```powershell
+Get-CimInstance Win32_Processor |
+  Select-Object VirtualizationFirmwareEnabled, SecondLevelAddressTranslationExtensions
+Get-ComputerInfo -Property HyperVRequirementVirtualizationFirmwareEnabled, HypervisorPresent
+```
+
+`VirtualizationFirmwareEnabled = False` means SVM (AMD) / VT-x (Intel) is off
+in firmware. Fix:
+
+1. Reboot into BIOS (Del/F2 on POST).
+2. ASUS: Advanced > CPU Configuration > SVM Mode > Enabled.
+   Intel boards: Advanced > CPU Configuration > Intel Virtualization Technology > Enabled.
+3. While there, re-check anything else the reset took: fTPM (Firmware TPM) and
+   Secure Boot (Windows UEFI mode) - both break Docker-adjacent tooling, games
+   with anti-cheat, and Windows Hello.
+4. Save, boot, re-run the check above - then `wsl --update` if WSL2 complains,
+   and start Docker Desktop again.
+
+Still failing with firmware enabled? Check Windows side:
+`bcdedit /enum '{current}'` should show `hypervisorlaunchtype Auto`, and
+Hyper-V / Virtual Machine Platform features must be on
+(`OptionalFeatures.exe`).

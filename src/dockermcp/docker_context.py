@@ -79,6 +79,9 @@ def check_docker_available[F: Callable[..., Any]](func: F) -> F:
                         "Start Docker Desktop",
                         "Run 'docker version' to test",
                         "Use docker_status tool for diagnostics",
+                        "If Docker says virtualization is not detected: a crash can reset "
+                        "the BIOS to defaults - re-enable SVM/VT-x in firmware, see "
+                        "docs/TROUBLESHOOTING.md",
                     ],
                 }
         try:
