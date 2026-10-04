@@ -12,18 +12,24 @@ containers using DockerMCP. It includes:
 import asyncio
 import json
 import logging
+import os
 import signal
 import sys
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 from fastmcp import MCPClient
+
+# Absolute log path: a bare filename lands in the host's cwd (BUG-063)
+LOG_DIR = Path(os.environ.get("LOCALAPPDATA") or Path.home()) / "docker-mcp" / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(), logging.FileHandler("monitoring.log")],
+    handlers=[logging.StreamHandler(), logging.FileHandler(LOG_DIR / "monitoring.log")],
 )
 logger = logging.getLogger("docker-monitor")
 
