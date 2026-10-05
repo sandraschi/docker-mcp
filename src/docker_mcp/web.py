@@ -20,6 +20,7 @@ from .activity_log import (
 )
 from .ai import AIRouter
 from .auth import authenticate
+from .examples_api import register_examples_routes
 from .llm.manager import get_llm_manager
 from .web_queries import (
     DockerUnavailable,
@@ -303,6 +304,8 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/images")
     async def api_images():
         return await _in_thread(list_images_sync)
+
+    register_examples_routes(app, _in_thread)
 
     @app.get("/api/images/inspect")
     async def api_image_inspect(ref: str = Query(..., min_length=1)):
