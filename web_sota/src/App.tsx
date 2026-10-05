@@ -5,6 +5,7 @@ import { Compose } from "@/pages/compose";
 import { ContainerDetail } from "@/pages/container-detail";
 import { Containers } from "@/pages/containers";
 import { Dashboard } from "@/pages/dashboard";
+import { Examples } from "@/pages/examples";
 import { Help } from "@/pages/help";
 import { ImageDetail } from "@/pages/image-detail";
 import { Images } from "@/pages/images";
@@ -34,6 +35,7 @@ function App() {
           <Route path="/chat" element={<Chat />} />
           <Route path="/tools/:name" element={<ToolRunner />} />
           <Route path="/tools" element={<Tools />} />
+          <Route path="/examples" element={<Examples />} />
           <Route path="/help" element={<Help />} />
           <Route path="/logs" element={<LogsPage />} />
           <Route path="/compose" element={<Compose />} />
