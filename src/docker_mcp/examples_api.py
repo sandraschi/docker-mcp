@@ -9,7 +9,8 @@ Two things live here:
   that label, so the demo can never touch your real containers.
 
 Every mutating call takes ``dry_run`` (default **true**): it returns the steps it would take and
-never talks to Docker. The web UI exposes this as a switch that defaults to on.
+changes nothing. A dry-run create does not contact Docker at all; a dry-run update/delete only reads
+the target container to validate it. The web UI exposes this as a switch that defaults to on.
 """
 
 from __future__ import annotations
@@ -176,7 +177,7 @@ def sandbox_list(client: Any) -> dict[str, Any]:
     return {"status": "success", "containers": rows, "count": len(rows), "label": f"{EXAMPLE_LABEL}=1"}
 
 
-def sandbox_create(client: Any, *, name: str, image: str, command: str, dry_run: bool) -> dict[str, Any]:
+def sandbox_create(client: Any | None, *, name: str, image: str, command: str, dry_run: bool) -> dict[str, Any]:
     _check_name(name)
     if not image.strip():
         raise ValueError("image is required")
@@ -187,6 +188,8 @@ def sandbox_create(client: Any, *, name: str, image: str, command: str, dry_run:
     ]
     if dry_run:
         return {"status": "dry_run", "dry_run": True, "would": steps}
+    if client is None:
+        raise ValueError("a docker client is required for a real create")
     try:
         client.images.get(image)
     except ImageNotFound:
@@ -256,13 +259,14 @@ def register_examples_routes(app: FastAPI, in_thread: Callable[..., Awaitable[An
 
     @app.post("/api/examples/sandbox/containers", status_code=201)
     async def api_sandbox_create(payload: dict = Body(default_factory=dict)):
+        dry_run = bool(payload.get("dry_run", True))
         return await in_thread(
             lambda: sandbox_create(
-                require_client(),
+                None if dry_run else require_client(),
                 name=str(payload.get("name", "")),
                 image=str(payload.get("image") or "alpine:latest"),
                 command=str(payload.get("command") if payload.get("command") is not None else "sleep 3600"),
-                dry_run=bool(payload.get("dry_run", True)),
+                dry_run=dry_run,
             )
         )
 

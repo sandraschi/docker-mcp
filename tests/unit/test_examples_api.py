@@ -256,6 +256,22 @@ def test_unknown_container_is_404(client, fake):
     assert client.delete("/api/examples/sandbox/containers/ghost?dry_run=false").status_code == 404
 
 
+def test_create_dry_run_works_without_a_docker_daemon(client, monkeypatch):
+    from docker_mcp.web_queries import DockerUnavailable
+
+    def boom():
+        raise DockerUnavailable("daemon not running")
+
+    monkeypatch.setattr(ex, "require_client", boom)
+    r = client.post("/api/examples/sandbox/containers", json={"name": "demo-two"})
+    assert r.status_code == 201
+    assert r.json()["dry_run"] is True
+    # ...but a real create still needs the daemon
+    assert (
+        client.post("/api/examples/sandbox/containers", json={"name": "demo-two", "dry_run": False}).status_code == 503
+    )
+
+
 def test_docker_down_is_503_not_500(client, monkeypatch):
     from docker_mcp.web_queries import DockerUnavailable
 
