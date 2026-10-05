@@ -1,95 +1,82 @@
-"""
-GPU Tools Example
+"""GPU tools: list GPUs, inspect one, and see how a GPU container would be started
 
-This script demonstrates how to use the GPU management tools in DockerMCP.
-It shows how to list GPUs, monitor usage, and run GPU-accelerated containers.
+Calls the GPU tools through fastmcp.Client. The GPU queries are read-only. Creating a GPU container
+is only printed, never executed, in both modes: docker-mcp has no tool to remove a container
+afterwards (and create_gpu_container cannot label it), so this example will not leave one behind.
+
+    python examples/gpu_example.py
 """
+
+from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime
+import os
+import sys
+import time
+from typing import Any
 
-from dockermcp.tools.gpu import create_gpu_container, get_container_gpu_info, get_gpu_info, list_gpus, monitor_gpu_usage
+from fastmcp import Client
+
+URL = os.environ.get("DOCKER_MCP_URL", "http://127.0.0.1:10807/mcp")
 
 
-async def main():
-    """Run GPU tool examples."""
-    print("=" * 80)
-    print("DockerMCP GPU Tools Example")
-    print("=" * 80)
+async def call(client: Client, tool: str, **arguments: Any) -> dict[str, Any]:
+    """Call one docker-mcp tool and return its result as a dict (errors come back as dicts too)."""
+    result = await client.call_tool(tool, arguments, raise_on_error=False)
+    if isinstance(result.data, dict):
+        return result.data
+    text = next((getattr(c, "text", "") for c in result.content), "")
+    return {"status": "error" if result.is_error else "success", "message": text or str(result.data)}
 
-    # Example 1: List available GPUs
-    print("\n1. Listing available GPUs...")
-    gpus = await list_gpus(detailed=True)
-    print(f"Found {gpus['total_gpus']} GPU(s):")
-    for i, gpu in enumerate(gpus["gpus"]):
-        print(f"  {i + 1}. {gpu['name']} (ID: {gpu['id']})")
-        print(f"     Memory: {gpu['memory_used'] / 1024**3:.1f}GB / {gpu['memory_total'] / 1024**3:.1f}GB used")
-        print(f"     Utilization: {gpu['utilization_gpu']}% GPU, {gpu['utilization_memory']}% Memory")
-        print(f"     Temperature: {gpu['temperature']}°C, Power: {gpu['power_draw']}W / {gpu['power_limit']}W")
 
-    if gpus["total_gpus"] == 0:
-        print("No GPUs found. Exiting...")
-        return
+async def run(client: Client) -> int:
+    print(f"docker-mcp at {URL}")
+    status = await call(client, "get_docker_status_tool")
+    if not status.get("docker_available"):
+        print(f"Docker is not available: {status.get('error', 'unknown error')}")
+        print("Start Docker Desktop and run this example again.")
+        return 2
 
-    # Example 2: Get detailed info about the first GPU
-    print("\n2. Getting detailed info for first GPU...")
-    gpu_info = await get_gpu_info(gpu_id="0")
-    if gpu_info["status"] == "success":
-        print(json.dumps(gpu_info["gpu"], indent=2, default=str))
-    else:
-        print(f"Error: {gpu_info.get('error', 'Unknown error')}")
+    print("\n1. Listing GPUs...")
+    gpus = await call(client, "list_gpus", request={"detailed": True})
+    if gpus.get("status") not in (None, "success"):
+        print(f"  {gpus.get('error') or gpus.get('message')}")
+        return 1
+    rows = gpus.get("gpus", [])
+    print(f"  {gpus.get('total_gpus', len(rows))} GPU(s)")
+    for gpu in rows:
+        print(f"  - {gpu.get('id')}: {gpu.get('name')}")
+    if not rows:
+        print("  No GPUs found - nothing more to show.")
+        return 0
 
-    # Example 3: Monitor GPU usage
-    print("\n3. Monitoring GPU usage for 10 seconds... (press Ctrl+C to skip)")
+    print("\n2. Details for the first GPU...")
+    first = str(rows[0].get("id", "0"))
+    info = await call(client, "get_gpu_info", request={"gpu_id": first})
+    print(json.dumps(info.get("gpu", info), indent=2, default=str)[:1500])
+
+    print("\n3. Starting a GPU container (shown, not executed)")
+    name = f"gpu-test-{int(time.time())}"
+    call_args = {
+        "image": "nvidia/cuda:12.4.1-base-ubuntu22.04",
+        "command": "nvidia-smi",
+        "gpu_ids": [first],
+        "name": name,
+    }
+    print(f"  would call create_gpu_container({call_args})")
+    print("  run it from the Tools page or your MCP client if you want a real one, then remove it yourself.")
+    return 0
+
+
+async def _cli() -> int:
     try:
-        monitor_result = await monitor_gpu_usage(interval=1.0, duration=10.0)
-        if monitor_result["status"] == "success":
-            print(f"\nCollected {monitor_result['sample_count']} samples:")
-            for sample in monitor_result["samples"][:3]:  # Show first 3 samples
-                print(
-                    f"  {sample['timestamp']} - "
-                    f"GPU: {sample['gpus'][0]['utilization_gpu']}%, "
-                    f"Mem: {sample['gpus'][0]['memory_used'] / 1024**3:.1f}GB"
-                )
-            if len(monitor_result["samples"]) > 3:
-                print(f"  ... and {len(monitor_result['samples']) - 3} more samples")
-    except asyncio.CancelledError:
-        print("\nMonitoring interrupted by user")
-
-    # Example 4: Run a GPU-accelerated container
-    print("\n4. Running a GPU-accelerated container...")
-    container = await create_gpu_container(
-        image="nvidia/cuda:11.0-base",
-        command="nvidia-smi",
-        gpu_ids=[0],  # Use first GPU
-        name=f"gpu-test-{int(datetime.now().timestamp())}",
-        detach=False,
-        auto_remove=True,
-    )
-
-    if container["status"] == "success":
-        if "output" in container:
-            print("Container output:")
-            print(
-                container["output"].decode("utf-8") if hasattr(container["output"], "decode") else container["output"]
-            )
-        else:
-            print(f"Container started with ID: {container.get('container_id')}")
-    else:
-        print(f"Error: {container.get('error', 'Failed to start container')}")
-
-    # Example 5: Get container GPU info
-    if container.get("container_id"):
-        print("\n5. Getting container GPU info...")
-        container_info = await get_container_gpu_info(container_id=container["container_id"])
-        if container_info["status"] == "success":
-            print(f"Container {container_info['container_id']} has GPU access: {container_info['has_gpu_access']}")
-            if container_info.get("gpus"):
-                print(f"Assigned GPUs: {', '.join(gpu['id'] for gpu in container_info['gpus'])}")
-        else:
-            print(f"Error: {container_info.get('error', 'Failed to get container info')}")
+        async with Client(URL) as client:
+            return await run(client)
+    except Exception as exc:  # connection refused, protocol error, ...
+        print(f"Cannot reach docker-mcp at {URL}: {exc}")
+        return 3
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(_cli()))

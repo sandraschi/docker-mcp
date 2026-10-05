@@ -1,239 +1,97 @@
-"""
-Basic Usage Examples for DockerMCP
+"""Basic usage: Docker status, containers, images and a short-lived volume
 
-This script demonstrates how to use the DockerMCP API to perform common Docker operations.
+Calls the real docker-mcp tools through fastmcp.Client: check the daemon, list containers and
+images, then create -> inspect -> remove a labelled demo volume.
+
+Safe by default (dry run): nothing is created or removed. Set DOCKER_MCP_EXAMPLE_DRY_RUN=0 to
+really run the volume steps. The webapp Examples page does this for you with its Dry run switch.
+
+    python examples/basic_usage.py
+    DOCKER_MCP_URL=http://127.0.0.1:10807/mcp DOCKER_MCP_EXAMPLE_DRY_RUN=0 python examples/basic_usage.py
 """
+
+from __future__ import annotations
 
 import asyncio
+import os
+import sys
+import time
+from typing import Any
 
-from fastmcp import MCPClient
+from fastmcp import Client
 
-# Initialize the client
-client = MCPClient("http://localhost:8000")
-
-# Set your API key (replace with your actual API key)
-client.api_key = "your-api-key-here"
+URL = os.environ.get("DOCKER_MCP_URL", "http://127.0.0.1:10807/mcp")
+DRY_RUN = os.environ.get("DOCKER_MCP_EXAMPLE_DRY_RUN", "1") != "0"
+LABELS = {"docker-mcp.example": "1"}
 
 
-async def list_containers() -> None:
-    """List all running containers."""
-    print("\n=== Listing Running Containers ===")
-    response = await client.list_containers()
-    if response.get("status") == "success":
-        for container in response.get("containers", []):
-            print(f"ID: {container['id']}")
-            print(f"  Name: {container['name']}")
-            print(f"  Image: {container['image']}")
-            print(f"  Status: {container['status']}")
-            print(f"  Created: {container['created']}")
-            print("-" * 50)
+async def call(client: Client, tool: str, **arguments: Any) -> dict[str, Any]:
+    """Call one docker-mcp tool and return its result as a dict (errors come back as dicts too)."""
+    result = await client.call_tool(tool, arguments, raise_on_error=False)
+    if isinstance(result.data, dict):
+        return result.data
+    text = next((getattr(c, "text", "") for c in result.content), "")
+    return {"status": "error" if result.is_error else "success", "message": text or str(result.data)}
+
+
+async def mutate(client: Client, tool: str, **arguments: Any) -> dict[str, Any]:
+    """Like call(), but in dry-run mode it only prints what would happen."""
+    if DRY_RUN:
+        print(f"  [dry-run] would call {tool}({arguments})")
+        return {"status": "dry_run"}
+    return await call(client, tool, **arguments)
+
+
+async def run(client: Client) -> int:
+    print(f"docker-mcp at {URL}  (dry run: {DRY_RUN})")
+    status = await call(client, "get_docker_status_tool")
+    if not status.get("docker_available"):
+        print(f"Docker is not available: {status.get('error', 'unknown error')}")
+        print("Start Docker Desktop and run this example again.")
+        return 2
+    print(f"Docker {status.get('version')} (API {status.get('api_version')})")
+
+    print("\n== Containers ==")
+    containers = (await call(client, "list_containers", params={"all_states": True})).get("containers", [])
+    print(f"{len(containers)} container(s)")
+    for c in containers[:5]:
+        print(f"  {c.get('name')}  {c.get('image')}  {c.get('status')}")
+
+    print("\n== Images ==")
+    images = (await call(client, "list_images")).get("images", [])
+    print(f"{len(images)} image(s)")
+    for image in images[:5]:
+        tags = image.get("repo_tags") or ["<none>"]
+        print(f"  {tags[0]}  {image.get('size', 0) / 1_048_576:.1f} MB")
+
+    print("\n== Volume lifecycle (labelled demo volume) ==")
+    name = f"docker-mcp-example-{int(time.time())}"
+    created = await mutate(client, "create_volume", name=name, labels=LABELS)
+    if DRY_RUN:
+        print(f"  [dry-run] would then inspect_volume({name!r}) and remove_volume({name!r})")
+    elif created.get("status") == "success":
+        print(f"  created {name}")
+        try:
+            info = await call(client, "inspect_volume", name=name)
+            print(f"  mountpoint: {info.get('volume', {}).get('mountpoint')}")
+        finally:
+            removed = await call(client, "remove_volume", name=name, force=True)
+            print(f"  remove: {removed.get('status')}")
     else:
-        print(f"Error: {response.get('error')}")
+        print(f"  create failed: {created.get('error') or created.get('message')}")
+        return 1
+    print("\nDone.")
+    return 0
 
 
-async def create_container() -> None:
-    """Create a new Nginx container."""
-    print("\n=== Creating Nginx Container ===")
-    container_config = {
-        "image": "nginx:latest",
-        "name": "web-server",
-        "ports": {"80/tcp": 8080},
-        "environment": {"ENV": "development"},
-        "labels": {"app": "demo"},
-    }
-
-    response = await client.create_container(**container_config)
-    if response.get("status") == "success":
-        print(f"Container created with ID: {response['container_id']}")
-
-        # Start the container
-        start_response = await client.start_container(response["container_id"])
-        if start_response.get("status") == "success":
-            print("Container started successfully")
-        else:
-            print(f"Failed to start container: {start_response.get('error')}")
-    else:
-        print(f"Failed to create container: {response.get('error')}")
-
-
-async def manage_images() -> None:
-    """Demonstrate image management operations."""
-    print("\n=== Managing Images ===")
-
-    # List all images
-    print("\nListing all images:")
-    response = await client.list_images(all=True)
-    if response.get("status") == "success":
-        for image in response.get("images", [])[:3]:  # Show first 3 images
-            print(f"- {image.get('repo_tags', ['<none>'])[0]} (Size: {image.get('size', 0) / (1024 * 1024):.2f} MB)")
-    else:
-        print(f"Error: {response.get('error')}")
-
-    # Pull a new image
-    print("\nPulling Redis image:")
-    pull_response = await client.pull_image("redis:alpine")
-    if pull_response.get("status") == "success":
-        print("Redis image pulled successfully")
-    else:
-        print(f"Failed to pull image: {pull_response.get('error')}")
-
-
-async def network_operations() -> None:
-    """Demonstrate network operations."""
-    print("\n=== Network Operations ===")
-
-    # List all networks
-    print("\nListing all networks:")
-    response = await client.list_networks()
-    if response.get("status") == "success":
-        for network in response.get("networks", []):
-            print(f"- {network['name']} ({network['driver']})")
-    else:
-        print(f"Error: {response.get('error')}")
-
-    # Create a new network
-    print("\nCreating a new network:")
-    network_config = {"name": "my-network", "driver": "bridge", "labels": {"purpose": "demo"}}
-    create_response = await client.create_network(**network_config)
-    if create_response.get("status") == "success":
-        print(f"Network created with ID: {create_response['network_id']}")
-    else:
-        print(f"Failed to create network: {create_response.get('error')}")
-
-
-async def volume_operations() -> None:
-    """Demonstrate volume operations."""
-    print("\n=== Volume Operations ===")
-
-    # List all volumes
-    print("\nListing all volumes:")
-    response = await client.list_volumes()
-    if response.get("status") == "success":
-        for volume in response.get("volumes", [])[:3]:  # Show first 3 volumes
-            print(f"- {volume['name']} ({volume['driver']})")
-    else:
-        print(f"Error: {response.get('error')}")
-
-    # Create a new volume
-    print("\nCreating a new volume:")
-    volume_config = {"name": "app-data", "driver": "local", "labels": {"app": "demo"}}
-    create_response = await client.create_volume(**volume_config)
-    if create_response.get("status") == "success":
-        print(f"Volume created with name: {create_response['name']}")
-    else:
-        print(f"Failed to create volume: {create_response.get('error')}")
-
-
-async def system_info() -> None:
-    """Display system information."""
-    print("\n=== System Information ===")
-
-    # Get Docker system info
-    response = await client.system_info()
-    if response.get("status") == "success":
-        info = response["info"]
-        print(f"Docker Version: {info.get('docker_version')}")
-        print(f"OS/Arch: {info.get('os')}/{info.get('architecture')}")
-        print(f"Containers: {info.get('containers_running', 0)} running, {info.get('containers_stopped', 0)} stopped")
-        print(f"Images: {info.get('images', 0)}")
-        print(f"CPUs: {info.get('n_cpu', 0)}")
-        print(f"Total Memory: {info.get('mem_total', 0) / (1024 * 1024 * 1024):.2f} GB")
-    else:
-        print(f"Error: {response.get('error')}")
-
-    # Get disk usage
-    print("\nDisk Usage:")
-    usage_response = await client.disk_usage()
-    if usage_response.get("status") == "success":
-        usage = usage_response["disk_usage"]
-        print(f"Total Space: {usage.get('total_space', 0) / (1024 * 1024):.2f} MB")
-        print(f"Used Space: {usage.get('used_space', 0) / (1024 * 1024):.2f} MB")
-        print(f"Reclaimable Space: {usage.get('reclaimable_space', 0) / (1024 * 1024):.2f} MB")
-    else:
-        print(f"Error: {usage_response.get('error')}")
-
-
-async def workflow_example() -> None:
-    """Demonstrate workflow operations."""
-    print("\n=== Workflow Example ===")
-
-    # Define a simple workflow
-    workflow_definition = {
-        "name": "web-app",
-        "services": {
-            "web": {"image": "nginx:alpine", "ports": {"80": "8080"}, "depends_on": ["db"]},
-            "db": {
-                "image": "postgres:13-alpine",
-                "environment": {"POSTGRES_PASSWORD": "example", "POSTGRES_DB": "mydb"},
-                "volumes": ["postgres_data:/var/lib/postgresql/data"],
-            },
-        },
-        "volumes": {"postgres_data": {}},
-    }
-
-    # Create the workflow
-    print("Creating workflow...")
-    create_response = await client.create_workflow(workflow_definition)
-    if create_response.get("status") != "success":
-        print(f"Failed to create workflow: {create_response.get('error')}")
-        return
-
-    workflow_id = create_response["workflow_id"]
-    print(f"Workflow created with ID: {workflow_id}")
-
-    # Start the workflow
-    print("Starting workflow...")
-    start_response = await client.start_workflow(workflow_id)
-    if start_response.get("status") != "success":
-        print(f"Failed to start workflow: {start_response.get('error')}")
-        return
-
-    print("Workflow started successfully")
-
-    # Monitor workflow status
-    print("\nMonitoring workflow status (press Ctrl+C to stop):")
+async def _cli() -> int:
     try:
-        while True:
-            status_response = await client.workflow_status(workflow_id)
-            if status_response.get("status") == "success":
-                status = status_response["workflow"]
-                print(f"\rStatus: {status['status']}", end="", flush=True)
-
-                if status["status"] in ["completed", "failed"]:
-                    print("\n")
-                    break
-
-            await asyncio.sleep(2)
-    except KeyboardInterrupt:
-        print("\nStopping monitoring...")
-
-    # Clean up
-    print("\nCleaning up...")
-    stop_response = await client.stop_workflow(workflow_id)
-    if stop_response.get("status") == "success":
-        print("Workflow stopped successfully")
-    else:
-        print(f"Failed to stop workflow: {stop_response.get('error')}")
-
-
-async def main() -> None:
-    """Run all examples."""
-    try:
-        print("=== DockerMCP Examples ===")
-
-        # Run examples
-        await list_containers()
-        await create_container()
-        await manage_images()
-        await network_operations()
-        await volume_operations()
-        await system_info()
-        await workflow_example()
-
-        print("\nAll examples completed!")
-    except Exception as e:
-        print(f"An error occurred: {e!s}")
+        async with Client(URL) as client:
+            return await run(client)
+    except Exception as exc:  # connection refused, protocol error, ...
+        print(f"Cannot reach docker-mcp at {URL}: {exc}")
+        return 3
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(_cli()))

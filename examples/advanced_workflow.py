@@ -1,279 +1,100 @@
-"""
-Advanced Workflow Example for DockerMCP
+"""Advanced workflow: a labelled network + volume stack with guaranteed cleanup
 
-This script demonstrates advanced workflow management with DockerMCP, including:
-- Multi-service application deployment
-- Service dependencies
-- Health checks
-- Error handling and rollback
-- Parallel operations
+Builds a tiny "stack" (one network, one volume), shows label-filtered listing, then tears it down in
+reverse order inside a finally block - so a failure half-way still cleans up what was created.
+Everything it creates carries the label docker-mcp.example=1.
+
+Safe by default (dry run): the create/remove steps are only printed. Set DOCKER_MCP_EXAMPLE_DRY_RUN=0
+to run them for real.
+
+    python examples/advanced_workflow.py
 """
+
+from __future__ import annotations
 
 import asyncio
+import os
+import sys
+import time
 from typing import Any
 
-from fastmcp import MCPClient
+from fastmcp import Client
 
-# Initialize the client
-client = MCPClient("http://localhost:8000")
-client.api_key = "your-api-key-here"
-
-
-class AdvancedWorkflow:
-    """Advanced workflow management with rollback support."""
-
-    def __init__(self, client: MCPClient):
-        self.client = client
-        self.workflow_id: str | None = None
-        self.resources: dict[str, list[dict[str, Any]]] = {"containers": [], "networks": [], "volumes": []}
-
-    async def create_network(self, name: str, driver: str = "bridge") -> dict[str, Any]:
-        """Create a Docker network and track it for cleanup."""
-        print(f"Creating network '{name}'...")
-        response = await self.client.create_network(name=name, driver=driver)
-
-        if response.get("status") == "success":
-            self.resources["networks"].append({"id": response["network_id"], "name": name})
-            print(f"Network '{name}' created successfully")
-        else:
-            print(f"Failed to create network '{name}': {response.get('error')}")
-
-        return response
-
-    async def create_volume(self, name: str, driver: str = "local") -> dict[str, Any]:
-        """Create a Docker volume and track it for cleanup."""
-        print(f"Creating volume '{name}'...")
-        response = await self.client.create_volume(name=name, driver=driver)
-
-        if response.get("status") == "success":
-            self.resources["volumes"].append({"name": response["name"], "driver": driver})
-            print(f"Volume '{name}' created successfully")
-        else:
-            print(f"Failed to create volume '{name}': {response.get('error')}")
-
-        return response
-
-    async def create_container(self, config: dict[str, Any]) -> dict[str, Any]:
-        """Create a Docker container and track it for cleanup."""
-        name = config.get("name", "unnamed")
-        print(f"Creating container '{name}'...")
-
-        response = await self.client.create_container(**config)
-
-        if response.get("status") == "success":
-            container_id = response["container_id"]
-            self.resources["containers"].append({"id": container_id, "name": name})
-            print(f"Container '{name}' created with ID: {container_id}")
-
-            # Start the container
-            start_response = await self.client.start_container(container_id)
-            if start_response.get("status") == "success":
-                print(f"Container '{name}' started successfully")
-            else:
-                print(f"Failed to start container '{name}': {start_response.get('error')}")
-        else:
-            print(f"Failed to create container '{name}': {response.get('error')}")
-
-        return response
-
-    async def wait_for_service(self, container_name: str, check_interval: int = 2, max_attempts: int = 30) -> bool:
-        """Wait for a service to become healthy."""
-        print(f"Waiting for service '{container_name}' to become healthy...")
-
-        for attempt in range(max_attempts):
-            # Check container status
-            containers = await self.client.list_containers(all=True)
-            container = next((c for c in containers.get("containers", []) if c.get("name") == container_name), None)
-
-            if not container:
-                print(f"Container '{container_name}' not found")
-                return False
-
-            # Check health status
-            health = container.get("health", {}).get("status", "unknown").lower()
-
-            if health == "healthy":
-                print(f"Service '{container_name}' is healthy")
-                return True
-            elif health == "unhealthy":
-                print(f"Service '{container_name}' is unhealthy")
-                return False
-
-            # Still starting up
-            if attempt % 5 == 0:  # Print status every 5 attempts
-                print(f"  {container_name} status: {health} (attempt {attempt + 1}/{max_attempts})")
-
-            await asyncio.sleep(check_interval)
-
-        print(f"Timeout waiting for service '{container_name}' to become healthy")
-        return False
-
-    async def deploy_application(self) -> bool:
-        """Deploy a multi-service application with dependencies."""
-        try:
-            # 1. Create networks
-            await self.create_network("app-network")
-
-            # 2. Create volumes
-            await self.create_volume("db-data")
-            await self.create_volume("cache-data")
-
-            # 3. Deploy database
-            db_config = {
-                "name": "app-db",
-                "image": "postgres:13-alpine",
-                "environment": {"POSTGRES_PASSWORD": "example", "POSTGRES_DB": "mydb", "POSTGRES_USER": "user"},
-                "volumes": ["db-data:/var/lib/postgresql/data"],
-                "networks": ["app-network"],
-                "healthcheck": {
-                    "test": ["CMD-SHELL", "pg_isready -U user -d mydb"],
-                    "interval": 5000000000,  # 5 seconds
-                    "timeout": 500000000,  # 0.5 seconds
-                    "retries": 3,
-                    "start_period": 10000000000,  # 10 seconds
-                },
-            }
-
-            await self.create_container(db_config)
-
-            # Wait for database to be ready
-            if not await self.wait_for_service("app-db"):
-                raise Exception("Database failed to start")
-
-            # 4. Deploy cache
-            cache_config = {
-                "name": "app-cache",
-                "image": "redis:alpine",
-                "networks": ["app-network"],
-                "volumes": ["cache-data:/data"],
-                "healthcheck": {
-                    "test": ["CMD", "redis-cli", "ping"],
-                    "interval": 5000000000,  # 5 seconds
-                    "timeout": 500000000,  # 0.5 seconds
-                    "retries": 3,
-                    "start_period": 5000000000,  # 5 seconds
-                },
-            }
-
-            await self.create_container(cache_config)
-
-            # Wait for cache to be ready
-            if not await self.wait_for_service("app-cache"):
-                raise Exception("Cache service failed to start")
-
-            # 5. Deploy application services in parallel
-            services = [
-                {
-                    "name": "app-backend",
-                    "image": "myapp-backend:latest",
-                    "environment": {
-                        "DB_HOST": "app-db",
-                        "DB_NAME": "mydb",
-                        "DB_USER": "user",
-                        "DB_PASSWORD": "example",
-                        "REDIS_HOST": "app-cache",
-                    },
-                    "ports": {"3000": "3000"},
-                    "networks": ["app-network"],
-                    "depends_on": ["app-db", "app-cache"],
-                    "healthcheck": {
-                        "test": ["CMD", "curl", "-f", "http://localhost:3000/health"],
-                        "interval": 10000000000,  # 10 seconds
-                        "timeout": 500000000,  # 0.5 seconds
-                        "retries": 3,
-                        "start_period": 30000000000,  # 30 seconds
-                    },
-                },
-                {
-                    "name": "app-frontend",
-                    "image": "myapp-frontend:latest",
-                    "ports": {"80": "8080"},
-                    "networks": ["app-network"],
-                    "depends_on": ["app-backend"],
-                    "environment": {"API_URL": "http://app-backend:3000"},
-                },
-            ]
-
-            # Deploy services in parallel
-            tasks = [self.create_container(service) for service in services]
-            await asyncio.gather(*tasks)
-
-            # Wait for backend to be healthy
-            if not await self.wait_for_service("app-backend"):
-                raise Exception("Backend service failed to start")
-
-            print("\nApplication deployed successfully!")
-            print("Services:")
-            print("  - Database:    http://localhost:5432")
-            print("  - Backend API: http://localhost:3000")
-            print("  - Frontend:    http://localhost:8080")
-
-            return True
-
-        except Exception as e:
-            print(f"\nError during deployment: {e!s}")
-            print("Initiating rollback...")
-            await self.rollback()
-            return False
-
-    async def rollback(self) -> None:
-        """Rollback all created resources."""
-        print("\n=== Starting Rollback ===")
-
-        # Stop and remove containers
-        for container in self.resources["containers"]:
-            print(f"Stopping container {container['name']} ({container['id']})")
-            try:
-                await self.client.stop_container(container["id"])
-                await self.client.remove_container(container["id"])
-            except Exception as e:
-                print(f"  Error removing container {container['name']}: {e!s}")
-
-        # Remove networks
-        for network in self.resources["networks"]:
-            print(f"Removing network {network['name']} ({network['id']})")
-            try:
-                await self.client.remove_network(network["id"])
-            except Exception as e:
-                print(f"  Error removing network {network['name']}: {e!s}")
-
-        # Remove volumes
-        for volume in self.resources["volumes"]:
-            print(f"Removing volume {volume['name']}")
-            try:
-                await self.client.remove_volume(volume["name"])
-            except Exception as e:
-                print(f"  Error removing volume {volume['name']}: {e!s}")
-
-        print("\nRollback completed")
-
-    async def cleanup(self) -> None:
-        """Clean up all resources."""
-        print("\n=== Cleaning Up ===")
-        await self.rollback()
+URL = os.environ.get("DOCKER_MCP_URL", "http://127.0.0.1:10807/mcp")
+DRY_RUN = os.environ.get("DOCKER_MCP_EXAMPLE_DRY_RUN", "1") != "0"
+LABELS = {"docker-mcp.example": "1"}
 
 
-async def main() -> None:
-    """Run the advanced workflow example."""
-    workflow = AdvancedWorkflow(client)
+async def call(client: Client, tool: str, **arguments: Any) -> dict[str, Any]:
+    """Call one docker-mcp tool and return its result as a dict (errors come back as dicts too)."""
+    result = await client.call_tool(tool, arguments, raise_on_error=False)
+    if isinstance(result.data, dict):
+        return result.data
+    text = next((getattr(c, "text", "") for c in result.content), "")
+    return {"status": "error" if result.is_error else "success", "message": text or str(result.data)}
 
+
+def succeeded(data: dict[str, Any]) -> bool:
+    return data.get("status") == "success" or data.get("success") is True
+
+
+async def run(client: Client) -> int:
+    print(f"docker-mcp at {URL}  (dry run: {DRY_RUN})")
+    status = await call(client, "get_docker_status_tool")
+    if not status.get("docker_available"):
+        print(f"Docker is not available: {status.get('error', 'unknown error')}")
+        print("Start Docker Desktop and run this example again.")
+        return 2
+
+    stack = f"docker-mcp-example-{int(time.time())}"
+    plan = [
+        ("create_network", {"params": {"name": stack, "labels": LABELS}}),
+        ("create_volume", {"name": stack, "labels": LABELS}),
+    ]
+    if DRY_RUN:
+        print(f"\nStack {stack!r} - planned steps:")
+        for tool, args in plan:
+            print(f"  [dry-run] would call {tool}({args})")
+        print(f"  [dry-run] would list volumes labelled {LABELS}, then remove the volume and the network")
+        print("\nDone (nothing was changed).")
+        return 0
+
+    print(f"\nStack {stack!r}")
+    created: list[str] = []
+    failed = False
     try:
-        success = await workflow.deploy_application()
+        for tool, args in plan:
+            data = await call(client, tool, **args)
+            print(f"  {tool}: {data.get('status', data.get('success'))}")
+            if not succeeded(data):
+                print(f"    {data.get('error') or data.get('message')}")
+                failed = True
+                break
+            created.append(tool)
 
-        if success:
-            print("\nApplication is running. Press Ctrl+C to stop...")
-            try:
-                while True:
-                    await asyncio.sleep(1)
-            except KeyboardInterrupt:
-                print("\nShutting down...")
-
-    except Exception as e:
-        print(f"Fatal error: {e!s}")
-
+        if not failed:
+            volumes = (await call(client, "list_volumes", labels=LABELS)).get("volumes", [])
+            print(f"  volumes labelled {LABELS}: {len(volumes)}")
     finally:
-        await workflow.cleanup()
+        print("\nCleanup:")
+        for tool in reversed(created):
+            if tool == "create_volume":
+                data = await call(client, "remove_volume", name=stack, force=True)
+                print(f"  remove_volume: {data.get('status')}")
+            else:
+                data = await call(client, "remove_network", network_id=stack, force=True)
+                print(f"  remove_network: {data.get('status')}")
+    return 1 if failed else 0
+
+
+async def _cli() -> int:
+    try:
+        async with Client(URL) as client:
+            return await run(client)
+    except Exception as exc:  # connection refused, protocol error, ...
+        print(f"Cannot reach docker-mcp at {URL}: {exc}")
+        return 3
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    sys.exit(asyncio.run(_cli()))
