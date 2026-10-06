@@ -112,6 +112,12 @@ if (-not (Test-Path $SrcPkg)) { throw "Copy source missing: $SrcPkg" }
 New-Item -ItemType Directory -Force -Path $StageRoot | Out-Null
 Copy-Item -Recurse -Force $SrcPkg $StagePkg
 Write-Host "  copied $SrcPkg -> $StagePkg"
+# docker-mcp specific: dockermcp.mcp_instance imports the sibling package docker_mcp
+# (config, sampling), so the bundle must carry it too or the server fails on init.
+$SiblingSrc = Join-Path $RepoRoot 'src\docker_mcp'
+if (-not (Test-Path $SiblingSrc)) { throw "Sibling package missing: $SiblingSrc" }
+Copy-Item -Recurse -Force $SiblingSrc (Join-Path $StageRoot 'docker_mcp')
+Write-Host "  copied $SiblingSrc -> $(Join-Path $StageRoot 'docker_mcp')"
 
 Step 1 counting as 'Assert staged entry point (must run after the copy)'
 $entryFile = Assert-EntryPointStaged
