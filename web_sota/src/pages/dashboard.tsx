@@ -70,125 +70,153 @@ interface DashboardData {
   networks_count?: number;
 }
 
+type SectionKey = "system" | "containers" | "images" | "counts" | "disk";
+type SectionState = "loading" | "ready" | "error";
+
+const EMPTY_DATA: DashboardData = { containers: [], system_info: null, images: [] };
+
 export function Dashboard() {
-  const [data, setData] = useState<DashboardData | null>(null);
-  const [loading, setLoading] = useState(true);
+  // Progressive loading: every section fetches independently and renders the
+  // moment its own data arrives. A slow daemon call (df, image list) never
+  // blocks system info, counts, or the static page chrome. Stale data stays
+  // visible during refreshes — skeletons only show when a section has nothing.
+  const [data, setData] = useState<DashboardData>(EMPTY_DATA);
+  const [sections, setSections] = useState<Record<SectionKey, SectionState>>({
+    system: "loading",
+    containers: "loading",
+    images: "loading",
+    counts: "loading",
+    disk: "loading",
+  });
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const connState = useConnection((s) => s.state);
   const prevConn = useRef(connState);
 
-  const fetchDashboard = useCallback(async (opts?: { silent?: boolean }) => {
-    if (!opts?.silent) setLoading(true);
-    try {
-      const sysRes = await fetch(`${API_BASE}/api/system`);
-      if (!sysRes.ok) throw new Error(`HTTP ${sysRes.status}`);
-      const sysJson = await sysRes.json();
-      const sysInfo = sysJson.system_info ?? sysJson;
-      setData((prev) => ({
-        containers: prev?.containers ?? [],
-        images: prev?.images ?? [],
-        disk_summary: prev?.disk_summary ?? null,
-        images_count: prev?.images_count,
-        images_size_estimate: prev?.images_size_estimate,
-        system_info: sysInfo,
-        system_status: sysJson.status ?? "success",
-        containers_status: "success",
-        containers_message: "Loading containers…",
-      }));
-      setError(null);
-      setLoading(false);
+  const setSection = useCallback((key: SectionKey, value: SectionState) => {
+    setSections((prev) => (prev[key] === value ? prev : { ...prev, [key]: value }));
+  }, []);
 
-      const [cRes, iRes, vRes, nRes] = await Promise.all([
-        fetch(`${API_BASE}/api/containers?all=false`),
-        fetch(`${API_BASE}/api/images`),
+  const fetchSystem = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/system`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setData((prev) => ({
+        ...prev,
+        system_info: json.system_info ?? null,
+        system_status: json.status ?? "success",
+      }));
+      setSection("system", "ready");
+      setError(null);
+    } catch (e) {
+      setSection("system", "error");
+      setError(e instanceof Error ? e.message : "Backend unreachable");
+    }
+  }, [setSection]);
+
+  const fetchContainers = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/containers?all=false`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const rows = json.containers ?? [];
+      setData((prev) => ({
+        ...prev,
+        containers: rows,
+        containers_status: json.status ?? "success",
+        containers_message: `${rows.length} running`,
+      }));
+      setSection("containers", "ready");
+    } catch {
+      setSection("containers", "error");
+    }
+  }, [setSection]);
+
+  const fetchImages = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/images`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      const rows: ImageItem[] = json.images ?? [];
+      const estimate = rows.reduce((sum, img) => sum + (img.size || 0), 0);
+      setData((prev) => ({
+        ...prev,
+        images: rows.slice(0, 12),
+        images_count: json.count ?? rows.length,
+        images_status: json.status,
+        images_size_estimate: estimate,
+      }));
+      setSection("images", "ready");
+    } catch {
+      setSection("images", "error");
+    }
+  }, [setSection]);
+
+  const fetchCounts = useCallback(async () => {
+    try {
+      const [vRes, nRes] = await Promise.all([
         fetch(`${API_BASE}/api/volumes`),
         fetch(`${API_BASE}/api/networks`),
       ]);
-      const cJson = cRes.ok ? await cRes.json() : { containers: [], status: "error" };
-      const iJson = iRes.ok ? await iRes.json() : { images: [], count: 0, status: "error" };
-      const vJson = vRes.ok ? await vRes.json() : { count: 0 };
-      const nJson = nRes.ok ? await nRes.json() : { count: 0 };
-      const imageRows = iJson.images ?? [];
-      const estimate = imageRows.reduce((sum: number, img: ImageItem) => sum + (img.size || 0), 0);
-      const counts = sysInfo?.containers ?? {};
-      const running = counts.running;
-      const total = counts.total;
-      setData((prev) => ({
-        ...(prev ?? { system_info: sysInfo, containers: [], images: [] }),
-        containers: cJson.containers ?? [],
-        containers_status: cJson.status,
-        containers_message:
-          running != null && total != null ? `${running} running / ${total} total` : cJson.message,
-        images: imageRows.slice(0, 12),
-        images_count: iJson.count ?? imageRows.length,
-        images_status: iJson.status,
-        images_size_estimate: estimate,
-        volumes_count: vJson.count ?? vJson.volumes?.length ?? 0,
-        networks_count: nJson.count ?? nJson.networks?.length ?? 0,
-        system_info: sysInfo,
-        system_status: sysJson.status ?? "success",
-      }));
-
-      void fetch(`${API_BASE}/api/disk`)
-        .then(async (diskRes) => {
-          if (!diskRes.ok) return;
-          const diskJson = await diskRes.json();
-          const summary = diskJson?.disk_usage?.summary;
-          if (summary) {
-            setData((prev) => (prev ? { ...prev, disk_summary: summary } : prev));
-          }
-        })
-        .catch(() => undefined);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to load dashboard");
-      setData(null);
-      setLoading(false);
+      const updates: Partial<DashboardData> = {};
+      if (vRes.ok) {
+        const v = await vRes.json();
+        updates.volumes_count = v.count ?? (v.volumes ?? []).length;
+      }
+      if (nRes.ok) {
+        const n = await nRes.json();
+        updates.networks_count = n.count ?? (n.networks ?? []).length;
+      }
+      if (!vRes.ok && !nRes.ok) throw new Error("counts failed");
+      setData((prev) => ({ ...prev, ...updates }));
+      setSection("counts", "ready");
+    } catch {
+      setSection("counts", "error");
     }
-  }, []);
+  }, [setSection]);
 
-  // Initial fetch on mount
+  const fetchDisk = useCallback(async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/disk`);
+      if (!res.ok) return;
+      const json = await res.json();
+      const summary = json?.disk_usage?.summary;
+      if (summary) {
+        setData((prev) => ({ ...prev, disk_summary: summary }));
+        setSection("disk", "ready");
+      }
+    } catch {
+      setSection("disk", "error");
+    }
+  }, [setSection]);
+
+  const refreshAll = useCallback(
+    async (opts?: { silent?: boolean }) => {
+      const tasks = [fetchSystem(), fetchContainers(), fetchImages(), fetchCounts(), fetchDisk()];
+      if (opts?.silent) return;
+      setRefreshing(true);
+      try {
+        await Promise.allSettled(tasks);
+      } finally {
+        setRefreshing(false);
+      }
+    },
+    [fetchSystem, fetchContainers, fetchImages, fetchCounts, fetchDisk],
+  );
+
+  // Initial fetch on mount (sections already "loading" -> skeletons show)
   useEffect(() => {
-    fetchDashboard();
-  }, [fetchDashboard]);
+    refreshAll({ silent: true });
+  }, [refreshAll]);
 
   // Re-fetch when backend transitions to connected (e.g. after startup delay)
   useEffect(() => {
     if (prevConn.current !== "connected" && connState === "connected") {
-      fetchDashboard({ silent: Boolean(data) });
+      refreshAll({ silent: true });
     }
     prevConn.current = connState;
-  }, [connState, fetchDashboard, data]);
-
-  if (loading && !data) {
-    return (
-      <div className="flex items-center justify-center min-h-[320px]">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-      </div>
-    );
-  }
-
-  if (error || !data) {
-    return (
-      <div className="space-y-6" data-testid="dashboard-error">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-white">Docker Dashboard</h2>
-          <p className="text-slate-400">AI-powered Docker management via natural language</p>
-        </div>
-        <Card className="border-red-900/50 bg-red-950/20">
-          <CardContent className="flex items-center gap-3 pt-6">
-            <AlertCircle className="h-8 w-8 text-red-500 shrink-0" />
-            <div className="flex-1">
-              <p className="text-red-200">
-                {error ?? "No data"} — Is the backend running and Docker available?
-              </p>
-            </div>
-            <RestartDockerButton onRecovered={fetchDashboard} />
-          </CardContent>
-        </Card>
-        <QuickActions onRecovered={fetchDashboard} />
-      </div>
-    );
-  }
+  }, [connState, refreshAll]);
 
   const containers = data.containers ?? [];
   const sys = data.system_info ?? {};
@@ -202,7 +230,12 @@ export function Dashboard() {
   const images = data.images ?? [];
   const storageHint = data.disk_summary
     ? "Images, volumes, cache"
-    : "Image sizes (df still running)";
+    : sections.disk === "loading"
+      ? "Reading docker df…"
+      : "Image sizes (df unavailable)";
+
+  const showContainerSkeletons = sections.containers === "loading" && containers.length === 0;
+  const showImageSkeletons = sections.images === "loading" && images.length === 0;
 
   return (
     <div className="space-y-6" data-testid="dashboard-ready">
@@ -211,7 +244,28 @@ export function Dashboard() {
           <h2 className="text-2xl font-bold tracking-tight text-white">Docker Dashboard</h2>
           <p className="text-slate-400">Container overview and engine status</p>
         </div>
+        <button
+          type="button"
+          onClick={() => void refreshAll()}
+          disabled={refreshing}
+          className="inline-flex items-center gap-1.5 rounded-md bg-slate-800 px-3 py-2 text-sm font-medium text-slate-200 hover:bg-slate-700 disabled:opacity-50"
+        >
+          <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+          {refreshing ? "Refreshing…" : "Refresh"}
+        </button>
       </div>
+
+      {error && (
+        <Card className="border-red-900/50 bg-red-950/20" data-testid="dashboard-error">
+          <CardContent className="flex items-center gap-3 pt-6">
+            <AlertCircle className="h-8 w-8 text-red-500 shrink-0" />
+            <div className="flex-1">
+              <p className="text-red-200">{error} — Is the backend running and Docker available?</p>
+            </div>
+            <RestartDockerButton onRecovered={() => void refreshAll()} />
+          </CardContent>
+        </Card>
+      )}
 
       <div className="bg-gradient-to-br from-blue-900/20 via-slate-900/50 to-transparent border border-blue-900/30 rounded-xl px-6 py-5">
         <h3 className="text-lg font-semibold text-white">Docker MCP</h3>
@@ -237,12 +291,12 @@ export function Dashboard() {
             className="inline-flex items-center gap-2 rounded-md border border-slate-600 bg-slate-900/60 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800"
           >
             <MessageSquare className="h-4 w-4" />
-            AI Command
+            AI Chat
           </Link>
         </div>
       </div>
 
-      <QuickActions onRecovered={fetchDashboard} />
+      <QuickActions onRecovered={() => void refreshAll()} />
 
       <ToolsHarnessExplainer variant="dashboard" />
 
@@ -253,7 +307,11 @@ export function Dashboard() {
             <Box className="h-4 w-4 text-blue-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{containerTotal}</div>
+            {sections.containers === "loading" && containers.length === 0 ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold text-white">{containerTotal}</div>
+            )}
             <p className="text-xs text-slate-400">
               {running} Running | {stopped} Stopped
             </p>
@@ -272,7 +330,11 @@ export function Dashboard() {
             <Database className="h-4 w-4 text-sky-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{data.volumes_count ?? "—"}</div>
+            {sections.counts === "loading" && data.volumes_count == null ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold text-white">{data.volumes_count ?? "—"}</div>
+            )}
             <p className="text-xs text-slate-400">Named volumes</p>
             <Link to="/volumes" className="text-xs text-blue-400 hover:underline mt-1 inline-block">
               View all
@@ -286,7 +348,11 @@ export function Dashboard() {
             <Network className="h-4 w-4 text-indigo-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{data.networks_count ?? "—"}</div>
+            {sections.counts === "loading" && data.networks_count == null ? (
+              <Skeleton className="h-8 w-16" />
+            ) : (
+              <div className="text-2xl font-bold text-white">{data.networks_count ?? "—"}</div>
+            )}
             <p className="text-xs text-slate-400">Docker networks</p>
             <Link
               to="/networks"
@@ -303,7 +369,11 @@ export function Dashboard() {
             <Cpu className="h-4 w-4 text-emerald-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">{sys.cpu?.cores ?? "—"} cores</div>
+            {sections.system === "loading" && sys.cpu?.cores == null ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <div className="text-2xl font-bold text-white">{sys.cpu?.cores ?? "—"} cores</div>
+            )}
             <p className="text-xs text-slate-400">Host</p>
           </CardContent>
         </Card>
@@ -314,9 +384,13 @@ export function Dashboard() {
             <Activity className="h-4 w-4 text-purple-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {mem.total_formatted ?? (mem.total != null ? formatBytes(mem.total) : "—")}
-            </div>
+            {sections.system === "loading" && mem.total == null && !mem.total_formatted ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <div className="text-2xl font-bold text-white">
+                {mem.total_formatted ?? (mem.total != null ? formatBytes(mem.total) : "—")}
+              </div>
+            )}
             <p className="text-xs text-slate-400">Total</p>
           </CardContent>
         </Card>
@@ -327,10 +401,17 @@ export function Dashboard() {
             <HardDrive className="h-4 w-4 text-orange-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-white">
-              {totalSize > 0 ? formatBytes(totalSize) : "—"}
-            </div>
-            <p className="text-xs text-slate-400">{storageHint}</p>
+            {totalSize > 0 ? (
+              <div className="text-2xl font-bold text-white">{formatBytes(totalSize)}</div>
+            ) : (
+              <Skeleton className="h-8 w-24" />
+            )}
+            <p className="text-xs text-slate-400">
+              {sections.disk === "loading" && !data.disk_summary && (
+                <Loader2 className="mr-1 inline h-3 w-3 animate-spin" />
+              )}
+              {storageHint}
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -345,8 +426,17 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="max-h-[240px] overflow-y-auto space-y-1">
-              {containers.length === 0 ? (
-                <p className="text-slate-500 text-sm">No containers</p>
+              {showContainerSkeletons ? (
+                <>
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" />
+                  <Skeleton className="h-8" />
+                </>
+              ) : containers.length === 0 ? (
+                <p className="text-slate-500 text-sm">
+                  {sections.containers === "error" ? "Could not load containers." : "No containers"}
+                </p>
               ) : (
                 containers.slice(0, 12).map((c) => (
                   <Link
@@ -384,8 +474,16 @@ export function Dashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4 max-h-[200px] overflow-y-auto">
-              {images.length === 0 ? (
-                <p className="text-slate-500 text-sm">No images</p>
+              {showImageSkeletons ? (
+                <>
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                  <Skeleton className="h-10" />
+                </>
+              ) : images.length === 0 ? (
+                <p className="text-slate-500 text-sm">
+                  {sections.images === "error" ? "Could not load images." : "No images"}
+                </p>
               ) : (
                 images.slice(0, 8).map((img, i) => {
                   const tag = imageRef(img);
@@ -415,6 +513,10 @@ export function Dashboard() {
   );
 }
 
+function Skeleton({ className }: { className?: string }) {
+  return <div className={`animate-pulse rounded bg-slate-800 ${className ?? "h-4 w-full"}`} />;
+}
+
 const PAGE_ACTIONS: {
   to: string;
   label: string;
@@ -423,15 +525,8 @@ const PAGE_ACTIONS: {
   primary?: boolean;
   testId?: string;
 }[] = [
-  {
-    to: "/tools",
-    label: "MCP Tools",
-    hint: "Tool harness (same as AI)",
-    icon: Wrench,
-    primary: true,
-    testId: "quick-action-tools",
-  },
-  { to: "/chat", label: "AI Command", hint: "Natural language", icon: MessageSquare },
+  // NOTE: MCP Tools and AI Chat live in the hero above + the sidebar —
+  // deliberately not repeated here.
   { to: "/containers", label: "Containers", hint: "List and inspect", icon: Container },
   { to: "/images", label: "Images", hint: "Tags and sizes", icon: ImageIcon },
   { to: "/volumes", label: "Volumes", hint: "Named volumes", icon: Database },

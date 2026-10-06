@@ -1,9 +1,10 @@
-import { AlertCircle, ArrowLeft, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, Download, Loader2 } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { API_BASE } from "@/lib/api";
 import { formatBytes, formatDate, shortId } from "@/lib/format";
+import { describeImage, kindLabel, parseProvenance, splitRepoTag } from "@/lib/provenance";
 
 interface ImageDetailData {
   id: string;
@@ -37,6 +38,18 @@ interface HistoryItem {
   tags?: string[];
 }
 
+interface ImageBrief {
+  about?: string | null;
+  github_repo?: string | null;
+  github_url?: string;
+  hub_url?: string | null;
+  stars?: number | null;
+  license?: string | null;
+  topics?: string[];
+  readme_excerpt?: string | null;
+  error?: string | null;
+}
+
 function asText(value: unknown): string {
   if (value == null || value === "") return "—";
   if (Array.isArray(value)) return value.join(" ");
@@ -50,6 +63,9 @@ export function ImageDetail() {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pullBusy, setPullBusy] = useState(false);
+  const [pullMsg, setPullMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [brief, setBrief] = useState<ImageBrief | null>(null);
 
   const load = useCallback(async () => {
     if (!imageRef) return;
@@ -77,6 +93,47 @@ export function ImageDetail() {
   useEffect(() => {
     load();
   }, [load]);
+
+  // Upstream brief (Docker Hub / GitHub README lookup), loaded separately so a
+  // slow or offline registry never blocks the config below.
+  useEffect(() => {
+    const tags = data?.tags?.length ? data.tags : null;
+    const ref = tags ? tags[0] : imageRef;
+    if (!ref || ref === "<none>") return;
+    let cancelled = false;
+    setBrief(null);
+    const params = new URLSearchParams({ ref });
+    fetch(`${API_BASE}/api/images/brief?${params.toString()}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((json) => {
+        if (!cancelled && json) setBrief(json);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [data, imageRef]);
+
+  const pull = async (ref: string) => {
+    const { repository, tag } = splitRepoTag(ref);
+    setPullBusy(true);
+    setPullMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/images/pull`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ repository, tag }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      setPullMsg({ text: json.message || "done", ok: true });
+      await load();
+    } catch (e) {
+      setPullMsg({ text: e instanceof Error ? e.message : "Pull failed", ok: false });
+    } finally {
+      setPullBusy(false);
+    }
+  };
 
   if (loading && !data) {
     return (
@@ -107,6 +164,13 @@ export function ImageDetail() {
 
   const tags = data.tags?.length ? data.tags : ["<none>"];
   const labels = Object.entries(data.labels || {});
+  const primaryRef = tags[0] === "<none>" ? imageRef : tags[0];
+  const prov = parseProvenance(primaryRef);
+  const description = describeImage(primaryRef, {
+    exposedPorts: data.exposed_ports,
+    entrypoint: data.entrypoint,
+    cmd: data.cmd,
+  });
 
   return (
     <div className="space-y-6">
@@ -120,8 +184,27 @@ export function ImageDetail() {
           </Link>
           <h2 className="text-2xl font-bold tracking-tight text-white mt-2 break-all">{tags[0]}</h2>
           <p className="text-slate-400 font-mono text-xs mt-1">{data.id}</p>
+          {pullMsg && (
+            <p className={`mt-2 text-sm ${pullMsg.ok ? "text-emerald-400" : "text-red-400"}`}>
+              {pullMsg.text}
+            </p>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => void pull(primaryRef)}
+            disabled={pullBusy || primaryRef === "<none>"}
+            title="Pull this tag — tells you if the local copy is already current"
+            className="inline-flex items-center gap-1.5 rounded-md bg-blue-700 px-3 py-2 text-sm font-medium text-white hover:bg-blue-600 disabled:opacity-50"
+          >
+            {pullBusy ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+            {pullBusy ? "Pulling…" : "Pull"}
+          </button>
           <button
             type="button"
             onClick={load}
@@ -143,6 +226,101 @@ export function ImageDetail() {
           </Link>
         </div>
       </div>
+
+      <Card className="border-slate-800 bg-slate-950/50">
+        <CardHeader>
+          <CardTitle className="text-white">What is this?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm leading-relaxed text-slate-200">{description}</p>
+          {brief && (brief.about || brief.readme_excerpt) && (
+            <div className="space-y-2 rounded-md border border-slate-800 bg-slate-900/60 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                Upstream analysis{brief.github_repo ? ` — ${brief.github_repo}` : ""}
+                {typeof brief.stars === "number" ? ` · ★ ${brief.stars.toLocaleString()}` : ""}
+                {brief.license ? ` · ${brief.license}` : ""}
+              </p>
+              {brief.about && brief.about.slice(0, 60) !== description.slice(0, 60) && (
+                <p className="text-[13px] leading-relaxed text-slate-300">{brief.about}</p>
+              )}
+              {(brief.topics || []).length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {(brief.topics || []).slice(0, 8).map((t) => (
+                    <span
+                      key={t}
+                      className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-400"
+                    >
+                      {t}
+                    </span>
+                  ))}
+                </div>
+              )}
+              {brief.readme_excerpt && (
+                <div className="max-h-44 overflow-y-auto whitespace-pre-wrap text-xs leading-relaxed text-slate-400">
+                  {brief.readme_excerpt}
+                </div>
+              )}
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${
+                prov.kind === "local"
+                  ? "border-emerald-800 bg-emerald-950/60 text-emerald-300"
+                  : prov.kind === "dockerhub-official"
+                    ? "border-blue-800 bg-blue-950/60 text-blue-300"
+                    : prov.kind === "ghcr"
+                      ? "border-violet-800 bg-violet-950/60 text-violet-300"
+                      : "border-slate-700 bg-slate-900 text-slate-300"
+              }`}
+            >
+              {prov.fleetRepo ? `${prov.fleetRepo} (local build)` : kindLabel(prov.kind)}
+            </span>
+            {prov.fleetRepo && (
+              <span className="font-mono text-xs text-slate-400">
+                D:\Dev\repos\{prov.fleetRepo}
+              </span>
+            )}
+          </div>
+          <div className="grid gap-3 text-sm md:grid-cols-2">
+            <Row label="Registry">{prov.registry || "(Docker Hub)"}</Row>
+            <Row label="Repository">
+              {[prov.namespace, prov.repo].filter(Boolean).join("/") || "—"}
+            </Row>
+            <Row label="Tag">{prov.tag}</Row>
+            <Row label="Source links">
+              <span className="flex flex-wrap gap-3">
+                {prov.hubUrl && (
+                  <a
+                    href={prov.hubUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-400 hover:underline"
+                  >
+                    {prov.kind === "ghcr" ? "GitHub repo" : "Docker Hub page"} ↗
+                  </a>
+                )}
+                <a
+                  href={prov.githubUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-400 hover:underline"
+                >
+                  Find source on GitHub ↗
+                </a>
+              </span>
+            </Row>
+          </div>
+          {tags.length > 1 && (
+            <div>
+              <p className="text-xs text-slate-500">Also tagged as</p>
+              <p className="mt-0.5 break-all font-mono text-xs text-slate-300">
+                {tags.slice(1).join(", ")}
+              </p>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Meta label="Size" value={formatBytes(data.size)} />
