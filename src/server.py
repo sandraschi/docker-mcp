@@ -22,6 +22,15 @@ from dockermcp.mcp_instance import get_mcp
 # Initialize MCP + tools before web routes import dockermcp tool modules
 mcp = get_mcp()
 
+# MCP Streamable HTTP sub-app, mounted at /mcp by setup_webapp().
+# Built here (not inside setup_webapp) so its lifespan can be combined with
+# the web bridge lifespan below — without that, requests 500 with
+# "StreamableHTTPSessionManager task group was not initialized".
+try:
+    mcp_http_app = mcp.http_app(path="/mcp", transport="streamable-http")
+except Exception:
+    mcp_http_app = None
+
 # Suppress all warnings
 warnings.filterwarnings("ignore")
 
@@ -74,7 +83,18 @@ async def _web_lifespan(_app: FastAPI):
 
 
 # FastAPI Bridge - auth only on /api/chat so dashboard/containers work without login
-web_app = FastAPI(title="Docker Management Web Bridge", lifespan=_web_lifespan)
+@asynccontextmanager
+async def _combined_lifespan(app: FastAPI):
+    async with _web_lifespan(app):
+        lifespan_fn = getattr(mcp_http_app, "lifespan", None) if mcp_http_app is not None else None
+        if lifespan_fn is not None:
+            async with lifespan_fn(app):
+                yield
+        else:
+            yield
+
+
+web_app = FastAPI(title="Docker Management Web Bridge", lifespan=_combined_lifespan)
 
 web_app.add_middleware(
     CORSMiddleware,
@@ -92,7 +112,7 @@ web_app.add_middleware(
 )
 
 # Setup webapp bridge with the tool-loaded MCP instance
-setup_webapp(web_app, mcp_app=mcp)
+setup_webapp(web_app, mcp_app=mcp, mcp_http_app=mcp_http_app)
 
 
 def _mount_web_ui(app: FastAPI) -> None:

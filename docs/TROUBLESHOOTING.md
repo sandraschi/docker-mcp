@@ -1,5 +1,27 @@
 # Troubleshooting
 
+## Slow `docker ps` / endlessly spinning webapp pages
+
+First decide where it is slow: time `docker ps` natively. If the CLI is fast,
+the problem is the backend/frontend, not the daemon.
+
+If the CLI itself takes ~10s with an idle host, find the stalling container:
+time one full inspect per container — healthy ones answer in milliseconds, a
+wedged one takes seconds (case 2026-10-03: exactly 3.0s each on three
+containers). Then check its network endpoints:
+
+```powershell
+docker inspect <name> --format "{{json .NetworkSettings.Networks}}"
+```
+
+Empty endpoints with a network mode set = broken record. Every daemon list
+call stalls on it, **running or stopped, across daemon restarts**. Fix:
+`docker rm <name>` and recreate via compose (`up`); stopping is NOT enough —
+stopped records still poison the list.
+
+Note: slow *full inspect* of a container does not slow lists — it only affects
+detail views. Slow *lists* point at endpoint/state resolution (above).
+
 ## Web dashboard: HTTP 500
 
 1. Confirm the API bridge is running on **10807** (backend PowerShell window from `start.ps1`).

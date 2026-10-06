@@ -5,7 +5,7 @@ from typing import Literal
 from urllib.parse import unquote
 
 import httpx
-from docker.errors import APIError, ImageNotFound, NotFound
+from docker.errors import APIError, DockerException, ImageNotFound, NotFound
 from fastapi import Body, Depends, FastAPI, HTTPException, Query
 from fastapi.responses import Response, StreamingResponse
 from fastmcp import FastMCP
@@ -28,15 +28,21 @@ from .web_queries import (
     container_logs_sync,
     dashboard_sync,
     disk_usage_sync,
+    get_fleet_settings,
+    image_brief_sync,
     image_history_sync,
     inspect_container_sync,
     inspect_image_sync,
     inspect_network_sync,
     inspect_volume_sync,
+    junk_summary_sync,
     list_containers_sync,
     list_images_sync,
     list_networks_sync,
     list_volumes_sync,
+    pull_image_sync,
+    scan_compose_files_cached,
+    set_fleet_root,
     system_info_sync,
 )
 
@@ -105,16 +111,23 @@ async def _in_thread(fn, *args, **kwargs):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except APIError as exc:
-        detail = getattr(exc, "explanation", None) or str(exc)
-        raise HTTPException(status_code=409, detail=detail) from exc
     except (NotFound, ImageNotFound) as exc:
         detail = getattr(exc, "explanation", None) or str(exc)
         raise HTTPException(status_code=404, detail=detail) from exc
+    except APIError as exc:
+        detail = getattr(exc, "explanation", None) or str(exc)
+        raise HTTPException(status_code=409, detail=detail) from exc
+    except (DockerException, OSError) as exc:
+        raise HTTPException(status_code=503, detail=f"Docker daemon unavailable: {exc}") from exc
 
 
-def setup_webapp(app: FastAPI, mcp_app: FastMCP):
-    """Setup standard SOTA web endpoints for Docker-MCP."""
+def setup_webapp(app: FastAPI, mcp_app: FastMCP, mcp_http_app=None):
+    """Setup standard SOTA web endpoints for Docker-MCP.
+
+    mcp_http_app is the FastMCP Streamable HTTP sub-app (built in server.py so
+    its lifespan can be combined there); it is mounted at /mcp here, before the
+    "/" StaticFiles UI mount, or POST /mcp falls through to StaticFiles (405).
+    """
     import time
 
     _start_time = time.time()
@@ -292,6 +305,8 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
         log_activity("tool_call", f"restart_container {container_id[:12]}")
         return result
 
+    register_examples_routes(app, _in_thread)
+
     @app.get("/api/system")
     async def api_system():
         return await _in_thread(system_info_sync)
@@ -305,8 +320,6 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     async def api_images():
         return await _in_thread(list_images_sync)
 
-    register_examples_routes(app, _in_thread)
-
     @app.get("/api/images/inspect")
     async def api_image_inspect(ref: str = Query(..., min_length=1)):
         result = await _in_thread(inspect_image_sync, unquote(ref))
@@ -316,6 +329,37 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
     @app.get("/api/images/history")
     async def api_image_history(ref: str = Query(..., min_length=1)):
         return await _in_thread(image_history_sync, unquote(ref))
+
+    @app.get("/api/images/brief")
+    async def api_image_brief(ref: str = Query(..., min_length=1)):
+        result = await _in_thread(image_brief_sync, unquote(ref))
+        return result
+
+    @app.post("/api/images/pull")
+    async def api_image_pull(payload: dict = Body(...)):
+        repository = str(payload.get("repository") or "").strip()
+        tag = str(payload.get("tag") or "latest").strip() or "latest"
+        if not repository:
+            raise HTTPException(status_code=400, detail="repository is required")
+        result = await _in_thread(pull_image_sync, repository, tag)
+        log_activity("tool_call", f"pull_image {repository}:{tag} -> {result.get('message')}")
+        return result
+
+    @app.get("/api/junk")
+    async def api_junk():
+        result = await _in_thread(junk_summary_sync)
+        log_activity("tool_call", "junk summary (web API)")
+        return result
+
+    @app.get("/api/settings/fleet")
+    async def api_fleet_settings_get():
+        return await _in_thread(get_fleet_settings)
+
+    @app.put("/api/settings/fleet")
+    async def api_fleet_settings_put(payload: dict = Body(...)):
+        result = await _in_thread(set_fleet_root, str(payload.get("fleet_root") or ""))
+        log_activity("tool_call", f"fleet_root -> {result.get('fleet_root')}")
+        return result
 
     @app.get("/api/volumes")
     async def api_volumes():
@@ -358,14 +402,27 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
         from dockermcp.tools.compose.compose_management import _compose_up
 
         return await _compose_up(
-            project=payload["project"], build=payload.get("build", False), detach=payload.get("detach", True)
+            project=payload["project"],
+            build=payload.get("build", False),
+            detach=payload.get("detach", True),
+            project_dir=payload.get("project_dir"),
         )
 
     @app.post("/api/compose/down")
     async def api_compose_down(payload: dict = Body(...)):
         from dockermcp.tools.compose.compose_management import _compose_down
 
-        return await _compose_down(project=payload["project"], volumes=payload.get("volumes", False))
+        return await _compose_down(
+            project=payload["project"],
+            volumes=payload.get("volumes", False),
+            project_dir=payload.get("project_dir"),
+        )
+
+    @app.get("/api/compose/files")
+    async def api_compose_files(refresh: bool = Query(False)):
+        result = await _in_thread(scan_compose_files_cached, refresh)
+        log_activity("tool_call", f"compose files scan: {result.get('count', 0)} files")
+        return result
 
     @app.get("/api/compose/logs")
     async def api_compose_logs(project: str = Query(...), tail: int = Query(50)):
@@ -485,6 +542,24 @@ def setup_webapp(app: FastAPI, mcp_app: FastMCP):
             return {"response": f"AI Bridge Error: {exc}", "status": "error"}
 
     _setup_diagnostics_routes(app, _start_time, mcp_app)
+
+    # MCP Streamable HTTP at exact /mcp (advertised on the dashboard hero).
+    # Routes are included directly (not mounted): Starlette Mount("/mcp")
+    # only matches "/mcp/..." with trailing slash, so a mount would 405/404
+    # clients POSTing the advertised exact path. The sub-app instance comes
+    # from server.py (same one whose lifespan is combined into the parent);
+    # never build a second one here.
+    try:
+        if mcp_http_app is None:
+            raise RuntimeError("no MCP HTTP sub-app provided by server.py")
+        sub_routes = list(getattr(mcp_http_app, "routes", []))
+        if not sub_routes:
+            raise RuntimeError("MCP HTTP sub-app has no routes")
+        for route in sub_routes:
+            app.router.routes.append(route)
+        log_activity("server", f"MCP Streamable HTTP routes added at /mcp ({len(sub_routes)} routes)")
+    except Exception as exc:
+        log_activity("server", f"MCP HTTP routes failed: {exc}", level="ERROR")
 
 
 class _AgenticEvent:
