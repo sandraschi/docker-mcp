@@ -3,7 +3,7 @@
     "install_dir": "%LOCALAPPDATA%\\Docker MCP",
     "operator_exe": "docker-mcp-native.exe",
     "backend_process_names": ["docker-mcp-native", "docker-mcp-native-backend"],
-    "backend_port": 10807,
+    "backend_port": 11240,
     "health_path": "/api/health",
     "diagnostics_path": "/api/v1/diagnostics",
     "feature_smoke_path": "/api/v1/diagnostics",

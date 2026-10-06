@@ -1,55 +1,25 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod backend;
-use backend::{BackendProcess, materialize_backend};
-use std::io::BufRead;
-use std::process::{Command, Stdio};
+use backend::{spawn_backend, BackendProcess};
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
-#[cfg(windows)]
-use std::os::windows::process::CommandExt;
 
+/// Spawns (or respawns) the sidecar. Also the target of the UI "Restart Backend" button:
+/// `spawn_backend` stops the old child and frees the port before starting a new one.
 #[tauri::command]
 async fn start_backend(
     app: tauri::AppHandle,
     state: tauri::State<'_, BackendProcess>,
 ) -> Result<String, String> {
-    let path = materialize_backend(&app)?;
-    let mut child = Command::new(&path)
-        .env("DOCKER_TAURI", "1")
-        .args(["--http", "--port", "10807"])
-        .creation_flags(0x0800_0000)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| format!("Failed to start backend: {e}"))?;
+    spawn_backend(app, &state)
+}
 
-    let stdout = child.stdout.take().ok_or("No stdout")?;
-    let stderr = child.stderr.take().ok_or("No stderr")?;
-    *state.0.lock().unwrap() = Some(child);
-
-    let ac1 = app.clone();
-    let ac2 = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let reader = std::io::BufReader::new(stdout);
-        for line in reader.lines().flatten() {
-            if line.contains("Uvicorn running") || line.contains("Application startup complete") {
-                let _ = ac1.emit("backend-status", "ready");
-                break;
-            }
-        }
-    });
-    tauri::async_runtime::spawn(async move {
-        let reader = std::io::BufReader::new(stderr);
-        for line in reader.lines().flatten() {
-            if line.contains("Uvicorn running") || line.contains("Application startup complete") {
-                let _ = ac2.emit("backend-status", "ready");
-                break;
-            }
-        }
-    });
-
-    Ok("Backend starting on port 10807".into())
+fn stop_backend(app: &tauri::AppHandle) {
+    if let Some(mut child) = app.state::<BackendProcess>().0.lock().unwrap().take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 fn main() {
@@ -79,10 +49,11 @@ fn main() {
         .build(tauri::generate_context!())
         .expect("error building tauri application")
         .run(|app, event| {
-            if let tauri::RunEvent::Exit = event {
-                if let Some(mut child) = app.state::<BackendProcess>().0.lock().unwrap().take() {
-                    let _ = child.kill();
-                }
+            if matches!(
+                event,
+                tauri::RunEvent::Exit | tauri::RunEvent::ExitRequested { .. }
+            ) {
+                stop_backend(app);
             }
         });
 }
