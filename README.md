@@ -9,25 +9,24 @@ FastMCP 3.5 control plane for Docker — containers, images, volumes, networks, 
 
 ## Install
 
-Download from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest). Nothing to build, no Python or Node needed. You do need Docker Desktop.
+1. Download **`docker-mcp-<version>-setup.exe`** from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest).
+2. Run it. Windows may show a SmartScreen warning because the installer is not code-signed:
+   choose **More info > Run anyway**.
+3. Open **Docker MCP** from the Start menu.
 
-| You want | Download | Then |
-|----------|----------|------|
-| **Docker tools in Claude Desktop** | `docker-mcp-<version>.mcpb` | Drag it onto the Claude Desktop window |
-| **The dashboard as a Windows app** | `docker-mcp-<version>-setup.exe` | Run the installer, launch **Docker MCP** |
+That installs the dashboard and the backend in one go. Nothing else to set up except
+[Docker Desktop](https://www.docker.com/products/docker-desktop/), which this controls.
 
-Details and troubleshooting: [INSTALL.md](INSTALL.md).
+**Only want the Docker tools inside Claude?** The `.mcpb` bundle registers the MCP server in Claude Desktop
+but does **not** install the dashboard. Paste this to Claude:
 
-## Run from source (developers)
+> Install the docker-mcp MCP extension: download `docker-mcp-<version>.mcpb` from
+> https://github.com/sandraschi/docker-mcp/releases/latest and open it with Claude Desktop.
 
-```powershell
-git clone https://github.com/sandraschi/docker-mcp
-cd docker-mcp
-uv sync
-.\start.ps1
-```
+More options (other IDEs, manual config, troubleshooting): [INSTALL.md](INSTALL.md).
 
-Opens `http://127.0.0.1:10806` (API bridge on `10807`). Building the installers yourself is covered in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+**Developers:** building from source, the justfile, tests and releasing are in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## What You Can Do
 
@@ -76,7 +75,7 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`). Building the installers 
 
 ## Requirements
 
-Windows 10/11 and Docker Desktop (Docker Engine 20.10+). To run from source or build the installers: Python 3.12+ with uv, Node.js 20+, and Rust (Tauri build only).
+Windows 10/11 and Docker Desktop (Docker Engine 20.10+). Building from source has its own prerequisites, listed in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## License
 

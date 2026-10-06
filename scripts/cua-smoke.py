@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# ruff: noqa: S310  (urlopen is only used for loopback health/diagnostics URLs built from config)
 """CUA smoke test for NSIS-installed fleet apps (pywinauto-mcp canary).
 
 CUA_SMOKE_VERSION = 13
@@ -26,6 +27,7 @@ Phases (planned Phase 3): nav sidebar click-through, floating chat visibility.
 """
 
 import argparse
+import hashlib
 import json
 import os
 import subprocess
@@ -745,6 +747,46 @@ def uninstall():
 # ── Main ──────────────────────────────────────────────────────────────
 
 
+def _write_result(output_dir, installer, phase_results, passed, failed, fatal_failed):
+    """Write cua-reports/cua-result.json: the machine-readable record the release gate checks.
+
+    A gate must never trust "a report exists" (see CRITICAL PITFALLs above). It verifies
+    installer_sha256 against the release asset it is about to ship, all_passed, pywinauto, and that the
+    Backend-receipt proof phase ran and passed.
+    """
+    import datetime
+
+    sha = size = None
+    if installer and os.path.isfile(installer):
+        h = hashlib.sha256()
+        with open(installer, "rb") as fh:
+            for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+                h.update(chunk)
+        sha, size = h.hexdigest(), os.path.getsize(installer)
+    proof = any(p["name"] == "Backend-receipt proof" and p["ok"] for p in phase_results)
+    result = {
+        "schema": 1,
+        "smoke_version": CUA_SMOKE_VERSION,
+        "product": PRODUCT_NAME,
+        "installer": os.path.basename(installer) if installer else None,
+        "installer_sha256": sha,
+        "installer_size": size,
+        "pywinauto": bool(_HAS_PYWAUTO),
+        "backend_receipt_proof": proof,
+        "phases": phase_results,
+        "passed": passed,
+        "failed": failed,
+        "all_passed": bool(
+            passed and not failed and not fatal_failed and _HAS_PYWAUTO and proof and sha
+        ),
+        "finished_at": datetime.datetime.now(datetime.UTC).isoformat(),
+    }
+    os.makedirs(output_dir, exist_ok=True)
+    with open(os.path.join(output_dir, "cua-result.json"), "w", encoding="utf-8") as fh:
+        json.dump(result, fh, indent=2)
+    print(f"  Wrote {os.path.join(output_dir, 'cua-result.json')} (all_passed={result['all_passed']})")
+
+
 def main():
     # Self-check: warn if template version differs
     _check_version()
@@ -767,9 +809,15 @@ def main():
         _capture_nav_baseline()
         nav_click_through(args.output_dir)
 
+    _installer = {"path": None}
+
+    def _install_phase():
+        _installer["path"] = args.installer or find_installer()
+        silent_install(_installer["path"])
+
     phases = [
         (True, "Kill stale processes", lambda: kill_stale()),
-        (True, "Install NSIS", lambda: silent_install(args.installer or find_installer())),
+        (True, "Install NSIS", _install_phase),
         (True, "Launch app", launch_app),
         (False, "Verify window", verify_window),
         (False, "Screenshot", lambda: take_screenshot(args.output_dir)),
@@ -784,6 +832,7 @@ def main():
 
     passed = failed = 0
     fatal_failed = False
+    phase_results: list[dict] = []
 
     print(f"\n{'=' * 50}")
     print(f"  CUA Smoke Test - {PRODUCT_NAME}")
@@ -802,18 +851,22 @@ def main():
                 fn()
                 print(f"  V {name}\n")
                 passed += 1
+                phase_results.append({"name": name, "ok": True})
             except PhaseFailed:
                 print(f"  X {name}\n")
                 failed += 1
+                phase_results.append({"name": name, "ok": False})
                 if is_fatal:
                     fatal_failed = True
             except Exception as e:
                 print(f"  X {name}: {e}\n")
                 failed += 1
+                phase_results.append({"name": name, "ok": False, "error": str(e)[:300]})
                 if is_fatal:
                     fatal_failed = True
     finally:
         _release_mouse()
+        _write_result(args.output_dir, _installer["path"], phase_results, passed, failed, fatal_failed)
 
     print(f"{'=' * 50}")
     print(f"  Result: {passed}/{passed + failed} phases passed")
