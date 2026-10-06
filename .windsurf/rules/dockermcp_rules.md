@@ -1,15 +1,15 @@
 # DockerMCP Windsurf Improvement Guide
 
-**Guide Version:** 1.0  
-**Target Audience:** Sandra + AI development team  
-**Estimated Implementation Time:** 2-3 weeks  
+**Guide Version:** 1.0
+**Target Audience:** Sandra + AI development team
+**Estimated Implementation Time:** 2-3 weeks
 **Priority Level:** CRITICAL (Repository currently non-functional)
 
 ## Quick Start: Fix Critical Issues (Day 1)
 
 ### 1. Make the Server Runnable
 
-**Problem**: ImportError on 8 missing modules  
+**Problem**: ImportError on 8 missing modules
 **Solution**: Create stub modules or remove imports
 
 #### Option A: Create Stub Modules (Recommended)
@@ -23,7 +23,7 @@ New-Item -ItemType Directory -Force -Path "D:\Dev\repos\dockermcp\src\workflow_i
 class NetworkManager:
     def __init__(self):
         pass
-    
+
     def list_networks(self):
         return {"success": False, "error": "Not implemented yet"}
 "@ | Out-File -FilePath "D:\Dev\repos\dockermcp\src\docker_ops\networks.py" -Encoding UTF8
@@ -32,7 +32,7 @@ class NetworkManager:
 class VolumeManager:
     def __init__(self):
         pass
-    
+
     def list_volumes(self):
         return {"success": False, "error": "Not implemented yet"}
 "@ | Out-File -FilePath "D:\Dev\repos\dockermcp\src\docker_ops\volumes.py" -Encoding UTF8
@@ -46,7 +46,7 @@ cd "D:\Dev\repos\dockermcp"
 # Create all missing modules with basic stubs
 $modules = @(
     "src\docker_ops\networks.py",
-    "src\docker_ops\volumes.py", 
+    "src\docker_ops\volumes.py",
     "src\docker_ops\system.py",
     "src\workflow_intel\stack_health.py",
     "src\workflow_intel\problem_detection.py",
@@ -59,17 +59,17 @@ foreach ($module in $modules) {
     if ($module -like "*workflow_intel*") {
         $className = switch (Split-Path $module -LeafBase) {
             "stack_health" { "StackHealthChecker" }
-            "problem_detection" { "ProblemDetector" } 
+            "problem_detection" { "ProblemDetector" }
             "automation" { "AutomationManager" }
             "vienna_specific" { "ViennaEnvironment" }
         }
     }
-    
+
     @"
 class $className:
     def __init__(self):
         pass
-    
+
     def placeholder_method(self):
         return {"success": False, "error": "Not implemented yet"}
 "@ | Out-File -FilePath $module -Encoding UTF8
@@ -81,7 +81,7 @@ python -m src.server
 
 ### 2. Basic FastMCP 2.10 Integration
 
-**Problem**: Using subprocess instead of FastMCP  
+**Problem**: Using subprocess instead of FastMCP
 **Solution**: Wrap existing functions with FastMCP decorators
 
 ```python
@@ -97,7 +97,7 @@ def list_containers(all_states: bool = True) -> dict:
     container_mgr = ContainerManager()
     return container_mgr.list_containers(all_states)
 
-@app.tool() 
+@app.tool()
 def get_container_info(container_name: str) -> dict:
     """Get detailed information about a specific container."""
     container_mgr = ContainerManager()
@@ -112,16 +112,16 @@ def main():
 
 ### 1. Streamline Rules (HIGH PRIORITY)
 
-**Current Problem**: 32KB generic rules file  
+**Current Problem**: 32KB generic rules file
 **Solution**: Create dockermcp-specific rules
 
 <function_calls>
 <invoke name="filesystem:write_file">
-<parameter name="content"># DockerMCP Windsurf Rules - Austrian Efficiency Edition
+# DockerMCP Windsurf Rules
 
-**Version:** 1.0  
-**Last Updated:** 2025-08-13  
-**Project:** dockermcp  
+**Version:** 1.0
+**Last Updated:** 2025-08-13
+**Project:** dockermcp
 
 ## Core Development Rules
 
@@ -133,10 +133,10 @@ def main():
 def operation_name(param: type) -> Dict[str, Any]:
     """
     Clear description of what this does.
-    
+
     Args:
         param: Description of parameter
-        
+
     Returns:
         Standardized result dictionary
     """
@@ -194,7 +194,7 @@ def parse_docker_json(output: str):
     return items
 ```
 
-### 3. Austrian Efficiency Patterns
+### 3. Diagnostic Patterns
 
 #### Vienna Stack Definitions
 ```python
@@ -220,15 +220,15 @@ VIENNA_STACKS = {
 #### Problem Detection Pattern
 ```python
 def detect_restart_loops(threshold_minutes: int = 10):
-    """Austrian efficiency: Don't just detect, understand WHY."""
+    """Don't just detect, understand WHY."""
     containers = get_containers_with_restarts()
-    
+
     for container in containers:
         if container["restart_count"] > 3:
             # Analyze logs for root cause
             logs = get_container_logs(container["name"], lines=50)
             error_patterns = analyze_error_patterns(logs)
-            
+
             yield {
                 "container": container["name"],
                 "restart_count": container["restart_count"],
@@ -241,7 +241,7 @@ def detect_restart_loops(threshold_minutes: int = 10):
 
 #### When Windsurf generates Docker code:
 1. Always include error handling with structured responses
-2. Use Austrian efficiency comments: `# Sandra's insight: "explanation"`
+2. Use insight comments: `# Sandra's insight: "explanation"`
 3. Include timeout parameters for all Docker commands
 4. Return JSON-compatible dictionaries
 5. Add proper type hints
@@ -263,7 +263,7 @@ def test_list_containers():
     result = list_containers()
     assert result["success"] is True
     assert "containers" in result
-    
+
     # Test error case (Docker not available)
     with mock.patch('subprocess.run') as mock_run:
         mock_run.side_effect = FileNotFoundError("docker not found")
@@ -279,15 +279,15 @@ def test_list_containers():
 def docker_operation(param: str) -> Dict[str, Any]:
     """
     One-line summary of what this does.
-    
+
     Sandra's use case: Explain why this exists for her workflow.
-    
+
     Args:
         param: Description with examples
-        
+
     Returns:
         Dict with 'success' bool and 'data'/'error' fields
-        
+
     Example:
         >>> result = docker_operation("test")
         >>> print(result["success"])
@@ -295,7 +295,7 @@ def docker_operation(param: str) -> Dict[str, Any]:
     """
 ```
 
-#### Austrian Efficiency Documentation
+#### Documentation
 - Include "Sandra's insight:" comments for domain knowledge
 - Document Vienna-specific patterns and reasoning
 - Explain automation decisions and trade-offs
@@ -308,7 +308,7 @@ def docker_operation(param: str) -> Dict[str, Any]:
 {
   "name": "dockermcp",
   "version": "0.1.0",
-  "description": "Austrian efficiency Docker operations for Claude Desktop",
+  "description": "Docker operations for Claude Desktop",
   "mcpServers": {
     "dockermcp": {
       "command": "python",
@@ -325,7 +325,7 @@ def docker_operation(param: str) -> Dict[str, Any]:
 
 ### Phase 1: Core Functionality (Days 1-2)
 1. Fix import errors with stub modules
-2. Add basic FastMCP tool decorators  
+2. Add basic FastMCP tool decorators
 3. Test container operations
 4. Create minimal DXT package
 
@@ -335,11 +335,10 @@ def docker_operation(param: str) -> Dict[str, Any]:
 3. Create test suite
 4. Document actual capabilities
 
-### Phase 3: Austrian Efficiency (Days 6-10) 
+### Phase 3: Efficiency (Days 6-10)
 1. Add Vienna stack intelligence
 2. Implement problem detection
 3. Create automation workflows
 4. Performance optimization
 
 ---
-*"In Vienna, even the containers run on time."* - Austrian efficiency applied to Docker operations
