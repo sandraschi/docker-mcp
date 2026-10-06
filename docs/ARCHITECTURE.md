@@ -19,7 +19,7 @@
 | Mode | Protocol | Port | Usage |
 |------|----------|------|-------|
 | MCP stdio | stdin/stdout | — | Claude Desktop |
-| MCP HTTP | `GET /mcp` SSE | 10807 | Streamable HTTP |
+| MCP HTTP | `POST /mcp` Streamable HTTP | 10807 | Remote/agent clients (verified: initialize → tools/list → tools/call) |
 | REST API | `/api/*` | 10807 | Web dashboard |
 
 ## Modules
@@ -52,6 +52,9 @@ Base: `http://127.0.0.1:10807/api`
 | `/containers/{id}/restart` | POST | Restart |
 | `/images` | GET | All images |
 | `/images/inspect` | GET | Image inspect (`?ref=`) |
+| `/images/brief` | GET | Upstream brief: Hub description + GitHub README (`?ref=`, 10-min cache) |
+| `/images/pull` | POST | Pull + freshness (`{"repository","tag"}` → `already_current`/`updated`) |
+| `/images/history` | GET | Layer history (`?ref=`) |
 | `/volumes` | GET | Named volumes |
 | `/volumes/{name}` | GET | Volume inspect |
 | `/networks` | GET | Networks |
@@ -64,6 +67,9 @@ Base: `http://127.0.0.1:10807/api`
 | `/compose/down` | POST | Stop services |
 | `/compose/logs` | GET | Compose logs |
 | `/compose/config` | GET | Render compose config |
+| `/compose/files` | GET | Fleet-root compose scan (`?refresh=true`) |
+| `/settings/fleet` | GET/PUT | Fleet repos folder (`{"fleet_root"}`) |
+| `/junk` | GET | Cleanup candidates (images/containers/volumes/networks) |
 | `/compose/analyze` | POST | Parse docker-compose.yml |
 | `/chat` | POST | LLM proxy |
 | `/llm/providers` | GET | Discover LLMs |

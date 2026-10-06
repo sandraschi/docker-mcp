@@ -1,5 +1,15 @@
 # Configuration
 
+## Fleet repos ("our" vs external images, compose file scan)
+
+| Setting | Default | Description |
+|---------|---------|-------------|
+| Fleet root | `D:/Dev/repos` | Where your own repos live. Anyone cloning from GitHub points it at their checkout (Settings page → Fleet repositories). |
+| `DOCKER_MCP_FLEET_ROOT` | *(empty)* | Env override, wins over the saved setting. |
+| Settings file | `~/.docker-mcp/settings.json` | Persists `fleet_root` (`GET/PUT /api/settings/fleet`). |
+
+Used for image provenance matching (`myai-*` → `myai`, …) and the compose-files preload (`GET /api/compose/files`).
+
 ## MCP transport
 
 | Variable | Default | Description |

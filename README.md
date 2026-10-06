@@ -39,15 +39,16 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 
 | Area | Highlights |
 |------|------------|
-| **Containers** | CRUD, logs, stats, exec, inspect, health analysis |
-| **Images** | List, pull, build, tag, push, prune, search, compare |
-| **Compose** | Projects, up/down, logs, config, YAML file analysis |
+| **Containers** | CRUD, logs, stats, exec, inspect, health analysis, inline start/stop/restart |
+| **Images** | List, pull (freshness check), build, tag, push, prune, search, compare, provenance, upstream brief |
+| **Compose** | Projects, up/down, logs, config, YAML file analysis, repo-files preload |
+| **Reports** | Global status + cleanup opportunities, Markdown/JSON export |
 | **Backup/Restore** | `save/load image`, `backup/restore volume`, `export compose` |
 | **Docker Desktop** | Status, hang detection, triple-kill recovery, restart |
 | **AI Chat** | SSE streaming, tool execution cards, LLM provider discovery |
 | **Agentic** | Deploy, cleanup, diagnose, rollback workflows |
 | **Prefab Cards** | Containers, images, daemon status, system info |
-| **Web dashboard** | Overview quick actions (Run MCP tools, Diagnose, Backup, Recover Docker), `/tools` runner, volumes, networks, compose, AI chat |
+| **Web dashboard** | Progressive overview (per-section loading, no global spinner), quick actions (Run MCP tools, Diagnose, Backup, Recover Docker), `/tools` runner, volumes, networks, compose, AI chat, reports with export |
 
 ## Documentation
 

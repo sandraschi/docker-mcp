@@ -11,6 +11,17 @@ The `/compose` page provides:
 - **Logs**: Last N lines per project
 - **File analysis**: Load any `docker-compose.yml` from disk
 
+### Repo files preload
+
+Above the analyzer, **Compose files in repos** lists every
+`docker-compose.yml|yaml` / `compose.yml|yaml` under the fleet repos folder
+(Settings → Fleet repositories, `GET /api/compose/files`, 5-min cache,
+`?refresh=true` to rescan; `_upstream`/`_archives` skipped). List/card view,
+search, sort, CSV/JSON export, per-file **Analyze** (fills the analyzer with
+the backend-side path), **Up** (in the file's directory via `project_dir`)
+and **Down** (with confirm). Files whose project guess matches a running
+project get a green badge.
+
 ### File Picker
 
 Two modes for loading external compose files:
@@ -49,8 +60,9 @@ The file is parsed on the backend by `compose_analysis.py`, which extracts:
 |----------|--------|------|
 | `/api/compose/projects` | GET | `?all=true` |
 | `/api/compose/ps` | GET | `?project=name` |
-| `/api/compose/up` | POST | `{"project":"name", "build":false}` |
-| `/api/compose/down` | POST | `{"project":"name", "volumes":false}` |
+| `/api/compose/up` | POST | `{"project":"name", "build":false, "project_dir":"/path/to/dir"}` |
+| `/api/compose/down` | POST | `{"project":"name", "volumes":false, "project_dir":"/path/to/dir"}` |
+| `/api/compose/files` | GET | Fleet-root scan (`?refresh=true`); service counts, 5-min cache |
 | `/api/compose/logs` | GET | `?project=name&tail=50` |
 | `/api/compose/config` | GET | `?project=name` |
 | `/api/compose/analyze` | POST | `{"file_path":"C:/docker-compose.yml"}` |

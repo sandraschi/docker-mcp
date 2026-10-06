@@ -2,6 +2,27 @@
 
 ## [Unreleased]
 
+### Added (2026-10-03 session)
+- **List/card views + export everywhere**: containers/images/networks/volumes pages with richer columns (age, size, ports/network chips, compose project, gateway), sort, filters (state/tag/driver/origin/usage), CSV/JSON export of the filtered set.
+- **Image provenance**: fleet-local vs Docker Hub/GHCR/lscr/GCR classification with fleet-repo match, Hub + GitHub links, in-use badges, origin/usage filters.
+- **Image "What is this?" brief**: `GET /api/images/brief?ref=` (Docker Hub description + GitHub repo meta/README excerpt, 10-min cache) on the detail page.
+- **Image pull with freshness**: `POST /api/images/pull` compares ids before/after (`already_current` vs `updated`); Pull buttons on list/cards/detail.
+- **Container actions inline**: start/stop/restart buttons on containers list + cards.
+- **Cleanup + reports**: `GET /api/junk` (dangling/unused/large/old images, stopped containers, unused volumes via `df` RefCount, unused networks) and `/reports` page with Markdown/JSON export and deep links.
+- **Compose files preload**: `GET /api/compose/files` scans the fleet repos folder (service counts, 5-min cache, `?refresh=true`); compose page section with search/sort/export/Analyze/Up/Down and running badges; `project_dir` passthrough on up/down.
+- **Fleet repos setting**: `GET/PUT /api/settings/fleet` + Settings UI; persisted `~/.docker-mcp/settings.json`, `DOCKER_MCP_FLEET_ROOT` override.
+- **MCP Streamable HTTP at `/mcp`**: verified handshake (initialize → tools/list → tools/call, 43 tools); combined parent+MCP lifespan in `server.py`.
+- **Dashboard progressive loading**: per-section fetches + skeletons, no global spinner; AI Command renamed AI Chat; dropped duplicated quick actions.
+
+### Changed
+- `list_images` uses raw `/images/json` (docker-py `list()` = one full inspect per image: 44 hidden calls, 31s → ~11s); image usage map from list attrs (zero extra calls).
+- `dashboard_sync` aggregate gains `volumes_count`/`networks_count`; networks list inspects for real container counts + gateway (list API never populates `Containers`).
+- Compose scan skips `_upstream`/`_archives`.
+
+### Fixed
+- `POST /mcp` 405 (no route; StaticFiles fallthrough) — now serves MCP Streamable HTTP.
+- Daemon list stalls from a container with broken network-endpoint state (case 2026-10-03: `tailscale-mcp-server`, empty endpoints; `docker rm` + recreate via compose; stopping is NOT enough — stopped records still poison list).
+
 ### Added
 - **Dashboard quick actions**: Overview hero CTA **Run MCP tools** plus a button row for MCP Tools, AI Command, Containers, Images, Volumes, Networks, Compose, Event logs, Diagnose, Backup, Prune unused, Daemon status, and Recover Docker.
 - **MCP tool runner UI**: `GET/POST /api/tools` and `GET/POST /api/tools/{name}` with JSON Schema forms. Catalog at `/tools`; runner at `/tools/:name`. Destructive tools require confirm.
