@@ -16,7 +16,7 @@
 }
 ```
 
-Or install the `.mcpb` bundle: `just mcpb-pack` → drag onto Claude Desktop.
+Or install the `.mcpb` bundle from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest) by dragging it onto Claude Desktop.
 
 ### Cursor
 

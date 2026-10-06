@@ -1,52 +1,42 @@
 # Installation
 
-## 🚀 Quick Start (recommended)
+## Prerequisites
 
-```powershell
-# Install just if you don't have it
-winget install Casey.Just    # Windows
-# scoop install just          # Windows (alternative)
-# brew install just           # macOS
-# sudo apt install just       # Debian/Ubuntu
-# cargo install just          # Linux (Rust)
+- Windows 10/11
+- [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed (`winget install Docker.DockerDesktop`)
 
-git clone https://github.com/sandraschi/docker-mcp
-cd docker-mcp
-just
-```
-
-The interactive recipe dashboard opens in your browser. From there:
-
-```powershell
-just bootstrap   # install all dependencies
-just serve       # start the server
-just web         # start the frontend (if applicable)
-```
-
-> **Why not `pip install`?** MCP servers bundle webapps, configs, project scaffolding, and tooling that a flat Python package can't deliver. PyPI offers no safety advantage — it doesn't audit packages either. `just` gives you the complete, ready-to-run stack.
+Both installers below are prebuilt and attached to every
+[release](https://github.com/sandraschi/docker-mcp/releases/latest). You do not need Python,
+Node.js, Rust or `just` to use them.
 
 ## Option A — MCPB (Claude Desktop)
 
-1. Download `docker-mcp-*.mcpb` from [Releases](https://github.com/sandraschi/docker-mcp/releases/latest)
-2. Drag onto Claude Desktop or use Settings → MCP → Install from file
+1. Download `docker-mcp-<version>.mcpb` from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest)
+2. Drag it onto the Claude Desktop window
+3. Ask Claude: "List my running containers"
 
-Build locally: `just mcpb-pack` (requires Node.js for `npx @anthropic-ai/mcpb`).
+The bundle runs the MCP server over stdio. It is unsigned, so Claude Desktop may ask you to confirm.
 
-## Option B — Tauri desktop installer (Windows)
+## Option B — Desktop app (Windows installer)
+
+1. Download `docker-mcp-<version>-setup.exe` from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest)
+2. Run it. It installs per user (no admin prompt) and is unsigned, so Windows SmartScreen may warn: choose **More info → Run anyway**
+3. Launch **Docker MCP** from the Start menu
+
+The app starts its own backend on `127.0.0.1:11240`; it does not collide with a dev stack on 10806/10807.
+
+## Option C — Run from source (developers)
 
 ```powershell
-just build-native
-```
-
-Installer under `native/target/release/bundle/`. Requires Rust, Node.js, uv, and PyInstaller (see [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)).
-
-## Option C — Web dashboard (dev)
-
-```powershell
+git clone https://github.com/sandraschi/docker-mcp
+cd docker-mcp
+uv sync
 .\start.ps1
 ```
 
-Opens http://127.0.0.1:10806 (frontend) and http://127.0.0.1:10807 (API).
+Opens http://127.0.0.1:10806 (frontend) and http://127.0.0.1:10807 (API). Building the `.mcpb` and
+the installer yourself (`just mcpb-pack`, `just build-native`) is covered in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ---
 

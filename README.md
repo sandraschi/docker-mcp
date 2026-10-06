@@ -9,13 +9,16 @@ FastMCP 3.5 control plane for Docker — containers, images, volumes, networks, 
 
 ## Install
 
-| Method | Command |
-|--------|---------|
-| **Claude Desktop** | `just mcpb-pack` → drag `.mcpb` onto Claude |
-| **Windows (NSIS)** | `just build-native` → run `*-setup.exe` |
-| **Dev (any OS)** | `uv sync && .\start.ps1` → `localhost:10806` |
+Download from the [latest release](https://github.com/sandraschi/docker-mcp/releases/latest). Nothing to build, no Python or Node needed. You do need Docker Desktop.
 
-## Quick Start
+| You want | Download | Then |
+|----------|----------|------|
+| **Docker tools in Claude Desktop** | `docker-mcp-<version>.mcpb` | Drag it onto the Claude Desktop window |
+| **The dashboard as a Windows app** | `docker-mcp-<version>-setup.exe` | Run the installer, launch **Docker MCP** |
+
+Details and troubleshooting: [INSTALL.md](INSTALL.md).
+
+## Run from source (developers)
 
 ```powershell
 git clone https://github.com/sandraschi/docker-mcp
@@ -24,7 +27,7 @@ uv sync
 .\start.ps1
 ```
 
-Opens `http://127.0.0.1:10806` (API bridge on `10807`).
+Opens `http://127.0.0.1:10806` (API bridge on `10807`). Building the installers yourself is covered in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## What You Can Do
 
@@ -73,7 +76,7 @@ Opens `http://127.0.0.1:10806` (API bridge on `10807`).
 
 ## Requirements
 
-Python 3.12+, Docker Engine 20.10+, Node.js 20+ (dev). Rust 1.70+ (Tauri build only).
+Windows 10/11 and Docker Desktop (Docker Engine 20.10+). To run from source or build the installers: Python 3.12+ with uv, Node.js 20+, and Rust (Tauri build only).
 
 ## License
 
