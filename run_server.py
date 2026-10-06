@@ -11,7 +11,10 @@ sys.path.insert(0, str(ROOT / "src"))
 
 
 # PyInstaller lazy-import traps (fleet Tauri protocol)
+import _datetime  # noqa: F401
 import _strptime  # noqa: F401
+
+import mcp.types  # noqa: F401  (freeze the mcp bootstrap before fastmcp touches it)
 
 
 def main() -> None:
@@ -19,6 +22,7 @@ def main() -> None:
     host = os.environ.get("MCP_HOST", "127.0.0.1")
 
     import uvicorn
+
     from customization.server import app
 
     uvicorn.run(app, host=host, port=port, log_level="info")

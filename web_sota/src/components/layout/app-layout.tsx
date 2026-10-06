@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { API_BASE } from "@/lib/api";
 import { useZoom } from "@/lib/useZoom";
 import { useConnection } from "@/store/connection";
 import { Sidebar } from "./sidebar";
@@ -6,7 +7,6 @@ import { Topbar } from "./topbar";
 
 // import { Toaster } from '@/components/ui/toaster';
 
-const BACKEND_PORT = 10807;
 const HEALTH_OK_MS = 15000;
 const DOCKER_STATUS_MS = 30000;
 const BACKOFF_MS = [2000, 4000, 8000, 16000, 30000];
@@ -28,7 +28,7 @@ export function AppLayout({ children }: AppLayoutProps) {
     const poll = async () => {
       if (cancelled) return;
       try {
-        const r = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/health`, {
+        const r = await fetch(`${API_BASE}/api/health`, {
           signal: AbortSignal.timeout(5000),
         });
         if (cancelled) return;
@@ -39,7 +39,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           if (now - lastDockerAt >= DOCKER_STATUS_MS) {
             lastDockerAt = now;
             try {
-              const ds = await fetch(`http://127.0.0.1:${BACKEND_PORT}/api/docker/status`, {
+              const ds = await fetch(`${API_BASE}/api/docker/status`, {
                 signal: AbortSignal.timeout(5000),
               });
               if (cancelled) return;

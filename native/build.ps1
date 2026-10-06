@@ -26,6 +26,9 @@ foreach ($dir in $frontendDirs) {
             throw "TypeScript compilation failed - fix all errors before building NSIS installer"
         }
 
+        # Operator backend port (docker-mcp-native claim). Same value as backend.rs BACKEND_PORT
+        # and tauri.conf.json; the backend-embedded dist must match the Tauri-served one.
+        $env:VITE_API_BASE = "http://127.0.0.1:11240"
         npm run build
         if ($LASTEXITCODE -ne 0) { throw "Frontend build failed" }
         Pop-Location
@@ -52,7 +55,13 @@ if (Test-Path $specFile) {
             Write-Host "  Patched fastmcp metadata fallback" -ForegroundColor Yellow
         }
     }
-    uv run pyinstaller "$specFile" --clean --noconfirm
+    # Project venv pyinstaller only: `uv run pyinstaller` can resolve to the global uv tool
+    # env, which has none of the project deps and freezes a binary that crashes on import.
+    $pyiExe = "$Root\.venv\Scripts\pyinstaller.exe"
+    if (-not (Test-Path $pyiExe)) { throw "pyinstaller missing from project venv - run: uv add --dev pyinstaller pefile altgraph" }
+    Get-Process -Name "docker-mcp-backend" -ErrorAction SilentlyContinue | Stop-Process -Force
+    Remove-Item "$Root\dist\${RepoName}-backend.exe" -Force -ErrorAction SilentlyContinue
+    & $pyiExe "$specFile" --clean --noconfirm
     if ($LASTEXITCODE -ne 0) { throw "PyInstaller failed with exit code $LASTEXITCODE" }
     Pop-Location
 } else {
@@ -69,14 +78,15 @@ if ($sizeMB -lt 5) {
 }
 Write-Host "  Backend exe: $sizeMB MB"
 
-# Bundle .env into installer if it exists (survives reinstall, no manual copy needed)
-$envSrc = "$Root\.env"
-if (Test-Path $envSrc) {
-    Copy-Item $envSrc "$ResourceDir\.env" -Force
-    Write-Host "  Bundled .env ($((Get-Item $envSrc).Length) bytes)" -ForegroundColor Green
+# Bundle .env.example ONLY. The developer's real .env holds personal API keys and must never
+# ship in the installer. tauri.conf.json lists resources/.env.example.
+Remove-Item "$ResourceDir\.env" -Force -ErrorAction SilentlyContinue
+$envExample = "$Root\.env.example"
+if (Test-Path $envExample) {
+    Copy-Item $envExample "$ResourceDir\.env.example" -Force
+    Write-Host "  Bundled .env.example" -ForegroundColor Green
 } else {
-    Write-Host "  WARNING: No .env at repo root - create one from .env.example for credentials" -ForegroundColor DarkYellow
-    Set-Content -Path "$ResourceDir\.env" -Value "# Empty - configure via Settings page" -Encoding utf8
+    throw ".env.example not found at repo root - tauri.conf.json bundles resources/.env.example"
 }
 
 Write-Host "  Smoke-testing frozen binary..." -ForegroundColor Yellow
@@ -84,11 +94,23 @@ $testPort = 11999
 $oldPort = $env:MCP_PORT; $oldHost = $env:MCP_HOST
 $env:MCP_PORT = "$testPort"; $env:MCP_HOST = "127.0.0.1"
 $testProc = Start-Process -FilePath $src -NoNewWindow -PassThru -RedirectStandardError "$Root\dist\pyi-crash.log"
-Start-Sleep -Seconds 5
+Start-Sleep -Seconds 15
 $env:MCP_PORT = $oldPort; $env:MCP_HOST = $oldHost
 if ($testProc.HasExited) {
     $crash = Get-Content "$Root\dist\pyi-crash.log" -Raw
     throw "Frozen binary crashed on launch (exit $($testProc.ExitCode)):`n$crash"
+}
+# Real endpoints, not just "process is alive": /health proves uvicorn is serving, the
+# diagnostics route proves the tool/app modules imported inside the frozen binary.
+foreach ($route in @("/api/health", "/api/v1/diagnostics")) {
+    try {
+        $resp = Invoke-WebRequest "http://127.0.0.1:$testPort$route" -UseBasicParsing -TimeoutSec 10
+        if ($resp.StatusCode -ne 200) { throw "HTTP $($resp.StatusCode)" }
+        Write-Host "  GET $route -> 200" -ForegroundColor Green
+    } catch {
+        $testProc.Kill()
+        throw "Frozen binary smoke test: GET $route failed: $($_.Exception.Message)"
+    }
 }
 $testProc.Kill(); $testProc.Dispose()
 Remove-Item "$Root\dist\pyi-crash.log" -Force -ErrorAction SilentlyContinue
