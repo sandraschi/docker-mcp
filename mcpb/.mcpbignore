@@ -1,38 +1,57 @@
-# Logic/Dev Bloat
+# Python
 .venv/
-node_modules/
 __pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# JavaScript
+node_modules/
+
+# Rust (hundreds of MB)
+target/
+Cargo.lock
+
+# Tests
+tests/
+examples/
 .ruff_cache/
 .pytest_cache/
-tests/
 
-# Discovery & Fleet Metadata
-glama.json
-llms.txt
-llms-full.txt
-.git/
+# Build output
+dist/
+build/
+*.exe
+*.msi
+*.wasm
+*.mcpb
+
+# Runtime data
+logs/
+cua-reports/
+*.png
+*.ico
+*.bak
+
+# Non-MCP components
+native/
+web_sota/
+scripts/
+mcpb/
+monitoring/
+.snapshots/
+.windsurf/
+.cursor/
 .github/
 .vscode/
 
-# Build Artifacts
-dist/
-build/
-*.mcpb
-
-# Editor / tooling backups (MCPB_PACKAGING_STANDARDS.md section 2.4)
-*.bak
-*.bak.*
-*.bak-*
-*.orig
-*.rej
-
-# Pack build tooling itself -- not runtime code
-mcpb/pack.ps1
-mcpb/verify_pack.py
-pack.ps1
-verify_pack.py
-
-# Non-MCP components detected in this repo
-web_sota/
-native/
-scripts/
+# Misc bloat
+ruff_output.json
+ruff_stderr.txt
+print_statements.txt
+remove_description_params.py
+error.log
+server.log
+test_output.log
+tools_backup_log.txt
+logging_analysis.txt

@@ -1,111 +1,934 @@
-[
-  {"tool": "list_containers", "params": {"all": true}, "description": "List all containers"},
-  {"tool": "list_containers", "params": {"all": false}, "description": "List running containers only"},
-  {"tool": "container_management", "params": {"operation": "list"}, "description": "List containers via portmanteau"},
-  {"tool": "container_management", "params": {"operation": "start", "container_id": "my_app"}, "description": "Start container"},
-  {"tool": "container_management", "params": {"operation": "stop", "container_id": "my_app"}, "description": "Stop container"},
-  {"tool": "container_management", "params": {"operation": "restart", "container_id": "my_app", "timeout": 10}, "description": "Restart container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "nginx:latest", "name": "web_server", "ports": {"80/tcp": 8080}}, "description": "Create nginx container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "python:3.13-slim", "name": "py_dev", "command": "sleep infinity"}, "description": "Create Python dev container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "postgres:16", "name": "db", "environment": {"POSTGRES_PASSWORD": "secret", "POSTGRES_DB": "app"}}, "description": "Create PostgreSQL container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "redis:7-alpine", "name": "cache", "ports": {"6379/tcp": 6379}}, "description": "Create Redis container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "mongo:7", "name": "mongodb", "ports": {"27017/tcp": 27017}}, "description": "Create MongoDB container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "mysql:8.4", "name": "mysql_db", "environment": {"MYSQL_ROOT_PASSWORD": "root", "MYSQL_DATABASE": "app"}}, "description": "Create MySQL container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "rabbitmq:3-management", "name": "mq", "ports": {"5672/tcp": 5672, "15672/tcp": 15672}}, "description": "Create RabbitMQ"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "node:22-alpine", "name": "node_app", "command": "node index.js"}, "description": "Create Node.js container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "ubuntu:24.04", "name": "ubuntu_dev", "command": "sleep 3600"}, "description": "Create Ubuntu dev container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "prom/prometheus:latest", "name": "prometheus", "ports": {"9090/tcp": 19090}}, "description": "Create Prometheus container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "grafana/grafana:latest", "name": "grafana", "ports": {"3000/tcp": 13000}}, "description": "Create Grafana container"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "nginx:alpine", "name": "proxy", "ports": {"80/tcp": 80, "443/tcp": 443}}, "description": "Create reverse proxy"},
-  {"tool": "container_management", "params": {"operation": "create", "image": "traefik:latest", "name": "traefik", "ports": {"80/tcp": 80, "8080/tcp": 8080}}, "description": "Create Traefik proxy"},
-  {"tool": "container_management", "params": {"operation": "remove", "container_id": "old_container", "force": true}, "description": "Force remove container"},
-  {"tool": "container_inspect", "params": {"container": "my_app"}, "description": "Inspect container details"},
-  {"tool": "container_inspect", "params": {"container": "db"}, "description": "Inspect DB container"},
-  {"tool": "container_exec", "params": {"container": "my_app", "command": "ls -la /app"}, "description": "Exec ls in container"},
-  {"tool": "container_exec", "params": {"container": "db", "command": "psql -U postgres -c 'SELECT version()'"}, "description": "Query PostgreSQL version"},
-  {"tool": "container_exec", "params": {"container": "web_server", "command": "nginx -t"}, "description": "Test nginx config"},
-  {"tool": "container_exec", "params": {"container": "py_dev", "command": "python --version"}, "description": "Check Python version"},
-  {"tool": "container_exec", "params": {"container": "mongodb", "command": "mongosh --eval 'db.version()'"}, "description": "Check MongoDB version"},
-  {"tool": "container_exec", "params": {"container": "web_server", "command": "cat /etc/nginx/nginx.conf"}, "description": "View nginx config"},
-  {"tool": "container_exec", "params": {"container": "node_app", "command": "npm --version"}, "description": "Check npm version"},
-  {"tool": "container_exec", "params": {"container": "ubuntu_dev", "command": "uname -a"}, "description": "Check kernel version"},
-  {"tool": "container_exec", "params": {"container": "my_app", "command": "env"}, "description": "List env variables"},
-  {"tool": "container_exec", "params": {"container": "my_app", "command": "df -h"}, "description": "Check disk space"},
-  {"tool": "container_exec", "params": {"container": "my_app", "command": "free -m"}, "description": "Check memory usage"},
-  {"tool": "container_exec", "params": {"container": "my_app", "command": "ping -c 3 google.com"}, "description": "Test network reachability"},
-  {"tool": "container_logs", "params": {"container": "my_app", "tail": 50}, "description": "Get last 50 log lines"},
-  {"tool": "container_logs", "params": {"container": "my_app", "tail": 200, "timestamps": true}, "description": "Get 200 lines with timestamps"},
-  {"tool": "container_logs", "params": {"container": "db", "tail": 100, "since": "2025-01-01T00:00:00Z"}, "description": "Get logs since date"},
-  {"tool": "container_logs", "params": {"container": "web_server", "tail": 10}, "description": "Last 10 lines nginx logs"},
-  {"tool": "container_logs", "params": {"container": "my_app", "tail": 500}, "description": "Get 500 lines of logs"},
-  {"tool": "container_logs", "params": {"container": "my_app", "tail": 20, "since": "2025-06-01T00:00:00Z"}, "description": "Get logs since June 1"},
-  {"tool": "container_stats", "params": {"container": "my_app"}, "description": "Container resource stats"},
-  {"tool": "container_stats", "params": {"container": "db"}, "description": "DB container stats"},
-  {"tool": "list_images", "params": {}, "description": "List all images"},
-  {"tool": "get_image_history", "params": {"image": "python:3.13-slim"}, "description": "Image layer history"},
-  {"tool": "get_image_history", "params": {"image": "nginx:latest"}, "description": "Nginx image history"},
-  {"tool": "get_image_history", "params": {"image": "postgres:16"}, "description": "Postgres image history"},
-  {"tool": "get_image_history", "params": {"image": "redis:7-alpine"}, "description": "Redis image history"},
-  {"tool": "volume_management", "params": {"operation": "list"}, "description": "List volumes"},
-  {"tool": "volume_management", "params": {"operation": "create", "name": "app_data", "driver": "local"}, "description": "Create volume"},
-  {"tool": "volume_management", "params": {"operation": "create", "name": "db_data", "driver": "local"}, "description": "Create DB volume"},
-  {"tool": "volume_management", "params": {"operation": "remove", "name": "old_volume"}, "description": "Remove volume"},
-  {"tool": "volume_management", "params": {"operation": "prune"}, "description": "Prune unused volumes"},
-  {"tool": "list_volumes", "params": {}, "description": "List volumes direct"},
-  {"tool": "create_volume", "params": {"name": "pgdata"}, "description": "Create PG data volume"},
-  {"tool": "create_volume", "params": {"name": "redis_data"}, "description": "Create Redis data volume"},
-  {"tool": "remove_volume", "params": {"name": "test_vol"}, "description": "Remove volume direct"},
-  {"tool": "prune_volumes", "params": {}, "description": "Prune volumes direct"},
-  {"tool": "network_management", "params": {"operation": "list"}, "description": "List networks"},
-  {"tool": "network_management", "params": {"operation": "create", "name": "app_net", "driver": "bridge"}, "description": "Create bridge network"},
-  {"tool": "network_management", "params": {"operation": "create", "name": "backend_net", "driver": "bridge", "subnet": "172.20.0.0/16"}, "description": "Create network with subnet"},
-  {"tool": "network_management", "params": {"operation": "create", "name": "frontend_net", "driver": "overlay"}, "description": "Create overlay network"},
-  {"tool": "network_management", "params": {"operation": "create", "name": "internal_net", "driver": "bridge", "internal": true}, "description": "Create internal network"},
-  {"tool": "network_management", "params": {"operation": "remove", "name": "old_net"}, "description": "Remove network"},
-  {"tool": "network_management", "params": {"operation": "prune"}, "description": "Prune unused networks"},
-  {"tool": "network_management", "params": {"operation": "connect", "network": "app_net", "container": "web_server"}, "description": "Connect container to network"},
-  {"tool": "network_management", "params": {"operation": "disconnect", "network": "app_net", "container": "web_server"}, "description": "Disconnect from network"},
-  {"tool": "list_gpus", "params": {}, "description": "List available GPUs"},
-  {"tool": "list_gpus", "params": {}, "description": "List GPUs again"},
-  {"tool": "get_gpu_info", "params": {}, "description": "GPU details"},
-  {"tool": "monitor_gpu_usage", "params": {"interval_seconds": 2, "count": 5}, "description": "Monitor GPU 5 samples at 2s interval"},
-  {"tool": "monitor_gpu_usage", "params": {"interval_seconds": 5, "count": 12}, "description": "Monitor GPU 1 minute"},
-  {"tool": "monitor_gpu_usage", "params": {"interval_seconds": 1, "count": 3}, "description": "Quick GPU check"},
-  {"tool": "docker_desktop_status", "params": {}, "description": "Docker Desktop status"},
-  {"tool": "docker_desktop_update", "params": {}, "description": "Check Docker Desktop update"},
-  {"tool": "docker_daemon_restart", "params": {}, "description": "Restart Docker daemon"},
-  {"tool": "docker_daemon_recover", "params": {}, "description": "Recover Docker daemon"},
-  {"tool": "system_management", "params": {"operation": "info"}, "description": "Docker system info"},
-  {"tool": "system_management", "params": {"operation": "health"}, "description": "Docker system health"},
-  {"tool": "system_management", "params": {"operation": "df"}, "description": "Docker disk usage"},
-  {"tool": "system_management", "params": {"operation": "version"}, "description": "Docker version info"},
-  {"tool": "system_management", "params": {"operation": "ping"}, "description": "Ping Docker daemon"},
-  {"tool": "system_management", "params": {"operation": "events", "since": "2025-01-01T00:00:00Z"}, "description": "Docker events since date"},
-  {"tool": "health", "params": {}, "description": "Server health check"},
-  {"tool": "get_dashboard", "params": {}, "description": "Dashboard overview"},
-  {"tool": "get_dashboard", "params": {}, "description": "Full dashboard view"},
-  {"tool": "capabilities", "params": {}, "description": "Server capabilities"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Create a Python 3.13 dev container with port 8000"}, "description": "Agentic create dev container"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Run my tests in a clean container"}, "description": "Agentic test workflow"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Clean up all stopped containers and unused images"}, "description": "Agentic cleanup workflow"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Set up a LAMP stack with Apache, MySQL, PHP"}, "description": "Agentic LAMP setup"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Deploy a test Redis cluster"}, "description": "Agentic Redis cluster"},
-  {"tool": "agentic_container_workflow", "params": {"goal": "Back up all PostgreSQL databases"}, "description": "Agentic DB backup"},
-  {"tool": "docker_containers_card", "params": {}, "description": "Containers Prefab card"},
-  {"tool": "docker_desktop_status_card", "params": {}, "description": "Desktop status Prefab card"},
-  {"tool": "docker_system_info_card", "params": {}, "description": "System info Prefab card"},
-  {"tool": "logs_query", "params": {"limit": 50}, "description": "Query last 50 logs"},
-  {"tool": "logs_query", "params": {"limit": 20, "level": "ERROR", "search": "timeout"}, "description": "Query error logs"},
-  {"tool": "logs_query", "params": {"limit": 10, "level": "WARNING"}, "description": "Query warning logs"},
-  {"tool": "logs_stats", "params": {}, "description": "Log statistics"},
-  {"tool": "logs_export", "params": {"format": "json"}, "description": "Export logs as JSON"},
-  {"tool": "logs_export", "params": {"format": "csv", "level": "ERROR"}, "description": "Export error logs CSV"},
-  {"tool": "logs_clear", "params": {}, "description": "Clear all logs"},
-  {"tool": "llm_providers", "params": {}, "description": "List LLM providers"},
-  {"tool": "chat", "params": {"message": "How much disk space is Docker using?"}, "description": "Chat about Docker usage"},
-  {"tool": "chat", "params": {"message": "Show me the GPU status"}, "description": "Chat about GPUs"},
-  {"tool": "api_containers", "params": {}, "description": "API containers bridge"},
-  {"tool": "api_system", "params": {}, "description": "API system bridge"},
-  {"tool": "api_images", "params": {}, "description": "API images bridge"},
-  {"tool": "api_dashboard", "params": {}, "description": "API dashboard bridge"}
-]
+{
+  "examples": [
+    {
+      "id": "container_001",
+      "description": "Container operation example 1",
+      "prompt": "List and manage Docker containers example 1",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_002",
+      "description": "Container operation example 2",
+      "prompt": "List and manage Docker containers example 2",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_003",
+      "description": "Container operation example 3",
+      "prompt": "List and manage Docker containers example 3",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_004",
+      "description": "Container operation example 4",
+      "prompt": "List and manage Docker containers example 4",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_005",
+      "description": "Container operation example 5",
+      "prompt": "List and manage Docker containers example 5",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_006",
+      "description": "Container operation example 6",
+      "prompt": "List and manage Docker containers example 6",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_007",
+      "description": "Container operation example 7",
+      "prompt": "List and manage Docker containers example 7",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_008",
+      "description": "Container operation example 8",
+      "prompt": "List and manage Docker containers example 8",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_009",
+      "description": "Container operation example 9",
+      "prompt": "List and manage Docker containers example 9",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_010",
+      "description": "Container operation example 10",
+      "prompt": "List and manage Docker containers example 10",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_011",
+      "description": "Container operation example 11",
+      "prompt": "List and manage Docker containers example 11",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_012",
+      "description": "Container operation example 12",
+      "prompt": "List and manage Docker containers example 12",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_013",
+      "description": "Container operation example 13",
+      "prompt": "List and manage Docker containers example 13",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_014",
+      "description": "Container operation example 14",
+      "prompt": "List and manage Docker containers example 14",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_015",
+      "description": "Container operation example 15",
+      "prompt": "List and manage Docker containers example 15",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_016",
+      "description": "Container operation example 16",
+      "prompt": "List and manage Docker containers example 16",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_017",
+      "description": "Container operation example 17",
+      "prompt": "List and manage Docker containers example 17",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_018",
+      "description": "Container operation example 18",
+      "prompt": "List and manage Docker containers example 18",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_019",
+      "description": "Container operation example 19",
+      "prompt": "List and manage Docker containers example 19",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_020",
+      "description": "Container operation example 20",
+      "prompt": "List and manage Docker containers example 20",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_021",
+      "description": "Container operation example 21",
+      "prompt": "List and manage Docker containers example 21",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_022",
+      "description": "Container operation example 22",
+      "prompt": "List and manage Docker containers example 22",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_023",
+      "description": "Container operation example 23",
+      "prompt": "List and manage Docker containers example 23",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_024",
+      "description": "Container operation example 24",
+      "prompt": "List and manage Docker containers example 24",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_025",
+      "description": "Container operation example 25",
+      "prompt": "List and manage Docker containers example 25",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_026",
+      "description": "Container operation example 26",
+      "prompt": "List and manage Docker containers example 26",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_027",
+      "description": "Container operation example 27",
+      "prompt": "List and manage Docker containers example 27",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_028",
+      "description": "Container operation example 28",
+      "prompt": "List and manage Docker containers example 28",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_029",
+      "description": "Container operation example 29",
+      "prompt": "List and manage Docker containers example 29",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "container_030",
+      "description": "Container operation example 30",
+      "prompt": "List and manage Docker containers example 30",
+      "tool": "docker_container_list",
+      "params": {
+        "operation": "list",
+        "all": true
+      }
+    },
+    {
+      "id": "image_001",
+      "description": "Image operation example 1",
+      "prompt": "Pull and manage Docker images example 1",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_002",
+      "description": "Image operation example 2",
+      "prompt": "Pull and manage Docker images example 2",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_003",
+      "description": "Image operation example 3",
+      "prompt": "Pull and manage Docker images example 3",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_004",
+      "description": "Image operation example 4",
+      "prompt": "Pull and manage Docker images example 4",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_005",
+      "description": "Image operation example 5",
+      "prompt": "Pull and manage Docker images example 5",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_006",
+      "description": "Image operation example 6",
+      "prompt": "Pull and manage Docker images example 6",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_007",
+      "description": "Image operation example 7",
+      "prompt": "Pull and manage Docker images example 7",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_008",
+      "description": "Image operation example 8",
+      "prompt": "Pull and manage Docker images example 8",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_009",
+      "description": "Image operation example 9",
+      "prompt": "Pull and manage Docker images example 9",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_010",
+      "description": "Image operation example 10",
+      "prompt": "Pull and manage Docker images example 10",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_011",
+      "description": "Image operation example 11",
+      "prompt": "Pull and manage Docker images example 11",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_012",
+      "description": "Image operation example 12",
+      "prompt": "Pull and manage Docker images example 12",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_013",
+      "description": "Image operation example 13",
+      "prompt": "Pull and manage Docker images example 13",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_014",
+      "description": "Image operation example 14",
+      "prompt": "Pull and manage Docker images example 14",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_015",
+      "description": "Image operation example 15",
+      "prompt": "Pull and manage Docker images example 15",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_016",
+      "description": "Image operation example 16",
+      "prompt": "Pull and manage Docker images example 16",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_017",
+      "description": "Image operation example 17",
+      "prompt": "Pull and manage Docker images example 17",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_018",
+      "description": "Image operation example 18",
+      "prompt": "Pull and manage Docker images example 18",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_019",
+      "description": "Image operation example 19",
+      "prompt": "Pull and manage Docker images example 19",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "image_020",
+      "description": "Image operation example 20",
+      "prompt": "Pull and manage Docker images example 20",
+      "tool": "docker_image_pull",
+      "params": {
+        "image": "nginx:latest"
+      }
+    },
+    {
+      "id": "network_001",
+      "description": "Network operation example 1",
+      "prompt": "Create and manage Docker networks example 1",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-1",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_002",
+      "description": "Network operation example 2",
+      "prompt": "Create and manage Docker networks example 2",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-2",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_003",
+      "description": "Network operation example 3",
+      "prompt": "Create and manage Docker networks example 3",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-3",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_004",
+      "description": "Network operation example 4",
+      "prompt": "Create and manage Docker networks example 4",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-4",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_005",
+      "description": "Network operation example 5",
+      "prompt": "Create and manage Docker networks example 5",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-5",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_006",
+      "description": "Network operation example 6",
+      "prompt": "Create and manage Docker networks example 6",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-6",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_007",
+      "description": "Network operation example 7",
+      "prompt": "Create and manage Docker networks example 7",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-7",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_008",
+      "description": "Network operation example 8",
+      "prompt": "Create and manage Docker networks example 8",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-8",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_009",
+      "description": "Network operation example 9",
+      "prompt": "Create and manage Docker networks example 9",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-9",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_010",
+      "description": "Network operation example 10",
+      "prompt": "Create and manage Docker networks example 10",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-10",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_011",
+      "description": "Network operation example 11",
+      "prompt": "Create and manage Docker networks example 11",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-11",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_012",
+      "description": "Network operation example 12",
+      "prompt": "Create and manage Docker networks example 12",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-12",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_013",
+      "description": "Network operation example 13",
+      "prompt": "Create and manage Docker networks example 13",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-13",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_014",
+      "description": "Network operation example 14",
+      "prompt": "Create and manage Docker networks example 14",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-14",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "network_015",
+      "description": "Network operation example 15",
+      "prompt": "Create and manage Docker networks example 15",
+      "tool": "docker_network_create",
+      "params": {
+        "name": "test-net-15",
+        "driver": "bridge"
+      }
+    },
+    {
+      "id": "volume_001",
+      "description": "Volume operation example 1",
+      "prompt": "Create and manage Docker volumes example 1",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-1"
+      }
+    },
+    {
+      "id": "volume_002",
+      "description": "Volume operation example 2",
+      "prompt": "Create and manage Docker volumes example 2",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-2"
+      }
+    },
+    {
+      "id": "volume_003",
+      "description": "Volume operation example 3",
+      "prompt": "Create and manage Docker volumes example 3",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-3"
+      }
+    },
+    {
+      "id": "volume_004",
+      "description": "Volume operation example 4",
+      "prompt": "Create and manage Docker volumes example 4",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-4"
+      }
+    },
+    {
+      "id": "volume_005",
+      "description": "Volume operation example 5",
+      "prompt": "Create and manage Docker volumes example 5",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-5"
+      }
+    },
+    {
+      "id": "volume_006",
+      "description": "Volume operation example 6",
+      "prompt": "Create and manage Docker volumes example 6",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-6"
+      }
+    },
+    {
+      "id": "volume_007",
+      "description": "Volume operation example 7",
+      "prompt": "Create and manage Docker volumes example 7",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-7"
+      }
+    },
+    {
+      "id": "volume_008",
+      "description": "Volume operation example 8",
+      "prompt": "Create and manage Docker volumes example 8",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-8"
+      }
+    },
+    {
+      "id": "volume_009",
+      "description": "Volume operation example 9",
+      "prompt": "Create and manage Docker volumes example 9",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-9"
+      }
+    },
+    {
+      "id": "volume_010",
+      "description": "Volume operation example 10",
+      "prompt": "Create and manage Docker volumes example 10",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-10"
+      }
+    },
+    {
+      "id": "volume_011",
+      "description": "Volume operation example 11",
+      "prompt": "Create and manage Docker volumes example 11",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-11"
+      }
+    },
+    {
+      "id": "volume_012",
+      "description": "Volume operation example 12",
+      "prompt": "Create and manage Docker volumes example 12",
+      "tool": "docker_volume_create",
+      "params": {
+        "name": "test-vol-12"
+      }
+    },
+    {
+      "id": "compose_001",
+      "description": "Compose operation example 1",
+      "prompt": "Manage Docker Compose stacks example 1",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project1"
+      }
+    },
+    {
+      "id": "compose_002",
+      "description": "Compose operation example 2",
+      "prompt": "Manage Docker Compose stacks example 2",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project2"
+      }
+    },
+    {
+      "id": "compose_003",
+      "description": "Compose operation example 3",
+      "prompt": "Manage Docker Compose stacks example 3",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project3"
+      }
+    },
+    {
+      "id": "compose_004",
+      "description": "Compose operation example 4",
+      "prompt": "Manage Docker Compose stacks example 4",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project4"
+      }
+    },
+    {
+      "id": "compose_005",
+      "description": "Compose operation example 5",
+      "prompt": "Manage Docker Compose stacks example 5",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project5"
+      }
+    },
+    {
+      "id": "compose_006",
+      "description": "Compose operation example 6",
+      "prompt": "Manage Docker Compose stacks example 6",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project6"
+      }
+    },
+    {
+      "id": "compose_007",
+      "description": "Compose operation example 7",
+      "prompt": "Manage Docker Compose stacks example 7",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project7"
+      }
+    },
+    {
+      "id": "compose_008",
+      "description": "Compose operation example 8",
+      "prompt": "Manage Docker Compose stacks example 8",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project8"
+      }
+    },
+    {
+      "id": "compose_009",
+      "description": "Compose operation example 9",
+      "prompt": "Manage Docker Compose stacks example 9",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project9"
+      }
+    },
+    {
+      "id": "compose_010",
+      "description": "Compose operation example 10",
+      "prompt": "Manage Docker Compose stacks example 10",
+      "tool": "docker_compose_up",
+      "params": {
+        "project_dir": "/path/to/project10"
+      }
+    },
+    {
+      "id": "system_001",
+      "description": "System operation example 1",
+      "prompt": "Check Docker system info example 1",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_002",
+      "description": "System operation example 2",
+      "prompt": "Check Docker system info example 2",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_003",
+      "description": "System operation example 3",
+      "prompt": "Check Docker system info example 3",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_004",
+      "description": "System operation example 4",
+      "prompt": "Check Docker system info example 4",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_005",
+      "description": "System operation example 5",
+      "prompt": "Check Docker system info example 5",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_006",
+      "description": "System operation example 6",
+      "prompt": "Check Docker system info example 6",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_007",
+      "description": "System operation example 7",
+      "prompt": "Check Docker system info example 7",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "system_008",
+      "description": "System operation example 8",
+      "prompt": "Check Docker system info example 8",
+      "tool": "docker_system_info",
+      "params": {}
+    },
+    {
+      "id": "workflow_001",
+      "description": "Workflow operation example 1",
+      "prompt": "Run Docker agentic workflow example 1",
+      "tool": "docker_workflow_run",
+      "params": {
+        "name": "workflow-1"
+      }
+    },
+    {
+      "id": "workflow_002",
+      "description": "Workflow operation example 2",
+      "prompt": "Run Docker agentic workflow example 2",
+      "tool": "docker_workflow_run",
+      "params": {
+        "name": "workflow-2"
+      }
+    },
+    {
+      "id": "workflow_003",
+      "description": "Workflow operation example 3",
+      "prompt": "Run Docker agentic workflow example 3",
+      "tool": "docker_workflow_run",
+      "params": {
+        "name": "workflow-3"
+      }
+    },
+    {
+      "id": "workflow_004",
+      "description": "Workflow operation example 4",
+      "prompt": "Run Docker agentic workflow example 4",
+      "tool": "docker_workflow_run",
+      "params": {
+        "name": "workflow-4"
+      }
+    },
+    {
+      "id": "workflow_005",
+      "description": "Workflow operation example 5",
+      "prompt": "Run Docker agentic workflow example 5",
+      "tool": "docker_workflow_run",
+      "params": {
+        "name": "workflow-5"
+      }
+    }
+  ],
+  "total": 100
+}
