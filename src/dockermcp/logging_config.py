@@ -369,7 +369,8 @@ def configure_logging(
 
     # Add console handler
     if enable_console:
-        console_handler = logging.StreamHandler(sys.stdout)
+        # stderr, never stdout: in stdio mode stdout carries only MCP JSON-RPC frames.
+        console_handler = logging.StreamHandler(sys.stderr)
         console_handler.setLevel(level)
         console_handler.setFormatter(formatter)
         root_logger.addHandler(console_handler)

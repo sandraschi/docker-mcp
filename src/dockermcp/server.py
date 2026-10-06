@@ -80,18 +80,24 @@ def run_fastapi_server():
     uvicorn.run(app, host="127.0.0.1", port=10807, log_level="warning")
 
 
-def main() -> None:
-    """Initialize and run the Docker MCP server with stdio transport and FastAPI HTTP."""
+def main(web_bridge: bool = True) -> None:
+    """Initialize and run the Docker MCP server with stdio transport.
+
+    With ``web_bridge`` (default, Claude Desktop / mcpb) a FastAPI bridge for the dev webapp is
+    also started on port 10807. IDE registrations of the installed sidecar pass ``False``: stdio
+    only, so they never contend for 10807 with a dev stack or another client's instance.
+    """
     try:
-        # Start FastAPI server in a background thread
-        fastapi_thread = threading.Thread(target=run_fastapi_server, daemon=True)
-        fastapi_thread.start()
-        logger.info("FastAPI server started in background thread")
+        if web_bridge:
+            # Start FastAPI server in a background thread
+            fastapi_thread = threading.Thread(target=run_fastapi_server, daemon=True)
+            fastapi_thread.start()
+            logger.info("FastAPI server started in background thread")
 
-        # Give FastAPI time to start
-        import time
+            # Give FastAPI time to start
+            import time
 
-        time.sleep(2)
+            time.sleep(2)
 
         # Start MCP stdio server
         logger.info("Starting Docker MCP server with stdio transport...")

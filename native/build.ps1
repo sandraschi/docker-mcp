@@ -114,7 +114,15 @@ foreach ($route in @("/api/health", "/api/v1/diagnostics")) {
 }
 $testProc.Kill(); $testProc.Dispose()
 Remove-Item "$Root\dist\pyi-crash.log" -Force -ErrorAction SilentlyContinue
-Write-Host "  Frozen binary smoke test PASSED" -ForegroundColor Green
+Write-Host "  Frozen binary HTTP smoke test PASSED" -ForegroundColor Green
+
+# Stdio transport: this is what an IDE/Claude Desktop registration of the installed sidecar runs
+# (`docker-mcp-backend.exe --stdio`). Real MCP handshake; fails if anything but JSON-RPC hits stdout.
+Write-Host "  Smoke-testing frozen binary over stdio (--stdio)..." -ForegroundColor Yellow
+$pyExe = "$Root\.venv\Scripts\python.exe"
+& $pyExe "$Root\scripts\smoke_stdio.py" $src --stdio
+if ($LASTEXITCODE -ne 0) { throw "Frozen binary stdio MCP handshake failed (see output above)" }
+Write-Host "  Frozen binary stdio smoke test PASSED" -ForegroundColor Green
 
 Copy-Item $src "$ResourceDir\${RepoName}-backend.exe" -Force
 Copy-Item $src "$DevDir\${RepoName}-backend-$Triple.exe" -Force
