@@ -39,6 +39,13 @@ def _run_http() -> None:
 
 
 def _run_stdio() -> None:
+    # Probe first, before any Docker/tool init: if the desktop app / dev stack backend is up and
+    # healthy, proxy to it instead of running a second instance (SOTA_REQUIREMENTS 2.3).
+    from docker_mcp.daemon_probe import proxy_if_daemon
+
+    if proxy_if_daemon():
+        return
+
     from dockermcp.server import main as stdio_main
 
     stdio_main(web_bridge=False)

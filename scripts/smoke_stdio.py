@@ -53,7 +53,14 @@ def main() -> int:
         print(__doc__)
         return 2
     proc = subprocess.Popen(
-        sys.argv[1:], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, bufsize=1
+        sys.argv[1:],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        bufsize=1,
     )
     stderr_buf: list[str] = []
 
