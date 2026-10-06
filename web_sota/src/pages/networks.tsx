@@ -1,10 +1,13 @@
 import { AlertCircle, ArrowDown, ArrowUp, Loader2, Network } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ExportButtons } from "@/components/export-buttons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { useViewMode, ViewToggle } from "@/components/view-toggle";
 import { API_BASE } from "@/lib/api";
-import { formatDate, resourceHref, shortId } from "@/lib/format";
+import type { Column } from "@/lib/export";
+import { formatAge, formatDate, resourceHref, shortId, truncate } from "@/lib/format";
 import { PAGE_SIZES, type SortDir, useClientTable } from "@/lib/useClientTable";
 
 interface NetworkItem {
@@ -17,10 +20,16 @@ interface NetworkItem {
   enable_ipv6?: boolean;
   container_count?: number;
   subnet?: string | null;
+  subnets?: string[];
+  gateway?: string | null;
+  labels?: Record<string, string>;
 }
 
 const matchNetwork = (n: NetworkItem, q: string) => {
-  const hay = [n.name, n.id, n.driver, n.scope, n.subnet].filter(Boolean).join(" ").toLowerCase();
+  const hay = [n.name, n.id, n.driver, n.scope, n.subnet, n.internal ? "internal" : "external"]
+    .filter(Boolean)
+    .join(" ")
+    .toLowerCase();
   return hay.includes(q);
 };
 
@@ -34,20 +43,37 @@ const sortValue = (n: NetworkItem, key: string): string | number => {
       return n.container_count ?? 0;
     case "created":
       return n.created || "";
+    case "subnet":
+      return n.subnet || "";
     default:
       return n.name || "";
   }
 };
+
+const NETWORK_COLUMNS: Array<Column<NetworkItem>> = [
+  { key: "name", label: "Name", value: (n) => n.name },
+  { key: "id", label: "ID", value: (n) => n.id },
+  { key: "driver", label: "Driver", value: (n) => n.driver },
+  { key: "scope", label: "Scope", value: (n) => n.scope },
+  { key: "subnet", label: "Subnet", value: (n) => n.subnet },
+  { key: "gateway", label: "Gateway", value: (n) => n.gateway },
+  { key: "containers", label: "ContainerCount", value: (n) => n.container_count },
+  { key: "internal", label: "Internal", value: (n) => (n.internal ? "yes" : "no") },
+  { key: "ipv6", label: "IPv6", value: (n) => (n.enable_ipv6 ? "yes" : "no") },
+  { key: "created", label: "Created", value: (n) => n.created },
+];
 
 export function Networks() {
   const [networks, setNetworks] = useState<NetworkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [driverFilter, setDriverFilter] = useState("all");
   const [sortKey, setSortKey] = useState("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [page, setPage] = useState(0);
   const [pageSize, setPageSize] = useState(50);
+  const [viewMode, setViewMode] = useViewMode("docker-mcp:networks:view", "list");
 
   const fetchNetworks = async () => {
     setLoading(true);
@@ -69,9 +95,19 @@ export function Networks() {
     fetchNetworks();
   }, []);
 
+  const drivers = useMemo(() => {
+    const set = new Set(networks.map((n) => n.driver).filter(Boolean) as string[]);
+    return [...set].sort();
+  }, [networks]);
+
+  const filtered = useMemo(() => {
+    if (driverFilter === "all") return networks;
+    return networks.filter((n) => n.driver === driverFilter);
+  }, [networks, driverFilter]);
+
   const match = useCallback(matchNetwork, []);
   const getSort = useCallback(sortValue, []);
-  const table = useClientTable(networks, {
+  const table = useClientTable(filtered, {
     search,
     match,
     sortKey,
@@ -83,7 +119,7 @@ export function Networks() {
 
   useEffect(() => {
     setPage(0);
-  }, [search, pageSize]);
+  }, [search, pageSize, driverFilter, viewMode]);
 
   const toggleSort = (key: string) => {
     if (sortKey === key) setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -92,6 +128,8 @@ export function Networks() {
       setSortDir(key === "created" || key === "containers" ? "desc" : "asc");
     }
   };
+
+  const totalAttached = networks.reduce((sum, n) => sum + (n.container_count ?? 0), 0);
 
   if (loading && networks.length === 0) {
     return (
@@ -103,14 +141,16 @@ export function Networks() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white">Networks</h2>
           <p className="text-slate-400">
-            {table.filteredCount} of {networks.length} networks
+            {table.filteredCount} of {networks.length} networks · {totalAttached} attached endpoints
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <ViewToggle mode={viewMode} onChange={setViewMode} />
+          <ExportButtons base="networks" columns={NETWORK_COLUMNS} rows={table.sortedFull} />
           <button
             type="button"
             onClick={fetchNetworks}
@@ -148,6 +188,18 @@ export function Networks() {
               className="max-w-sm bg-slate-900 border-slate-700 text-slate-100"
             />
             <select
+              value={driverFilter}
+              onChange={(e) => setDriverFilter(e.target.value)}
+              className="h-10 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200"
+            >
+              <option value="all">All drivers</option>
+              {drivers.map((d) => (
+                <option key={d} value={d}>
+                  {d}
+                </option>
+              ))}
+            </select>
+            <select
               value={pageSize}
               onChange={(e) => setPageSize(Number(e.target.value))}
               className="h-10 rounded-md border border-slate-700 bg-slate-900 px-3 text-sm text-slate-200"
@@ -163,12 +215,12 @@ export function Networks() {
         <CardContent>
           {table.rows.length === 0 && !error ? (
             <p className="text-slate-500 py-8 text-center">No networks match.</p>
-          ) : (
+          ) : viewMode === "list" ? (
             <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-800 text-left text-slate-400">
+              <div className="overflow-x-auto rounded-md border border-slate-800/60">
+                <table className="w-full min-w-[900px] text-sm">
+                  <thead className="bg-slate-900/80">
+                    <tr className="text-left text-xs uppercase tracking-wide text-slate-400">
                       <SortTh
                         label="Name"
                         k="name"
@@ -176,7 +228,7 @@ export function Networks() {
                         sortDir={sortDir}
                         onClick={toggleSort}
                       />
-                      <th className="pb-2 pr-4 font-medium">ID</th>
+                      <th className="px-3 py-2 font-medium">ID</th>
                       <SortTh
                         label="Driver"
                         k="driver"
@@ -191,7 +243,13 @@ export function Networks() {
                         sortDir={sortDir}
                         onClick={toggleSort}
                       />
-                      <th className="pb-2 pr-4 font-medium">Subnet</th>
+                      <SortTh
+                        label="Subnet"
+                        k="subnet"
+                        sortKey={sortKey}
+                        sortDir={sortDir}
+                        onClick={toggleSort}
+                      />
                       <SortTh
                         label="Containers"
                         k="containers"
@@ -200,7 +258,7 @@ export function Networks() {
                         onClick={toggleSort}
                       />
                       <SortTh
-                        label="Created"
+                        label="Age"
                         k="created"
                         sortKey={sortKey}
                         sortDir={sortDir}
@@ -208,36 +266,149 @@ export function Networks() {
                       />
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-800/80">
                     {table.rows.map((n) => (
-                      <tr
-                        key={n.id}
-                        className="border-b border-slate-800/80 text-slate-200 hover:bg-slate-800/40"
-                      >
-                        <td className="py-3 pr-4">
+                      <tr key={n.id} className="text-slate-200 hover:bg-slate-800/40">
+                        <td className="max-w-[240px] px-3 py-2.5 align-top">
                           <Link
                             to={resourceHref("networks", n.id)}
                             className="flex items-center gap-2 text-blue-400 hover:underline"
                           >
-                            <Network className="h-4 w-4 text-blue-500 shrink-0" />
-                            {n.name}
+                            <Network className="h-4 w-4 shrink-0 text-blue-500" />
+                            <span className="truncate font-medium" title={n.name}>
+                              {truncate(n.name, 32)}
+                            </span>
                           </Link>
-                          {n.internal ? (
-                            <span className="ml-2 text-xs text-slate-500">internal</span>
-                          ) : null}
+                          <span className="mt-1 flex flex-wrap gap-1 pl-6">
+                            {n.internal ? (
+                              <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-400">
+                                internal
+                              </span>
+                            ) : null}
+                            {n.enable_ipv6 ? (
+                              <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-400">
+                                IPv6
+                              </span>
+                            ) : null}
+                          </span>
                         </td>
-                        <td className="py-3 pr-4 font-mono text-slate-400">{shortId(n.id)}</td>
-                        <td className="py-3 pr-4">{n.driver || "—"}</td>
-                        <td className="py-3 pr-4">{n.scope || "—"}</td>
-                        <td className="py-3 pr-4 font-mono text-xs">{n.subnet || "—"}</td>
-                        <td className="py-3 pr-4">{n.container_count ?? 0}</td>
-                        <td className="py-3 text-slate-400 whitespace-nowrap">
-                          {formatDate(n.created)}
+                        <td className="px-3 py-2.5 align-top font-mono text-xs text-slate-400">
+                          {shortId(n.id)}
+                        </td>
+                        <td className="px-3 py-2.5 align-top">
+                          <span className="inline-flex items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-xs text-slate-200">
+                            {n.driver || "—"}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 align-top text-slate-300">{n.scope || "—"}</td>
+                        <td className="px-3 py-2.5 align-top font-mono text-xs text-slate-300">
+                          {n.subnet ? (
+                            <span title={n.subnet}>{truncate(n.subnet, 24)}</span>
+                          ) : (
+                            <span className="text-slate-600">—</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 align-top">
+                          <span
+                            className={`inline-flex min-w-[2rem] items-center justify-center rounded-full px-2 py-0.5 text-xs font-semibold ${
+                              (n.container_count ?? 0) > 0
+                                ? "bg-blue-950/80 text-blue-300 border border-blue-800"
+                                : "bg-slate-800 text-slate-400 border border-slate-700"
+                            }`}
+                          >
+                            {n.container_count ?? 0}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2.5 align-top whitespace-nowrap">
+                          <span className="block text-[13px] font-medium text-slate-200">
+                            {formatAge(n.created)}
+                          </span>
+                          <span className="block text-[11px] text-slate-500">
+                            {formatDate(n.created)}
+                          </span>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+              </div>
+              <Pager page={table.page} pageCount={table.pageCount} onPage={setPage} />
+            </>
+          ) : (
+            <>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {table.rows.map((n) => (
+                  <div
+                    key={n.id}
+                    className="flex flex-col rounded-lg border border-slate-800 bg-slate-900/60 p-4 transition-colors hover:border-slate-700 hover:bg-slate-900"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <Link
+                        to={resourceHref("networks", n.id)}
+                        className="flex min-w-0 items-center gap-2 text-blue-400 hover:underline"
+                      >
+                        <Network className="h-4 w-4 shrink-0 text-blue-500" />
+                        <span className="truncate font-semibold text-slate-100" title={n.name}>
+                          {truncate(n.name, 36)}
+                        </span>
+                      </Link>
+                      <span className="inline-flex shrink-0 items-center rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-300">
+                        {n.driver || "—"}
+                      </span>
+                    </div>
+                    <p className="mt-1 font-mono text-[11px] text-slate-500">{shortId(n.id)}</p>
+                    <div className="mt-3 grid grid-cols-2 gap-3 text-[13px]">
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Subnet</p>
+                        <p
+                          className="truncate font-mono text-xs text-slate-200"
+                          title={n.subnet ?? ""}
+                        >
+                          {n.subnet || "—"}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Scope</p>
+                        <p className="text-slate-200">{n.scope || "—"}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">
+                          Containers
+                        </p>
+                        <p className="font-semibold text-slate-100">{n.container_count ?? 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-[11px] uppercase tracking-wide text-slate-500">Age</p>
+                        <p className="font-medium text-slate-200" title={formatDate(n.created)}>
+                          {formatAge(n.created)}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {n.internal && (
+                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-400">
+                          internal
+                        </span>
+                      )}
+                      {n.enable_ipv6 && (
+                        <span className="rounded-full border border-slate-700 bg-slate-900 px-2 py-0.5 text-[11px] text-slate-400">
+                          IPv6 enabled
+                        </span>
+                      )}
+                      {!n.internal && !n.enable_ipv6 && (
+                        <span className="text-[11px] text-slate-600">external · IPv4</span>
+                      )}
+                    </div>
+                    <div className="mt-3 border-t border-slate-800 pt-3">
+                      <Link
+                        to={resourceHref("networks", n.id)}
+                        className="text-[13px] font-medium text-blue-400 hover:underline"
+                      >
+                        View details →
+                      </Link>
+                    </div>
+                  </div>
+                ))}
               </div>
               <Pager page={table.page} pageCount={table.pageCount} onPage={setPage} />
             </>
@@ -263,7 +434,7 @@ function SortTh({
 }) {
   const active = sortKey === k;
   return (
-    <th className="pb-2 pr-4 font-medium">
+    <th className="px-3 py-2 font-medium">
       <button
         type="button"
         onClick={() => onClick(k)}

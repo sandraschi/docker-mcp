@@ -1,4 +1,4 @@
-import { Cpu, RefreshCw, Save, Server } from "lucide-react";
+import { Cpu, FolderGit2, RefreshCw, Save, Server } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -36,6 +36,16 @@ export function Settings() {
   const [dockerStatus, setDockerStatus] = useState<Record<string, unknown> | null>(null);
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [engineError, setEngineError] = useState<string | null>(null);
+  const [fleet, setFleet] = useState<{
+    fleet_root?: string;
+    exists?: boolean;
+    is_default?: boolean;
+    repo_count?: number;
+    default?: string;
+  } | null>(null);
+  const [fleetInput, setFleetInput] = useState("");
+  const [fleetMsg, setFleetMsg] = useState<string | null>(null);
+  const [fleetSaving, setFleetSaving] = useState(false);
 
   const activeProvider = useMemo(
     () => providers.find((p) => p.type === provider),
@@ -108,17 +118,51 @@ export function Settings() {
   useEffect(() => {
     void (async () => {
       try {
-        const [statusRes, diagRes] = await Promise.all([
+        const [statusRes, diagRes, fleetRes] = await Promise.all([
           fetch(`${API_BASE}/api/docker/status`),
           fetch(`${API_BASE}/api/v1/diagnostics`),
+          fetch(`${API_BASE}/api/settings/fleet`),
         ]);
         if (statusRes.ok) setDockerStatus(await statusRes.json());
         if (diagRes.ok) setDiagnostics(await diagRes.json());
+        if (fleetRes.ok) {
+          const fleetJson = await fleetRes.json();
+          setFleet(fleetJson);
+          setFleetInput(String(fleetJson.fleet_root ?? ""));
+        }
       } catch (e) {
         setEngineError(e instanceof Error ? e.message : "Failed to load engine status");
       }
     })();
   }, []);
+
+  const saveFleetRoot = async (value: string) => {
+    const next = value.trim();
+    if (!next) {
+      setFleetMsg("Enter a folder path first.");
+      return;
+    }
+    setFleetSaving(true);
+    setFleetMsg(null);
+    try {
+      const res = await fetch(`${API_BASE}/api/settings/fleet`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fleet_root: next }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.detail || `HTTP ${res.status}`);
+      setFleet(json);
+      setFleetInput(String(json.fleet_root ?? next));
+      setFleetMsg(
+        json.warning ? String(json.warning) : `Saved — ${json.repo_count ?? 0} repos detected.`,
+      );
+    } catch (e) {
+      setFleetMsg(e instanceof Error ? e.message : "Save failed");
+    } finally {
+      setFleetSaving(false);
+    }
+  };
 
   const onProviderChange = (next: string) => {
     applyProvider(next, providers);
@@ -322,6 +366,70 @@ export function Settings() {
               Backup
             </Link>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card className="border-slate-800 bg-slate-950/50">
+        <CardHeader>
+          <div className="flex items-center gap-2">
+            <FolderGit2 className="h-5 w-5 text-violet-500" />
+            <CardTitle className="text-white">Fleet repositories</CardTitle>
+          </div>
+          <CardDescription className="text-slate-400">
+            Where your own repos live. Local images (myai-*, deepfang-*, …) are matched against this
+            folder — anyone cloning from GitHub should point it at their checkout. The
+            DOCKER_MCP_FLEET_ROOT env var overrides this file.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {fleet ? (
+            <div className="flex flex-wrap items-center gap-2 text-sm">
+              <span className="font-mono text-xs text-slate-200 break-all">{fleet.fleet_root}</span>
+              {fleet.exists ? (
+                <span className="inline-flex items-center rounded-full border border-emerald-800 bg-emerald-950/60 px-2 py-0.5 text-xs text-emerald-300">
+                  {fleet.repo_count ?? 0} repos
+                </span>
+              ) : (
+                <span className="inline-flex items-center rounded-full border border-amber-800 bg-amber-950/60 px-2 py-0.5 text-xs text-amber-300">
+                  folder not found
+                </span>
+              )}
+              {fleet.is_default ? (
+                <span className="text-xs text-slate-500">default</span>
+              ) : (
+                <span className="text-xs text-slate-500">custom</span>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-slate-500">Loading fleet location…</p>
+          )}
+          <div className="grid gap-2">
+            <Label className="text-slate-300">Repos folder</Label>
+            <Input
+              value={fleetInput}
+              onChange={(e) => setFleetInput(e.target.value)}
+              placeholder="e.g. D:/Dev/repos or /home/you/fleet"
+              className="bg-slate-900 border-slate-800 text-slate-100 font-mono text-sm"
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+              disabled={fleetSaving}
+              onClick={() => void saveFleetRoot(fleetInput)}
+            >
+              <Save className="mr-2 h-4 w-4" /> {fleetSaving ? "Saving…" : "Save folder"}
+            </Button>
+            <Button
+              variant="outline"
+              className="border-slate-800 text-slate-300 hover:bg-slate-800"
+              disabled={fleetSaving || !fleet?.default}
+              onClick={() => void saveFleetRoot(String(fleet?.default ?? ""))}
+            >
+              Reset to default
+            </Button>
+          </div>
+          {fleetMsg && <p className="text-sm text-slate-400">{fleetMsg}</p>}
         </CardContent>
       </Card>
 
