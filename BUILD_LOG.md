@@ -2,6 +2,20 @@
 
 Running record of installer / bundle builds, failures, and fixes.
 
+## 2026-10-06 (later) - dual transport, stdout fix, release assets
+
+Rebuilt both artifacts and replaced the assets on the `v3.5.0` release
+(`docker-mcp-3.5.0.mcpb`, `docker-mcp-3.5.0-setup.exe`). The release had no assets before.
+
+| # | Problem | Fix |
+|---|---------|-----|
+| 1 | **JSON log lines went to stdout in stdio mode**, corrupting the MCP JSON-RPC stream. This also affected the `.mcpb` shipped earlier the same day. | `logging_config.py` console handler writes to stderr. |
+| 2 | Sidecar `run_server.py` was HTTP-only, so the installed `docker-mcp-backend.exe` could not be registered in an IDE over stdio. | Same contract as arxiv-mcp: HTTP by default (Tauri spawn), stdio on `--stdio` or `MCP_TRANSPORT=stdio`, without the web bridge on 10807 (`dockermcp.server.main(web_bridge=False)`). |
+| 3 | No test proved the server speaks MCP over stdio; the earlier launch checks only showed a process staying alive. | `scripts/smoke_stdio.py` does a real `initialize` + `tools/list` handshake and fails on any non-JSON-RPC stdout. `native/build.ps1` runs it against the frozen exe; verified against the packed `.mcpb` from a clean unpack (43 tools). |
+| 4 | Packed `.mcpb` included two stale `pyproject.toml.bak_*` files. | `*.bak*` added to `.mcpbignore`. |
+
+Not done: CUA install/launch/uninstall smoke test. The release tag `v3.5.0` still points at an older commit than these binaries.
+
 ## 2026-10-06 - v3.5.0 rebuild (MCPB + Tauri NSIS)
 
 Artifacts:
