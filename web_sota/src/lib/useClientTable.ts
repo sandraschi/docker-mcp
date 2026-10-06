@@ -43,5 +43,7 @@ export function useClientTable<T>(
     pageCount,
     page,
     rows: slice,
+    /** Full filtered + sorted list (all pages) — use for CSV/JSON export. */
+    sortedFull: sorted,
   };
 }

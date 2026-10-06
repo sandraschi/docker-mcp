@@ -338,7 +338,7 @@ export function Chat() {
     <div className="flex h-[calc(100vh-8rem)] flex-col space-y-3" data-testid="chat-page">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
-          <h2 className="text-2xl font-bold tracking-tight text-white">AI Command</h2>
+          <h2 className="text-2xl font-bold tracking-tight text-white">AI Chat</h2>
           <div
             className="flex gap-1 bg-slate-900 rounded-lg p-1 border border-slate-800"
             data-testid="personality-select"

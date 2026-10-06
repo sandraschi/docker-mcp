@@ -4,6 +4,7 @@ import {
   ChevronRight,
   Container,
   Database,
+  FileText,
   FlaskConical,
   HelpCircle,
   Image as ImageIcon,
@@ -33,7 +34,8 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
     { href: "/volumes", label: "Volumes", icon: Database },
     { href: "/networks", label: "Networks", icon: Network },
     { href: "/compose", label: "Compose", icon: Layers },
-    { href: "/chat", label: "AI Command", icon: MessageSquare },
+    { href: "/reports", label: "Reports", icon: FileText },
+    { href: "/chat", label: "AI Chat", icon: MessageSquare },
     { href: "/tools", label: "MCP Tools", icon: Wrench },
     { href: "/examples", label: "Examples", icon: FlaskConical },
     { href: "/logs", label: "Event logs", icon: ScrollText },
@@ -48,11 +50,30 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
         collapsed ? "w-16" : "w-64",
       )}
     >
-      <div className="flex h-16 items-center border-b border-slate-800 px-4">
-        <div className="flex items-center gap-2 font-semibold text-slate-100">
-          <Box className="h-6 w-6 text-blue-500" />
-          {!collapsed && <span className="animate-in fade-in duration-300">Docker Management</span>}
-        </div>
+      <div
+        className={cn(
+          "border-b border-slate-800",
+          collapsed
+            ? "flex flex-col items-center gap-1 px-1 py-2"
+            : "flex h-16 items-center justify-between gap-2 px-3",
+        )}
+      >
+        {!collapsed && (
+          <div className="flex min-w-0 flex-1 items-center gap-2 font-semibold text-slate-100">
+            <Box className="h-6 w-6 shrink-0 text-blue-500" />
+            <span className="animate-in fade-in truncate duration-300">Docker Management</span>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          data-testid="sidebar-toggle"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          className="flex shrink-0 items-center justify-center rounded-md p-2 text-slate-400 transition-colors hover:bg-slate-800 hover:text-white"
+        >
+          {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+        </button>
+        {collapsed && <Box className="h-6 w-6 shrink-0 text-blue-500" aria-hidden />}
       </div>
 
       <nav className="flex-1 space-y-1 p-2">
@@ -86,22 +107,6 @@ export function Sidebar({ collapsed, onToggle }: SidebarProps) {
           );
         })}
       </nav>
-
-      <div className="border-t border-slate-800 p-2">
-        <button
-          onClick={onToggle}
-          className="flex w-full items-center justify-center rounded-md p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition-colors"
-        >
-          {collapsed ? (
-            <ChevronRight className="h-5 w-5" />
-          ) : (
-            <div className="flex items-center w-full">
-              <ChevronLeft className="h-5 w-5 mr-3" />
-              <span>Collapse</span>
-            </div>
-          )}
-        </button>
-      </div>
     </aside>
   );
 }

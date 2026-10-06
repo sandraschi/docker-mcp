@@ -12,6 +12,7 @@ import { Images } from "@/pages/images";
 import { LogsPage } from "@/pages/logs";
 import { NetworkDetail } from "@/pages/network-detail";
 import { Networks } from "@/pages/networks";
+import { Reports } from "@/pages/reports";
 import { Settings } from "@/pages/settings";
 import { ToolRunner } from "@/pages/tool-runner";
 import { Tools } from "@/pages/tools";
@@ -32,6 +33,8 @@ function App() {
           <Route path="/volumes" element={<Volumes />} />
           <Route path="/networks/:id" element={<NetworkDetail />} />
           <Route path="/networks" element={<Networks />} />
+          <Route path="/compose" element={<Compose />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/chat" element={<Chat />} />
           <Route path="/tools/:name" element={<ToolRunner />} />
           <Route path="/tools" element={<Tools />} />
