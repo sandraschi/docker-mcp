@@ -20,10 +20,10 @@
     "type": "python",
     "entry_point": "src/dockermcp/server.py",
     "mcp_config": {
-      "command": "python",
-      "args": ["-m", "dockermcp"],
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "python", "-m", "dockermcp.server"],
       "env": {
-        "PYTHONPATH": "${PWD}/src",
+        "PYTHONPATH": "${__dirname}/src",
         "PYTHONUNBUFFERED": "1",
         "DOCKER_MCP_LLM_GLOM": "1"
       }
