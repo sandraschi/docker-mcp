@@ -10,13 +10,12 @@ import logging
 import sys
 import warnings
 from contextlib import asynccontextmanager
-from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from docker_mcp.web import setup_webapp
-from dockermcp.logging_config import configure_logging, logger
+from dockermcp.logging_config import LOG_FILE, configure_logging, logger
 from dockermcp.mcp_instance import get_mcp
 
 # Initialize MCP + tools before web routes import dockermcp tool modules
@@ -64,7 +63,7 @@ quiet_probe_access_logs()
 configure_logging(
     enable_console=True,
     json_format=False,
-    log_file=str(Path("logs/dockermcp.log")),
+    log_file=str(LOG_FILE),
     level="WARNING",
 )
 
@@ -202,10 +201,6 @@ async def run_mcp_server():
 def main():
     """Initialize and run the Docker MCP server with all tools."""
     try:
-        # Create logs directory if it doesn't exist
-        logs_dir = Path("logs")
-        logs_dir.mkdir(exist_ok=True)
-
         # Create and run the event loop
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
