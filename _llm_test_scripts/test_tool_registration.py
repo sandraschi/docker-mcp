@@ -22,26 +22,22 @@ async def test_tool_registration():
     mcp_singleton = FastMCPSingleton()
     mcp = mcp_singleton.mcp
 
-    # Get registered tools
-    tools = mcp.get_tools()
+    # Get registered tools (FastMCP 3.x API, async)
+    tools = await mcp.list_tools()
     print(f"\nFound {len(tools)} registered tools:")
     for tool in tools:
-        print(f"- {tool['name']}: {tool['description']}")
+        print(f"- {tool.name}: {tool.description}")
 
     # Test list_containers tool
-    if "list_containers" in [t["name"] for t in tools]:
+    if "list_containers" in [t.name for t in tools]:
         print("\nTesting list_containers tool...")
         try:
             # Find the tool
-            tool = next(t for t in tools if t["name"] == "list_containers")
+            tool = next(t for t in tools if t.name == "list_containers")
 
-            # Call the tool
-            result = await tool["function"](all_states=False)
-
-            if result.get("status") == "success":
-                print(f"✓ Successfully listed {len(result.get('containers', []))} containers")
-            else:
-                print(f"✗ Error: {result.get('message', 'Unknown error')}")
+            # Call the tool (3.x Tool.run takes an arguments dict)
+            result = await tool.run({"all_states": False})
+            print(f"V list_containers call ok: {str(result.content)[:120]}")
 
         except Exception as e:
             print(f"✗ Error testing list_containers: {e!s}")
