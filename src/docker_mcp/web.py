@@ -714,4 +714,4 @@ def _setup_diagnostics_routes(app: FastAPI, start_time: float, mcp_app: FastMCP)
     async def recover_docker():
         from dockermcp.docker_context import triple_kill_docker
 
-        return triple_kill_docker()
+        return await asyncio.to_thread(triple_kill_docker)
