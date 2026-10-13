@@ -1,1 +1,99 @@
-<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="9" time="9.605" timestamp="2026-10-06T03:59:31.257861+02:00" hostname="Goliath"><testcase classname="tests.test_daemon_probe" name="test_healthy_daemon_is_found" time="0.878" /><testcase classname="tests.test_daemon_probe" name="test_nothing_listening_means_no_daemon" time="2.317" /><testcase classname="tests.test_daemon_probe" name="test_hung_zombie_is_rejected_within_health_timeout" time="2.337" /><testcase classname="tests.test_daemon_probe" name="test_other_service_on_the_port_is_rejected" time="0.819" /><testcase classname="tests.test_daemon_probe" name="test_unhealthy_status_is_rejected" time="0.844" /><testcase classname="tests.test_daemon_probe" name="test_health_500_is_rejected" time="0.868" /><testcase classname="tests.test_daemon_probe" name="test_healthy_but_mcp_mount_dead_is_rejected" time="0.843" /><testcase classname="tests.test_daemon_probe" name="test_opt_out" time="0.502" /><testcase classname="tests.test_daemon_probe" name="test_default_candidates_are_operator_then_dev" time="0.001" /></testsuite></testsuites>
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="2" skipped="0" tests="2" time="3.135" timestamp="2026-10-12T12:48:26.825513+02:00" hostname="Goliath"><testcase classname="tests.unit.tools.test_prune_networks" name="test_prune_networks_no_networks" time="0.003"><failure message="AttributeError: 'NetworkOperationResponse' object has no attribute 'data'">mcp_docker_stub = &lt;MagicMock id='2588881210640'&gt;
+
+    def test_prune_networks_no_networks(mcp_docker_stub):
+        """Prune with nothing to delete."""
+        client = mcp_docker_stub
+        client.networks.prune.return_value = {"NetworksDeleted": [], "SpaceReclaimed": 0}
+
+        response = prune_networks()
+
+        assert response.status == "success"
+&gt;       assert response.data["networks_deleted"] == []
+               ^^^^^^^^^^^^^
+
+tests\unit\tools\test_prune_networks.py:53:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = NetworkOperationResponse(status='success', message='Successfully pruned 0 networks', network_id=None, error=None)
+item = 'data'
+
+    def __getattr__(self, item: str) -&gt; Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+&gt;                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'NetworkOperationResponse' object has no attribute 'data'
+
+.venv\Lib\site-packages\pydantic\main.py:1026: AttributeError</failure></testcase><testcase classname="tests.unit.tools.test_prune_networks" name="test_prune_networks_success" time="0.002"><failure message="AttributeError: 'NetworkOperationResponse' object has no attribute 'data'">mcp_docker_stub = &lt;MagicMock id='2588956642576'&gt;
+
+    def test_prune_networks_success(mcp_docker_stub):
+        """Prune returns deleted networks + reclaimed space."""
+        client = mcp_docker_stub
+        client.networks.prune.return_value = {"NetworksDeleted": ["net1", "net2"], "SpaceReclaimed": 1024}
+
+        response = prune_networks()
+
+        assert response.status == "success"
+&gt;       assert response.data["networks_deleted"] == ["net1", "net2"]
+               ^^^^^^^^^^^^^
+
+tests\unit\tools\test_prune_networks.py:40:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = NetworkOperationResponse(status='success', message='Successfully pruned 2 networks', network_id=None, error=None)
+item = 'data'
+
+    def __getattr__(self, item: str) -&gt; Any:
+        private_attributes = object.__getattribute__(self, '__private_attributes__')
+        if item in private_attributes:
+            attribute = private_attributes[item]
+            if hasattr(attribute, '__get__'):
+                return attribute.__get__(self, type(self))  # type: ignore
+
+            try:
+                # Note: self.__pydantic_private__ cannot be None if self.__private_attributes__ has items
+                return self.__pydantic_private__[item]  # type: ignore
+            except KeyError as exc:
+                raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}') from exc
+        else:
+            # `__pydantic_extra__` can fail to be set if the model is not yet fully initialized.
+            # See `BaseModel.__repr_args__` for more details
+            try:
+                pydantic_extra = object.__getattribute__(self, '__pydantic_extra__')
+            except AttributeError:
+                pydantic_extra = None
+
+            if pydantic_extra and item in pydantic_extra:
+                return pydantic_extra[item]
+            else:
+                if hasattr(self.__class__, item):
+                    return super().__getattribute__(item)  # Raises AttributeError if appropriate
+                else:
+                    # this is the current error
+&gt;                   raise AttributeError(f'{type(self).__name__!r} object has no attribute {item!r}')
+E                   AttributeError: 'NetworkOperationResponse' object has no attribute 'data'
+
+.venv\Lib\site-packages\pydantic\main.py:1026: AttributeError</failure></testcase></testsuite></testsuites>
