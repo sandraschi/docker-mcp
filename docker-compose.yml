@@ -7,7 +7,7 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - "10784:8000"
+      - "11255:8000"
     environment:
       - PYTHONUNBUFFERED=1
       - LOG_LEVEL=INFO
@@ -43,7 +43,7 @@ services:
     image: grafana/grafana:latest
     container_name: grafana
     ports:
-      - "10785:3000"
+      - "11256:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
